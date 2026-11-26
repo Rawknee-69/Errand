@@ -57,6 +57,7 @@ export type GatewayAppOptions = {
   discoverOptions?: DiscoverOptions;
   maxConnectors?: number;
   oauthRedirectUri?: string;
+  webOrigin?: string;
   hmacKey?: string;
   auth: AuthOptions | "disabled";
 };
@@ -154,6 +155,7 @@ export function createGatewayApp(
   }
   const agentHandler = createAgentHandler(db, options.hmacKey);
   const oauthRedirectUri = options.oauthRedirectUri ?? DEFAULT_OAUTH_REDIRECT_URI;
+  const webOrigin = options.webOrigin?.replace(/\/+$/, "");
 
   if (options.auth !== "disabled") registerAuth(app, db, options.auth);
 
@@ -327,6 +329,9 @@ export function createGatewayApp(
       ...(query.iss === undefined ? {} : { iss: query.iss }),
     });
     if (c.req.header("accept")?.includes("text/html") === true) {
+      if (webOrigin !== undefined) {
+        return c.redirect(`${webOrigin}/connectors`, 302);
+      }
       return c.html(oauthCallbackPage(result.connector.name));
     }
     return c.json(connectorDetail(result, userId));

@@ -1,0 +1,33 @@
+# OAuth callback proof — after — gateway http://127.0.0.1:8788, mock http://127.0.0.1:4002
+POST /api/auth/login -> 200 authenticated=true
+POST /api/connectors/oauth/start -> 201
+  connector b011e05c-d181-4166-8b5b-5efc7f02b7fb authStatus=pending
+GET /oauth/authorize -> 200 consent-form=true
+POST /oauth/authorize (Approve) -> 302
+  Location: http://127.0.0.1:8788/api/oauth/callback?code=4IKfMRS50fIHo9z_AaDH1o4O9nsX-4fm&state=Jl0FZm-uSZI2bKXKCyqBhGdCdV1uN_5Y9MrfOn2Rp9Y&iss=http%3A%2F%2F127.0.0.1%3A4002
+GET /api/oauth/callback?code=4IKfMRS50fIHo9z_AaDH1o4O9nsX-4fm&state=Jl0FZm-uSZI2bKXKCyqBhGdCdV1uN_5Y9MrfOn2Rp9Y&iss=http%3A%2F%2F127.0.0.1%3A4002 (Accept: text/html)
+  status: 302
+  Location: http://127.0.0.1:5173/connectors
+  Content-Type: null
+  body: 
+POST /api/connectors/oauth/start -> 201
+  connector 8c56d390-679e-44d5-b346-e8ba6460439d authStatus=pending
+GET /oauth/authorize -> 200 consent-form=true
+POST /oauth/authorize (Approve) -> 302
+  Location: http://127.0.0.1:8788/api/oauth/callback?code=m5s73qVdeGavXB1-nypBwiji2-7gFE_V&state=hvE89mq4l-p2NaVQcX3B0kHMtARboafEHbDS34UNf30&iss=http%3A%2F%2F127.0.0.1%3A4002
+GET /api/oauth/callback?code=m5s73qVdeGavXB1-nypBwiji2-7gFE_V&state=hvE89mq4l-p2NaVQcX3B0kHMtARboafEHbDS34UNf30&iss=http%3A%2F%2F127.0.0.1%3A4002 (no HTML accept)
+  status: 200
+  Location: null
+  Content-Type: application/json
+  body: {"connector":{"id":"8c56d390-679e-44d5-b346-e8ba6460439d","name":"Mock calendar after 2","url":"http://127.0.0.1:4002/oauth/mcp","transport":"streamable-http","authType":"oauth","authStatus":"active","lastAuthError":null,"lastSuccessAt":"2026-11-26T08:43:34.843Z","createdAt":"2026-11-26T08:43:34.803
+POST /api/connectors/oauth/start -> 201
+  connector c2c8a606-7708-45e1-accb-bb78d5f49c24 authStatus=pending
+GET /oauth/authorize -> 200 consent-form=true
+POST /oauth/authorize (Approve) -> 302
+  Location: http://127.0.0.1:8788/api/oauth/callback?code=eO9zhFm9RogR7_GIXr1OAo1IcwVJnI8j&state=my5nHhsLXkg51qmMk0PFlnyjoWYgCxAElzhb3P8svl4&iss=http%3A%2F%2F127.0.0.1%3A4002
+GET /api/oauth/callback?code=eO9zhFm9RogR7_GIXr1OAo1IcwVJnI8j&state=my5nHhsLXkg51qmMk0PFlnyjoWYgCxAElzhb3P8svl4&iss=http%3A%2F%2F127.0.0.1%3A4002&webOrigin=https%3A%2F%2Fevil.example&next=https%3A%2F%2Fevil.example (Accept: text/html)
+  status: 302
+  Location: http://127.0.0.1:5173/connectors
+  Content-Type: null
+  body: 
+# end

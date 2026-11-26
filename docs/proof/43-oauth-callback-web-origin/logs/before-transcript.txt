@@ -1,0 +1,13 @@
+# OAuth callback proof — before — gateway http://127.0.0.1:8789, mock http://127.0.0.1:4002
+POST /api/auth/login -> 200 authenticated=true
+POST /api/connectors/oauth/start -> 201
+  connector 16d1eed8-fce7-498c-8b12-cb97b9377c32 authStatus=pending
+GET /oauth/authorize -> 200 consent-form=true
+POST /oauth/authorize (Approve) -> 302
+  Location: http://127.0.0.1:8789/api/oauth/callback?code=Di-ioG1P3OxkVS4G5fCbNpGaovG9gNjs&state=9L0M8R8-v_MDtbSATOlW65Bjdn3380bTbUJ2hylVfkg&iss=http%3A%2F%2F127.0.0.1%3A4002
+GET /api/oauth/callback?code=Di-ioG1P3OxkVS4G5fCbNpGaovG9gNjs&state=9L0M8R8-v_MDtbSATOlW65Bjdn3380bTbUJ2hylVfkg&iss=http%3A%2F%2F127.0.0.1%3A4002 (Accept: text/html)
+  status: 200
+  Location: null
+  Content-Type: text/html; charset=UTF-8
+  body: <!doctype html> <meta charset="utf-8"> <title>Errand — connected</title> <body style="font-family: system-ui, sans-serif; max-width: 32rem; margin: 4rem auto"> <h1>Connected</h1> <p><strong>Mock calendar before 1</strong> is authorized and its tools are catalogued.</p> <p><a href="/api/catalog">Open
+# end

@@ -112,6 +112,17 @@ function callbackPath(callback: URL): string {
   return `/api/oauth/callback${callback.search}`;
 }
 
+function appWithWebOrigin(webOrigin: string): ReturnType<typeof createGatewayApp> {
+  return createGatewayApp(db, {
+    userId: USER,
+    keyring,
+    discoverOptions: { allowLocalhostDev: true, timeoutMs: 5_000 },
+    oauthRedirectUri: REDIRECT_URI,
+    webOrigin,
+    auth: "disabled",
+  });
+}
+
 async function authorizeFlow(name?: string) {
   const started = await startFlow(name);
   const callback = await approve(started.authorizationUrl);
@@ -224,6 +235,52 @@ describe("OAuth 2.1 + PKCE via the SDK", () => {
     const html = await response.text();
     expect(html).not.toContain("<img src=x");
     expect(html).toContain("&lt;img src=x onerror=&quot;alert(1)&quot;&gt;");
+  });
+
+  test("redirects a browser to the configured web origin after a successful callback", async () => {
+    const started = await startFlow();
+    const callback = await approve(started.authorizationUrl);
+    const response = await appWithWebOrigin("https://app.example").request(callbackPath(callback), {
+      headers: { accept: "text/html" },
+    });
+
+    expect(response.status).toBe(302);
+    expect(response.headers.get("location")).toBe("https://app.example/connectors");
+    expect((await mockState()).authorizationCodeGrants).toBe(1);
+  });
+
+  test("normalizes a trailing slash on the web origin", async () => {
+    const started = await startFlow();
+    const callback = await approve(started.authorizationUrl);
+    const response = await appWithWebOrigin("https://app.example/").request(callbackPath(callback), {
+      headers: { accept: "text/html" },
+    });
+
+    expect(response.headers.get("location")).toBe("https://app.example/connectors");
+  });
+
+  test("ignores callback query parameters when building the redirect target", async () => {
+    const started = await startFlow();
+    const callback = await approve(started.authorizationUrl);
+    callback.searchParams.set("webOrigin", "https://evil.example");
+    callback.searchParams.set("next", "https://evil.example");
+    const response = await appWithWebOrigin("https://app.example").request(callbackPath(callback), {
+      headers: { accept: "text/html" },
+    });
+
+    expect(response.status).toBe(302);
+    expect(response.headers.get("location")).toBe("https://app.example/connectors");
+  });
+
+  test("keeps the JSON connector detail for non-HTML callers when a web origin is set", async () => {
+    const started = await startFlow();
+    const callback = await approve(started.authorizationUrl);
+    const response = await appWithWebOrigin("https://app.example").request(callbackPath(callback));
+
+    expect(response.status).toBe(200);
+    const body = await readJson(response, connectResponseSchema);
+    expect(body.connector.id).toBe(started.connector.id);
+    expect(body.connector.authStatus).toBe("active");
   });
 
   test("rejects a callback whose issuer is not the discovered authorization server", async () => {

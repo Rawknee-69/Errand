@@ -93,4 +93,16 @@ describe("loadConfig", () => {
       /MAX_CONNECTORS_PER_USER/,
     );
   });
+
+  test("accepts an absent or absolute WEB_ORIGIN", () => {
+    expect(loadConfig({ ...keys }).WEB_ORIGIN).toBeUndefined();
+    expect(loadConfig({ ...keys, WEB_ORIGIN: "https://app.example" }).WEB_ORIGIN).toBe(
+      "https://app.example",
+    );
+  });
+
+  test("rejects a WEB_ORIGIN that is not an absolute URL", () => {
+    expect(() => loadConfig({ ...keys, WEB_ORIGIN: "app.example" })).toThrow(/WEB_ORIGIN/);
+    expect(() => loadConfig({ ...keys, WEB_ORIGIN: "/connectors" })).toThrow(/WEB_ORIGIN/);
+  });
 });

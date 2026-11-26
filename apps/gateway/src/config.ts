@@ -31,6 +31,7 @@ const configSchema = z.object({
   MAX_CONNECTORS_PER_USER: z.coerce.number().int().positive().default(DEFAULT_MAX_CONNECTORS_PER_USER),
   // Must match the public callback URL registered with each authorization server.
   OAUTH_REDIRECT_URI: z.string().url().optional(),
+  WEB_ORIGIN: z.string().url().optional(),
 });
 
 export type GatewayConfig = z.infer<typeof configSchema>;
