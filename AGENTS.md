@@ -34,3 +34,20 @@ Read `docs/agents/workflow.md` before touching code. Non-negotiable summary:
 - Comments only where code cannot explain itself, one or two lines.
 - Anything only the human can do stops the session with a single marked
   `HUMAN ACTION` block and one URL. Never poll; never fake the step.
+
+### Type safety
+
+`any` is a bug, not a shortcut: it means the shape of the data is unknown at a
+point where the code pretends to know it.
+
+- No `any` anywhere in first-party code, in any position: parameter, return,
+  generic argument, cast.
+- No `@ts-ignore`, and no `as unknown as` double assertion. Both smuggle the
+  same untyped value past the compiler.
+- `unknown` is allowed and expected at untrusted boundaries — upstream MCP
+  responses, request bodies, parsed JSON — but it must be narrowed by a schema
+  or a type guard before any property is read.
+- No type assertions to bypass a mismatch. Fix the type at its source; if a
+  library's types are wrong, isolate the correction in one adapter.
+- `bun run typecheck` includes the check, so a violation fails the build.
+  See `docs/adr/0001-ban-any.md`.

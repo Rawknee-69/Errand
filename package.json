@@ -8,7 +8,7 @@
   ],
   "scripts": {
     "test": "bun test",
-    "typecheck": "bun run --filter '*' typecheck",
+    "typecheck": "bun run --filter '*' typecheck && bun run scripts/check-types.ts",
     "dev:gateway": "bun run --cwd apps/gateway dev",
     "dev:web": "bun run --cwd apps/web dev",
     "dev:mock-services": "bun run --cwd apps/mock-services dev"
