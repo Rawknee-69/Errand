@@ -90,7 +90,7 @@ if (reportPath) {
     .map((match) => match[0])
     .filter((path) => !path.endsWith("README.md") && existsSync(join(process.cwd(), path)));
 
-  if (!/^##\s+Proof\b/im.test(report) || artifacts.length === 0) {
+  if (!/^#{2,3}\s*(?:\d+[.)]\s*)?Proof\b/im.test(report) || artifacts.length === 0) {
     console.error(
       [
         "Report has no usable proof.",
