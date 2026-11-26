@@ -7,6 +7,7 @@ import {
 import { and, eq, isNull } from "drizzle-orm";
 import type { Db } from "../db/client.ts";
 import { recordEventIn } from "../db/events.ts";
+import { GatewayError } from "../errors.ts";
 import { calls, receipts, slips, trust } from "../db/schema.ts";
 import {
   getSlip,
@@ -248,13 +249,13 @@ export function listTrustViews(db: Db, userId: string, now = new Date()): TrustV
 }
 
 export type TrustErrorCode = "unknown_errand_type" | "license_not_offered";
-export class TrustError extends Error {
+
+export class TrustError extends GatewayError {
   constructor(
-    readonly code: TrustErrorCode,
+    override readonly code: TrustErrorCode,
     message: string,
   ) {
-    super(message);
-    this.name = "TrustError";
+    super(code, message, code === "unknown_errand_type" ? 404 : 409);
   }
 }
 

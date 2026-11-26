@@ -7,6 +7,7 @@ import {
 } from "@modelcontextprotocol/client";
 import type { McpTransportKind } from "@errand/shared";
 import { DEFAULT_TIMEOUT_MS, EgressRefusal, egressRequest, type EgressOptions } from "../egress/guard.ts";
+import { GatewayError } from "../errors.ts";
 import { authHeaders, type ConnectorAuth } from "./auth.ts";
 import type { DiscoveredTool } from "./catalog.ts";
 import type { ToolAnnotations } from "./classifier.ts";
@@ -23,14 +24,13 @@ export type DiscoverOptions = EgressOptions & {
 
 export type McpConnectErrorCode = "auth" | "egress" | "connect";
 
-export class McpConnectError extends Error {
+export class McpConnectError extends GatewayError {
   constructor(
-    readonly code: McpConnectErrorCode,
+    override readonly code: McpConnectErrorCode,
     message: string,
     readonly challenge?: string,
   ) {
-    super(message);
-    this.name = "McpConnectError";
+    super(code, message, code === "auth" ? 401 : 502);
   }
 }
 
@@ -184,5 +184,5 @@ export async function discoverMcpTools(
     }
     throw new McpConnectError("auth", `The server rejected the supplied credentials (${url})`);
   }
-  throw new McpConnectError("connect", `Could not connect to ${url} — ${failures.join("; ")}`);
+  throw new McpConnectError("connect", `Could not connect to ${url} â€” ${failures.join("; ")}`);
 }

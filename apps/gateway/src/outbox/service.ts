@@ -4,6 +4,7 @@ import { isPendingOutboxState, type OutboxItem } from "@errand/shared";
 import type { AdmittedCall, Forwarder } from "../agent/forward.ts";
 import type { Db } from "../db/client.ts";
 import { recordEventIn } from "../db/events.ts";
+import { GatewayError } from "../errors.ts";
 import { outbox, type OutboxClass } from "../db/schema.ts";
 import { getOutboxItem, getSlip, listOutbox } from "../db/scoped-reads.ts";
 import { admitCall } from "../policy/pipeline.ts";
@@ -18,13 +19,12 @@ import { outboxView, type OutboxRow } from "./view.ts";
 
 export type OutboxErrorCode = "not_found" | "not_pending" | "not_confirmable" | "expired";
 
-export class OutboxError extends Error {
+export class OutboxError extends GatewayError {
   constructor(
-    readonly code: OutboxErrorCode,
+    override readonly code: OutboxErrorCode,
     message: string,
   ) {
-    super(message);
-    this.name = "OutboxError";
+    super(code, message, code === "not_found" ? 404 : 409);
   }
 }
 
