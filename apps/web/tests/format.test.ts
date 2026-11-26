@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
+  errandTypeLabel,
   formatCalls,
   formatClock,
   formatDollarsInput,
@@ -30,5 +31,10 @@ describe("money, calls and time", () => {
     expect(timeLeftLabel(7_200)).toBe("2 h left");
     expect(timeLeftLabel(0)).toBe("expired");
     expect(formatClock("not-a-date")).toBe("--:--");
+  });
+
+  test("shortens a hash for a label but keeps a short one whole", () => {
+    expect(errandTypeLabel("0123456789abcdef")).toBe("01234567…cdef");
+    expect(errandTypeLabel("short")).toBe("short");
   });
 });

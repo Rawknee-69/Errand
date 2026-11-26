@@ -1,35 +1,50 @@
 import { z } from "zod";
 import {
   agentKeyCreatedSchema,
+  agentKeyListResponseSchema,
+  agentKeyResponseSchema,
   catalogResponseSchema,
   catalogToolResponseSchema,
   connectorDetailSchema,
   connectorReauthResponseSchema,
   errorResponseSchema,
+  journalVerifyResponseSchema,
+  licenseAcceptResponseSchema,
   oauthStartResponseSchema,
   outboxItemResponseSchema,
   outboxListResponseSchema,
   probeResultSchema,
+  receiptListResponseSchema,
   sessionViewSchema,
   slipApprovedSchema,
   slipDetailSchema,
   slipListResponseSchema,
+  trustListResponseSchema,
+  undoApplyResponseSchema,
   type AgentKeyCreated,
+  type AgentKeyListResponse,
+  type AgentKeyResponse,
   type CatalogResponse,
   type CatalogToolResponse,
   type ConnectorAuthInput,
   type ConnectorDetail,
   type ConnectorReauthResponse,
+  type JournalVerifyResponse,
+  type LicenseAcceptResponse,
   type OAuthStartResponse,
   type OutboxItemResponse,
   type OutboxListResponse,
   type ProbeResult,
+  type ReceiptListResponse,
   type SessionView,
   type SlipApprovalInput,
   type SlipApproved,
   type SlipDetail,
   type SlipListResponse,
   type ToolClass,
+  type TrustCaps,
+  type TrustListResponse,
+  type UndoApplyResponse,
 } from "@errand/shared";
 
 export class ApiError extends Error {
@@ -122,6 +137,17 @@ export const api = {
   issueAgentKey(name: string): Promise<AgentKeyCreated> {
     return send(agentKeyCreatedSchema, "/api/agent-keys", "POST", { name });
   },
+  agentKeys(): Promise<AgentKeyListResponse> {
+    return send(agentKeyListResponseSchema, "/api/agent-keys", "GET");
+  },
+  revokeAgentKey(id: string): Promise<AgentKeyResponse> {
+    return send(
+      agentKeyResponseSchema,
+      `/api/agent-keys/${encodeURIComponent(id)}/revoke`,
+      "POST",
+      {},
+    );
+  },
   slips(): Promise<SlipListResponse> {
     return send(slipListResponseSchema, "/api/slips", "GET");
   },
@@ -147,6 +173,31 @@ export const api = {
   },
   confirmOutbox(id: string): Promise<OutboxItemResponse> {
     return send(outboxItemResponseSchema, `/api/outbox/${encodeURIComponent(id)}/confirm`, "POST", {});
+  },
+  receipts(): Promise<ReceiptListResponse> {
+    return send(receiptListResponseSchema, "/api/receipts", "GET");
+  },
+  undoReceipt(id: string): Promise<UndoApplyResponse> {
+    return send(
+      undoApplyResponseSchema,
+      `/api/receipts/${encodeURIComponent(id)}/undo`,
+      "POST",
+      {},
+    );
+  },
+  trust(): Promise<TrustListResponse> {
+    return send(trustListResponseSchema, "/api/trust", "GET");
+  },
+  acceptLicense(errandType: string, caps: TrustCaps): Promise<LicenseAcceptResponse> {
+    return send(
+      licenseAcceptResponseSchema,
+      `/api/trust/${encodeURIComponent(errandType)}/license`,
+      "POST",
+      caps,
+    );
+  },
+  verifyJournal(): Promise<JournalVerifyResponse> {
+    return send(journalVerifyResponseSchema, "/api/journal/verify", "GET");
   },
 };
 

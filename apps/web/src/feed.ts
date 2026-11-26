@@ -2,13 +2,16 @@ import {
   capTrimSchema,
   feedEventSchema,
   limitClampSchema,
+  trustCapsSchema,
   type CapTrim,
   type FeedEvent,
 } from "@errand/shared";
 import { formatCalls, formatMoney } from "./format.ts";
 import { describeTrims } from "./slips.ts";
+import type { BadgeTone } from "./tone.ts";
+import { capsSummary, cleanRunView } from "./trust.ts";
 
-export type FeedTone = "ok" | "danger" | "accent" | "muted";
+type FeedTone = BadgeTone;
 
 export type FeedItem = {
   seq: number;
@@ -217,6 +220,71 @@ export function describeFeedEvent(event: FeedEvent): FeedItem {
         verificationTone(verification),
       );
     }
+    case "trust.run_clean": {
+      const cleanRuns = count(payload, "clean_runs");
+      return item(
+        "Clean run counted",
+        cleanRuns === null
+          ? "The run verified clean"
+          : `${cleanRunView(cleanRuns).label} toward a license`,
+        "ok",
+      );
+    }
+    case "trust.run_unclean":
+      return item("Unclean run", humanise(reason ?? "not clean"), "danger");
+    case "trust.license_offered": {
+      const cleanRuns = count(payload, "clean_runs");
+      return item(
+        "License offered",
+        cleanRuns === null
+          ? "Clean runs are complete; auto-approval is yours to accept"
+          : `${cleanRuns} clean runs · auto-approval is yours to accept`,
+        "accent",
+      );
+    }
+    case "trust.license_accepted": {
+      const caps = trustCapsSchema.safeParse(payload.caps);
+      return item("License accepted", caps.success ? capsSummary(caps.data) : "Caps saved", "ok");
+    }
+    case "trust.license_used": {
+      const caps = trustCapsSchema.safeParse(payload.caps);
+      return item(
+        "License used",
+        caps.success ? `Auto-approved inside ${capsSummary(caps.data)}` : "Auto-approved inside your caps",
+        "accent",
+      );
+    }
+    case "trust.demoted": {
+      const fromTier = text(payload, "from_tier");
+      const fromRuns = count(payload, "from_clean_runs");
+      return item(
+        "Trust demoted",
+        detail([
+          humanise(reason ?? "demoted"),
+          fromTier === null ? null : `from ${humanise(fromTier)}`,
+          fromRuns === null ? null : `${fromRuns} clean runs`,
+        ]),
+        "danger",
+      );
+    }
+    case "undo.applied":
+      return item(
+        "Undo applied",
+        text(payload, "summary") ?? "The inverse ran and verified",
+        "ok",
+      );
+    case "undo.mismatched":
+      return item(
+        "Undo did not verify",
+        text(payload, "summary") ?? "The change is still there",
+        "danger",
+      );
+    case "undo.failed":
+      return item("Undo failed", text(payload, "message") ?? "The inverse did not run", "danger");
+    case "agent_key.created":
+      return item("Agent key created", text(payload, "name") ?? "A new key was issued", "accent");
+    case "agent_key.revoked":
+      return item("Agent key revoked", "That key can no longer connect", "muted");
     case "journal.verify":
     case "journal.verified": {
       const ok = payload.ok === true;

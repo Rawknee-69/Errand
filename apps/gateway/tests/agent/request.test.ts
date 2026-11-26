@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { AGENT_LIMITS } from "../../src/agent/limits.ts";
+import { AGENT_LIMITS } from "@errand/shared";
 import { ErrandRequestError, requestErrand, type RequestErrandInput } from "../../src/agent/request.ts";
 import { listJournalEvents } from "../../src/db/journal.ts";
 import { getSlip } from "../../src/db/scoped-reads.ts";

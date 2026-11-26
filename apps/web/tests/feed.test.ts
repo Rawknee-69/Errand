@@ -157,6 +157,80 @@ describe("describeFeedEvent", () => {
       tone: "muted",
     });
   });
+
+  test("explains trust, undo and agent-key events instead of showing the event name", () => {
+    expect(
+      describeFeedEvent(event(21, "trust.run_clean", { clean_runs: 3, errand_type: "abc" })),
+    ).toMatchObject({
+      title: "Clean run counted",
+      detail: "3 of 5 clean runs toward a license",
+      tone: "ok",
+    });
+    expect(
+      describeFeedEvent(
+        event(22, "trust.run_unclean", { reason: "receipt_mismatched", errand_type: "abc" }),
+      ),
+    ).toMatchObject({ title: "Unclean run", detail: "Receipt mismatched", tone: "danger" });
+    expect(
+      describeFeedEvent(event(23, "trust.license_offered", { clean_runs: 5, errand_type: "abc" })),
+    ).toMatchObject({
+      title: "License offered",
+      detail: "5 clean runs · auto-approval is yours to accept",
+      tone: "accent",
+    });
+    expect(
+      describeFeedEvent(
+        event(24, "trust.license_accepted", {
+          caps: { callCap: 2, spendCapCents: 1_500, minutes: 5 },
+        }),
+      ),
+    ).toMatchObject({ title: "License accepted", detail: "2 calls · $15.00 · 5 min", tone: "ok" });
+    expect(
+      describeFeedEvent(
+        event(25, "trust.license_used", {
+          caps: { callCap: 2, spendCapCents: 1_500, minutes: 5 },
+        }),
+      ),
+    ).toMatchObject({
+      title: "License used",
+      detail: "Auto-approved inside 2 calls · $15.00 · 5 min",
+      tone: "accent",
+    });
+    expect(
+      describeFeedEvent(
+        event(26, "trust.demoted", {
+          reason: "mismatch",
+          from_tier: "license",
+          from_clean_runs: 7,
+        }),
+      ),
+    ).toMatchObject({
+      title: "Trust demoted",
+      detail: "Mismatch · from License · 7 clean runs",
+      tone: "danger",
+    });
+    expect(
+      describeFeedEvent(event(27, "undo.applied", { summary: "Deleted the event." })),
+    ).toMatchObject({ title: "Undo applied", detail: "Deleted the event.", tone: "ok" });
+    expect(
+      describeFeedEvent(event(28, "undo.mismatched", { summary: "The event is still there." })),
+    ).toMatchObject({
+      title: "Undo did not verify",
+      detail: "The event is still there.",
+      tone: "danger",
+    });
+    expect(
+      describeFeedEvent(event(29, "undo.failed", { message: "The connector timed out" })),
+    ).toMatchObject({ title: "Undo failed", detail: "The connector timed out", tone: "danger" });
+    expect(
+      describeFeedEvent(event(30, "agent_key.created", { name: "Claude Code" })),
+    ).toMatchObject({ title: "Agent key created", detail: "Claude Code", tone: "accent" });
+    expect(describeFeedEvent(event(31, "agent_key.revoked", { agent_key_id: "k1" }))).toMatchObject({
+      title: "Agent key revoked",
+      detail: "That key can no longer connect",
+      tone: "muted",
+    });
+  });
 });
 
 describe("mergeFeedEvents", () => {

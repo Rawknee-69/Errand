@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { AGENT_LIMITS, resolveLimits } from "../../src/agent/limits.ts";
+import { AGENT_LIMITS } from "@errand/shared";
+import { resolveLimits } from "../../src/agent/limits.ts";
 
 describe("requested limits", () => {
   test("omitted limits resolve to the server maxima", () => {

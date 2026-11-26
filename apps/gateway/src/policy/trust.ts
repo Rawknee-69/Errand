@@ -17,7 +17,7 @@ import {
   listTrust,
 } from "../db/scoped-reads.ts";
 import { parseSlipTools } from "../agent/slip-tools.ts";
-import { AGENT_LIMITS } from "../agent/limits.ts";
+import { AGENT_LIMITS } from "@errand/shared";
 import type { SlipRow } from "../slips/row.ts";
 
 type TrustRow = typeof trust.$inferSelect;
@@ -48,15 +48,22 @@ export function parseTrustCaps(json: string): TrustCaps | null {
   }
 }
 
-function trustView(row: TrustRow): TrustView {
+function trustView(row: TrustRow, tools: string[]): TrustView {
   return {
     errandType: row.errandType,
+    tools,
     tier: row.tier,
     cleanRuns: row.cleanRuns,
     licenseOffered: row.tier === "learner" && row.cleanRuns >= CLEAN_RUNS_FOR_LICENSE,
     caps: parseTrustCaps(row.caps),
     updatedAt: row.updatedAt,
   };
+}
+
+// The trust key is a hash; the human needs the tools that hash represents.
+function toolsForType(db: Db, userId: string, errandType: string): string[] {
+  const slip = listSlips(db, userId).find((row) => row.errandType === errandType);
+  return slip === undefined ? [] : parseSlipTools(slip.tools).map((tool) => tool.name);
 }
 
 type TrustWriter = Pick<Db, "select" | "insert" | "update">;
@@ -230,8 +237,14 @@ export function demoteTrust(
 
 export function listTrustViews(db: Db, userId: string, now = new Date()): TrustView[] {
   settleRuns(db, userId, now);
+  const tools = new Map<string, string[]>();
+  for (const slip of listSlips(db, userId)) {
+    if (!tools.has(slip.errandType)) {
+      tools.set(slip.errandType, parseSlipTools(slip.tools).map((tool) => tool.name));
+    }
+  }
   return listTrust(db, userId)
-    .map(trustView)
+    .map((row) => trustView(row, tools.get(row.errandType) ?? []))
     .sort((left, right) => left.errandType.localeCompare(right.errandType));
 }
 
@@ -288,5 +301,5 @@ export function acceptLicense(
 
   const updated = getTrust(db, userId, errandType);
   if (updated === undefined) throw new Error(`Trust for ${errandType} vanished while accepting a license`);
-  return trustView(updated);
+  return trustView(updated, toolsForType(db, userId, errandType));
 }

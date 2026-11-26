@@ -7,6 +7,7 @@ import {
   type ToolClass,
 } from "@errand/shared";
 import { api, errorMessage } from "../api.ts";
+import { ResourceState } from "../components/ResourceState.tsx";
 import {
   blockedToolCount,
   exposedToolCount,
@@ -97,34 +98,20 @@ export function Catalog({ onOpenConnect }: Props) {
         </p>
       </header>
 
-      {loading && (
-        <p className="panel hint" aria-busy="true">
-          Reading the catalog…
-        </p>
-      )}
-
-      {error !== null && (
-        <div className="panel stack">
-          <p className="alert" role="alert">
-            {error}
-          </p>
-          <button type="button" className="button secondary" onClick={() => void reload()}>
-            Try again
-          </button>
-        </div>
-      )}
-
-      {!loading && error === null && tools.length === 0 && (
-        <div className="panel stack empty">
-          <h2>No tools yet</h2>
-          <p className="lede">
-            Connect a service and Errand lists every tool it offers here, already classified.
-          </p>
+      <ResourceState
+        loading={loading}
+        error={error}
+        isEmpty={tools.length === 0}
+        loadingCopy="Reading the catalog…"
+        emptyTitle="No tools yet"
+        emptyCopy="Connect a service and Errand lists every tool it offers here, already classified."
+        emptyAction={
           <button type="button" className="button primary" onClick={onOpenConnect}>
             Connect a service
           </button>
-        </div>
-      )}
+        }
+        onRetry={() => void reload()}
+      />
 
       {!loading && tools.length > 0 && (
         <>

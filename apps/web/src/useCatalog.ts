@@ -1,35 +1,22 @@
-import { useCallback, useEffect, useState } from "react";
-import type { CatalogResponse, CatalogToolView } from "@errand/shared";
-import { api, errorMessage } from "./api.ts";
+import { useCallback } from "react";
+import type { CatalogToolView } from "@errand/shared";
+import { api } from "./api.ts";
+import { replaceRow } from "./rows.ts";
+import { useResource } from "./useResource.ts";
 
 export function useCatalog() {
-  const [data, setData] = useState<CatalogResponse | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { data, loading, error, reload, setData } = useResource(api.catalog);
 
-  const reload = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      setData(await api.catalog());
-    } catch (caught) {
-      setError(errorMessage(caught));
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void reload();
-  }, [reload]);
-
-  const replaceTool = useCallback((tool: CatalogToolView) => {
-    setData((current) =>
-      current === null
-        ? current
-        : { ...current, tools: current.tools.map((row) => (row.id === tool.id ? tool : row)) },
-    );
-  }, []);
+  const replaceTool = useCallback(
+    (tool: CatalogToolView) => {
+      setData((current) =>
+        current === null
+          ? current
+          : { ...current, tools: replaceRow(current.tools, (row) => row.id === tool.id, tool) },
+      );
+    },
+    [setData],
+  );
 
   return { data, loading, error, reload, replaceTool };
 }
