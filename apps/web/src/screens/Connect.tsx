@@ -8,6 +8,7 @@ import type {
   McpTransportKind,
   ProbeResult,
 } from "@errand/shared";
+import { rememberAgentKey } from "../agentKeyStore.ts";
 import { api, errorMessage } from "../api.ts";
 import { AgentKeyPanel } from "../components/AgentKeyPanel.tsx";
 
@@ -151,7 +152,9 @@ export function Connect({ onOpenCatalog }: Props) {
     setBusy(true);
     setError(null);
     try {
-      setIssued(await api.issueAgentKey(`${result.connector.name} agent`.slice(0, 64)));
+      const next = await api.issueAgentKey(`${result.connector.name} agent`.slice(0, 64));
+      rememberAgentKey(next);
+      setIssued(next);
     } catch (caught) {
       setError(errorMessage(caught));
     } finally {

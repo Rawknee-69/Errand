@@ -96,7 +96,7 @@ for (const tool of catalog.tools.filter((row) => row.connectorId === calendar.id
 console.log("3. Agent key");
 const issued = await human(agentKeyCreatedSchema, "/api/agent-keys", {
   method: "POST",
-  body: JSON.stringify({ name: "Demo agent" }),
+  body: JSON.stringify({ name: "Terminal agent" }),
 });
 console.log(`   issued ${issued.agentKey.name} (shown once, stored as a hash)`);
 

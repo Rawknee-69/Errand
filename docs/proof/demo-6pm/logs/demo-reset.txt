@@ -1,0 +1,14 @@
+$ bun run demo:up --fresh
+  Errand demo is up
+  Kept 1 demo guest(s) and 2 key(s) across the reset
+
+$ POST /mcp with the owner key issued before the reset
+  status 400  (a malformed MCP body; authentication passed, no 401)
+
+$ POST /mcp with the demo guest key issued before the reset
+  status 400  (authentication passed)
+
+$ GET /api/agent-keys as the owner
+  {"agentKeys":[{"id":"3c472d52-...","name":"Owner browser key","revokedAt":null}]}
+
+So a `--fresh` reset now keeps demo guests and every issued agent key active.

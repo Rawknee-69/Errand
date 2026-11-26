@@ -20,7 +20,10 @@ It prints the owner passphrase: `errand-demo-passphrase`.
 
 - Control panel: <http://127.0.0.1:5173>
 - Logs: `.demo/logs/{gateway,web,mock-services}.log`
-- `bun run demo:up --fresh` starts with an empty database.
+- `bun run demo:up --fresh` starts with an empty database **but keeps demo
+  guests and every issued agent key active**. The script holds them in memory
+  across the reset and puts them back, so a key already pasted into an agent
+  keeps working after a reset. The banner reports how many were kept.
 - `Ctrl+C` stops all three processes.
 
 Everything below works with network. If Notion login fails on the day, use the
@@ -60,8 +63,11 @@ one required tool and the visible tool it leaves out
 `notion__notion_search` as the only tool the prompt needs.
 
 The generated prompt tells the agent to request exactly that set and never to
-add a tool "just in case". Issue a demo agent key. It is shown once. Copy the
-Cursor config (or the Claude Code command) and the prompt. It reads:
+add a tool "just in case". Issue a demo agent key. For the demo, the key value is
+kept in the browser tab's session, so changing screens or refreshing does not
+lose it; the gateway still stores only its hash and the panel shows whether the
+key is **Active** on this gateway. Copy the Cursor config (or the Claude Code
+command) and the prompt. It reads:
 
 ```text
 You are working through Errand, my MCP doorway. Use only the Errand tools: errand_catalog, request_errand, errand_status, errand_call. You have no other credential or connector URL.

@@ -1,12 +1,13 @@
 import { useEffect, useState } from "react";
 import type {
-  AgentKeyCreated,
+  AgentKeyView,
   AuthUser,
   Boundary,
   HiddenToolReason,
   JournalVerify,
   SlipSummary,
 } from "@errand/shared";
+import { rememberAgentKey, useAgentKeys } from "../agentKeyStore.ts";
 import { api, errorMessage } from "../api.ts";
 import { ClientSnippets } from "../components/ClientSnippets.tsx";
 import { CopyButton } from "../components/CopyButton.tsx";
@@ -77,18 +78,25 @@ function plural(n: number | undefined, singular: string): string {
 export function Demo({ user, onNavigate }: Props) {
   const [boundary, setBoundary] = useState<Boundary | null>(null);
   const [slips, setSlips] = useState<SlipSummary[]>([]);
-  const [issued, setIssued] = useState<AgentKeyCreated | null>(null);
+  const [keyList, setKeyList] = useState<AgentKeyView[]>([]);
   const [job, setJob] = useState<Job>(CALENDAR_JOB);
   const [verify, setVerify] = useState<JournalVerify | null>(null);
+  const storedKeys = useAgentKeys();
+  const issued = storedKeys[0] ?? null;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   async function refresh() {
     try {
-      const [nextBoundary, nextSlips] = await Promise.all([api.boundary(), api.slips()]);
+      const [nextBoundary, nextSlips, nextKeys] = await Promise.all([
+        api.boundary(),
+        api.slips(),
+        api.agentKeys(),
+      ]);
       setBoundary(nextBoundary);
       setSlips(nextSlips.slips);
+      setKeyList(nextKeys.agentKeys);
       setError(null);
     } catch (caught) {
       setError(errorMessage(caught));
@@ -105,7 +113,8 @@ export function Demo({ user, onNavigate }: Props) {
     setBusy(true);
     setError(null);
     try {
-      setIssued(await api.issueAgentKey("Demo agent"));
+      rememberAgentKey(await api.issueAgentKey("Demo agent"));
+      await refresh();
     } catch (caught) {
       setError(errorMessage(caught));
     } finally {
@@ -134,6 +143,18 @@ export function Demo({ user, onNavigate }: Props) {
   const notNeeded = visible.filter((tool) => !job.tools.includes(tool.name));
   const missingTools = job.tools.filter((name) => !visible.some((tool) => tool.name === name));
   const prompt = promptFor(job);
+  const keyOnGateway =
+    issued === null ? undefined : keyList.find((key) => key.id === issued.agentKey.id);
+  const keyStatus =
+    issued === null
+      ? null
+      : keyOnGateway === undefined
+        ? loading
+          ? "checking"
+          : "missing"
+        : keyOnGateway.revokedAt === null
+          ? "active"
+          : "revoked";
 
   return (
     <section className="screen">
@@ -343,8 +364,9 @@ export function Demo({ user, onNavigate }: Props) {
           <span className="badge ok">MCP · Streamable HTTP</span>
         </div>
         <p className="hint">
-          URL <span className="mono">{mcpUrl}</span>. The key is shown once and stored only as a
-          SHA-256 hash; revoking it kills the agent without touching a connector.
+          URL <span className="mono">{mcpUrl}</span>. The key value stays in this tab's session for
+          the demo; the gateway stores only a SHA-256 hash, and revoking it kills the agent without
+          touching a connector.
         </p>
         {issued === null ? (
           <button type="button" className="button primary" onClick={() => void issueKey()} disabled={busy}>
@@ -352,15 +374,64 @@ export function Demo({ user, onNavigate }: Props) {
           </button>
         ) : (
           <>
-            <p className="alert once" role="status">
-              Copy this now. It is shown once and cannot be recovered.
-            </p>
+            <div className="result-head">
+              <p className="alert once" role="status">
+                Kept in this browser session for the demo. The gateway stores only its hash.
+              </p>
+              <span className={keyStatus === "active" ? "badge ok" : "badge warn"}>
+                {keyStatus === "active"
+                  ? "Active"
+                  : keyStatus === "checking"
+                    ? "Checking…"
+                    : keyStatus === "revoked"
+                      ? "Revoked"
+                      : "Not active"}
+              </span>
+            </div>
             <div className="key-row">
               <code className="key">{issued.key}</code>
               <CopyButton value={issued.key} label="Copy key" />
             </div>
             <ClientSnippets mcpUrl={issued.mcpUrl} agentKey={issued.key} />
+            {(keyStatus === "missing" || keyStatus === "revoked") && (
+              <p className="alert" role="alert">
+                This key no longer authenticates against this gateway. Issue a fresh one; the old
+                one stays in memory only as a record.
+              </p>
+            )}
+            {(keyStatus === "missing" || keyStatus === "revoked") && (
+              <button
+                type="button"
+                className="button secondary"
+                onClick={() => void issueKey()}
+                disabled={busy}
+              >
+                {busy ? "Issuing…" : "Issue a new key"}
+              </button>
+            )}
           </>
+        )}
+        {keyList.length > 0 && (
+          <div className="stack">
+            <p className="eyebrow">Keys on this gateway</p>
+            <ul className="layer-list">
+              {keyList.map((key) => (
+                <li key={key.id}>
+                  <span>{key.name}</span>
+                  <span className="hidden-reason">
+                    {new Date(key.createdAt).toLocaleTimeString([], {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                  </span>
+                  <span className={key.revokedAt === null ? "state ok" : "state muted"}>
+                    {key.revokedAt === null ? "active" : "revoked"}
+                  </span>
+                </li>
+              ))}
+            </ul>
+            <p className="hint">Only hashes live here. The key values stay in this tab's session.</p>
+          </div>
         )}
         <div className="snippet">
           <p className="eyebrow">Paste this prompt into the agent</p>
