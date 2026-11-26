@@ -1,0 +1,3 @@
+No console errors or warnings for the walkthrough window.
+Captured from the in-app browser console (level: warning) on http://localhost:5173/slips
+after login and the Slips screen loaded. messages: []

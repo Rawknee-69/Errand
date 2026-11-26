@@ -1,0 +1,10 @@
+GET  http://localhost:5173/                        200
+GET  http://localhost:5173/api/auth/session        200
+GET  http://localhost:5173/api/auth/session        200
+POST http://localhost:5173/api/auth/login          200
+GET  http://localhost:5173/api/slips               200
+GET  http://localhost:5173/api/slips               200
+GET  http://localhost:5173/api/events              open (SSE, LIVE badge on screen)
+GET  http://localhost:5173/api/slips               200
+
+Vite module requests omitted. No failed API request in the window.

@@ -139,7 +139,18 @@ function agentServer(
         { hmacKey },
       );
       if (decision.outcome === "denied") {
-        return errorResult(decision.reason, decision.message, { tool });
+        return errorResult(
+          decision.reason,
+          decision.message,
+          decision.burned === undefined
+            ? { tool }
+            : {
+                tool,
+                slip_state: "burned",
+                burned_reason: decision.burned.reason,
+                burned_at: decision.burned.at,
+              },
+        );
       }
       const remaining = {
         calls: decision.callsRemaining,

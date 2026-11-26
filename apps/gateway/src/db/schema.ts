@@ -153,6 +153,8 @@ export const slips = sqliteTable(
     rateWindowCalls: integer("rate_window_calls").notNull().default(0),
     spendCapCents: integer("spend_cap_cents").notNull().default(0),
     spendUsedCents: integer("spend_used_cents").notNull().default(0),
+    // Out-of-scope attempts against this slip; the second one burns it.
+    scopeViolations: integer("scope_violations").notNull().default(0),
     capabilityHash: text("capability_hash"),
     signature: text("signature"),
     expiresAt: text("expires_at").notNull(),
