@@ -6,11 +6,12 @@
   classification (loopback, private, link-local, CGNAT, unspecified, multicast,
   reserved, cloud metadata, IPv4-mapped and NAT64 forms).
 - `apps/gateway/src/egress/guard.ts` — `assertFetchableUrl` (scheme, literal
-  address, and every DNS-resolved address), `egressFetch` (redirects
-  re-validated with a hard limit of three, timeout, response size cap), and
-  `EgressRefusal` with a typed code.
-- `apps/gateway/src/connectors/quota.ts` — `countConnectors`,
-  `assertConnectorQuota`, `ConnectorLimitError`.
+  address, and every DNS-resolved address), `egressFetch` (node:http(s) with
+  the validated address pinned through `lookup`, redirects re-validated with a
+  hard limit of three, timeout, response size cap), and `EgressRefusal` with a
+  typed code.
+- `apps/gateway/src/connectors/quota.ts` — `assertConnectorQuota` and
+  `ConnectorLimitError`.
 - `apps/gateway/src/config.ts` — `ALLOW_LOCALHOST_DEV`,
   `EGRESS_TIMEOUT_MS`, `EGRESS_MAX_RESPONSE_BYTES`, `MAX_CONNECTORS_PER_USER`,
   with defaults owned by the modules above.
@@ -38,10 +39,10 @@ $ bun run typecheck
 ✓ 3 checks passed: comments, installed, no-any
 
 $ bun test
- 107 pass
+ 113 pass
  0 fail
- 172 expect() calls
-Ran 107 tests across 12 files.
+ 178 expect() calls
+Ran 113 tests across 12 files.
 ```
 
 ## Proof
@@ -56,12 +57,15 @@ Ran 107 tests across 12 files.
 
 ## Versions changed
 
-None. No dependency was added; the guard uses `node:net`, `node:dns/promises`
-and the platform `fetch`.
+None. No dependency was added; the guard uses `node:net`, `node:dns/promises`,
+`node:http` and `node:https`.
 
 ## Unverified
 
-- DNS rebinding between resolve and connect is not pinned (recorded in
-  `PROOF.md`, finding 1).
+- The https certificate path is not exercised by the local tests, which use
+  plain http on loopback with the dev flag; pinning is driven for a resolved
+  hostname. See `PROOF.md`.
 - No gateway route calls the guard yet; #6 consumes it for paste-URL
   connectors.
+- The new env settings are parsed and defaulted but have no reader until #6
+  binds them to the guard and the quota call.

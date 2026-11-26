@@ -1,7 +1,7 @@
 ﻿cmd : $ bun run --filter '*' typecheck && bun run scripts/check.ts
-At line:1 char:15
-+ cd D:\errand; cmd /c "bun run typecheck" 2>&1 | Out-File -Encoding ut ...
-+               ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+At line:1 char:131
++ ... d\logs\egress-transcript.txt; cmd /c "bun run typecheck" 2>&1 | Out-F ...
++                                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     + CategoryInfo          : NotSpecified: ($ bun run --fil...cripts/check.ts:String) [], RemoteException
     + FullyQualifiedErrorId : NativeCommandError
  

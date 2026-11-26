@@ -33,6 +33,9 @@ const blocked: [string, BlockedReason][] = [
   ["::ffff:169.254.169.254", "cloud-metadata"],
   ["::ffff:10.0.0.1", "private"],
   ["64:ff9b::a00:1", "private"],
+  ["::127.0.0.1", "reserved"],
+  ["::10.0.0.1", "reserved"],
+  ["fec0::1", "private"],
 ];
 
 const allowed = ["8.8.8.8", "1.1.1.1", "93.184.216.34", "2606:4700:4700::1111", "::ffff:8.8.8.8"];

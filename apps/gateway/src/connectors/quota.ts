@@ -16,20 +16,16 @@ export class ConnectorLimitError extends Error {
   }
 }
 
-export function countConnectors(db: Db, userId: string): number {
-  const row = db
-    .select({ value: count() })
-    .from(connectors)
-    .where(eq(connectors.userId, userId))
-    .all()[0];
-  return row?.value ?? 0;
-}
-
 export function assertConnectorQuota(
   db: Db,
   userId: string,
   limit: number = DEFAULT_MAX_CONNECTORS_PER_USER,
 ): void {
-  const current = countConnectors(db, userId);
+  const row = db
+    .select({ value: count() })
+    .from(connectors)
+    .where(eq(connectors.userId, userId))
+    .all()[0];
+  const current = row?.value ?? 0;
   if (current >= limit) throw new ConnectorLimitError(current, limit);
 }

@@ -16,13 +16,14 @@ export type AddressVerdict = { allowed: true } | { allowed: false; reason: Block
 type Range = { prefix: bigint; bits: number; width: 32 | 128; reason: BlockedReason };
 
 function v4(prefix: string, bits: number, reason: BlockedReason): Range {
-  return { prefix: BigInt(ipv4ToInt(prefix)!), bits, width: 32, reason };
+  return { prefix: requireV4(prefix), bits, width: 32, reason };
 }
 
 function v6(prefix: string, bits: number, reason: BlockedReason): Range {
-  return { prefix: ipv6ToBigInt(prefix)!, bits, width: 128, reason };
+  return { prefix: requireV6(prefix), bits, width: 128, reason };
 }
 
+// Metadata ranges must precede the broader link-local and CGNAT ranges containing them.
 const blockedV4: Range[] = [
   v4("169.254.169.254", 32, "cloud-metadata"),
   v4("169.254.170.2", 32, "cloud-metadata"),
@@ -47,7 +48,9 @@ const blockedV6: Range[] = [
   v6("fd00:ec2::254", 128, "cloud-metadata"),
   v6("::1", 128, "loopback"),
   v6("::", 128, "unspecified"),
+  v6("::", 96, "reserved"),
   v6("fc00::", 7, "private"),
+  v6("fec0::", 10, "private"),
   v6("fe80::", 10, "link-local"),
   v6("ff00::", 8, "multicast"),
   v6("2001:db8::", 32, "reserved"),
@@ -56,20 +59,30 @@ const blockedV6: Range[] = [
   v6("2002::", 16, "reserved"),
 ];
 
-const mappedV4Prefix = ipv6ToBigInt("::ffff:0:0")! >> 32n;
-const nat64Prefix = ipv6ToBigInt("64:ff9b::")! >> 32n;
+const mappedV4Prefix = requireV6("::ffff:0:0") >> 32n;
+const nat64Prefix = requireV6("64:ff9b::") >> 32n;
+
+export function stripBrackets(value: string): string {
+  return value.startsWith("[") && value.endsWith("]") ? value.slice(1, -1) : value;
+}
 
 export function classifyAddress(value: string): AddressVerdict {
-  const address = value.startsWith("[") && value.endsWith("]") ? value.slice(1, -1) : value;
+  const address = stripBrackets(value);
   const family = isIP(address);
-  if (family === 4) return classifyV4(ipv4ToInt(address)!);
-  if (family === 6) return classifyV6(ipv6ToBigInt(address)!);
+  if (family === 4) {
+    const parsed = ipv4ToInt(address);
+    return parsed === undefined ? { allowed: false, reason: "invalid" } : classifyV4(parsed);
+  }
+  if (family === 6) {
+    const parsed = ipv6ToBigInt(address);
+    return parsed === undefined ? { allowed: false, reason: "invalid" } : classifyV6(parsed);
+  }
   return { allowed: false, reason: "invalid" };
 }
 
 function classifyV4(value: number): AddressVerdict {
   for (const range of blockedV4) {
-    if (inRange(BigInt(value), range.prefix, range.bits, 32)) {
+    if (inRange(BigInt(value), range)) {
       return { allowed: false, reason: range.reason };
     }
   }
@@ -78,7 +91,7 @@ function classifyV4(value: number): AddressVerdict {
 
 function classifyV6(value: bigint): AddressVerdict {
   for (const range of blockedV6) {
-    if (inRange(value, range.prefix, range.bits, 128)) {
+    if (inRange(value, range)) {
       return { allowed: false, reason: range.reason };
     }
   }
@@ -90,9 +103,21 @@ function classifyV6(value: bigint): AddressVerdict {
   return { allowed: true };
 }
 
-function inRange(value: bigint, prefix: bigint, bits: number, width: 32 | 128): boolean {
-  const shift = BigInt(width - bits);
-  return value >> shift === prefix >> shift;
+function inRange(value: bigint, range: Range): boolean {
+  const shift = BigInt(range.width - range.bits);
+  return value >> shift === range.prefix >> shift;
+}
+
+function requireV4(address: string): bigint {
+  const value = ipv4ToInt(address);
+  if (value === undefined) throw new Error(`Invalid IPv4 range prefix: ${address}`);
+  return BigInt(value);
+}
+
+function requireV6(address: string): bigint {
+  const value = ipv6ToBigInt(address);
+  if (value === undefined) throw new Error(`Invalid IPv6 range prefix: ${address}`);
+  return value;
 }
 
 function ipv4ToInt(address: string): number | undefined {

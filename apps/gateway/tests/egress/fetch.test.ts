@@ -1,5 +1,6 @@
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { egressFetch, EgressRefusal } from "../../src/egress/guard.ts";
+import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
+import { egressFetch } from "../../src/egress/guard.ts";
+import { egressRefusal as refusal } from "../support/refusals.ts";
 
 const hits: string[] = [];
 let server: ReturnType<typeof Bun.serve>;
@@ -82,15 +83,9 @@ afterAll(() => {
 
 const dev = { allowLocalhostDev: true };
 
-async function refusal(promise: Promise<unknown>): Promise<EgressRefusal> {
-  try {
-    await promise;
-  } catch (error) {
-    if (error instanceof EgressRefusal) return error;
-    throw error;
-  }
-  throw new Error("expected an EgressRefusal");
-}
+beforeEach(() => {
+  hits.length = 0;
+});
 
 describe("egressFetch", () => {
   test("fetches a local dev server and returns its body", async () => {
@@ -102,6 +97,14 @@ describe("egressFetch", () => {
   test("refuses a plain http local URL when the dev flag is off", async () => {
     const error = await refusal(egressFetch(`${base}/ok`, {}));
     expect(error.code).toBe("scheme");
+  });
+
+  test("connects to the validated address for a resolved hostname", async () => {
+    const response = await egressFetch(`http://localhost:${server.port}/ok`, {
+      ...dev,
+      resolveHost: async () => ["127.0.0.1"],
+    });
+    expect(await response.text()).toBe("hello from upstream");
   });
 
   test("follows a relative redirect after re-validating it", async () => {

@@ -1,4 +1,6 @@
 import { describe, expect, test } from "bun:test";
+import { DEFAULT_MAX_CONNECTORS_PER_USER } from "../src/connectors/quota.ts";
+import { DEFAULT_MAX_RESPONSE_BYTES, DEFAULT_TIMEOUT_MS } from "../src/egress/guard.ts";
 import { loadConfig } from "../src/config.ts";
 
 const keys = {
@@ -52,9 +54,9 @@ describe("loadConfig", () => {
   test("defaults the dev egress flag off and limits the fetch surface", () => {
     expect(loadConfig({ ...keys })).toMatchObject({
       ALLOW_LOCALHOST_DEV: false,
-      EGRESS_TIMEOUT_MS: 15000,
-      EGRESS_MAX_RESPONSE_BYTES: 10485760,
-      MAX_CONNECTORS_PER_USER: 10,
+      EGRESS_TIMEOUT_MS: DEFAULT_TIMEOUT_MS,
+      EGRESS_MAX_RESPONSE_BYTES: DEFAULT_MAX_RESPONSE_BYTES,
+      MAX_CONNECTORS_PER_USER: DEFAULT_MAX_CONNECTORS_PER_USER,
     });
   });
 

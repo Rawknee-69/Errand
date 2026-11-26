@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { assertFetchableUrl, EgressRefusal } from "../../src/egress/guard.ts";
+import { assertFetchableUrl } from "../../src/egress/guard.ts";
+import { egressRefusal as refusal } from "../support/refusals.ts";
 
 const resolveTo =
   (...addresses: string[]) =>
@@ -7,16 +8,6 @@ const resolveTo =
     addresses;
 
 const publicHost = { resolveHost: resolveTo("93.184.216.34") };
-
-async function refusal(promise: Promise<unknown>): Promise<EgressRefusal> {
-  try {
-    await promise;
-  } catch (error) {
-    if (error instanceof EgressRefusal) return error;
-    throw error;
-  }
-  throw new Error("expected an EgressRefusal");
-}
 
 describe("assertFetchableUrl", () => {
   test("accepts an https URL whose host resolves to a public address", async () => {
@@ -54,6 +45,15 @@ describe("assertFetchableUrl", () => {
     );
     expect(error.code).toBe("blocked-address");
     expect(resolved).toBe(false);
+  });
+
+  test.each([
+    "https://[::127.0.0.1]/",
+    "https://[::10.0.0.1]/",
+    "https://[fec0::1]/",
+  ])("refuses the deprecated or compatible IPv6 form in %s", async (target) => {
+    const error = await refusal(assertFetchableUrl(target, {}));
+    expect(error.code).toBe("blocked-address");
   });
 
   test("refuses a hostname that resolves to a private address", async () => {
