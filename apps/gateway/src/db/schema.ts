@@ -1,16 +1,24 @@
 import { index, integer, primaryKey, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
+import {
+  CONNECTOR_AUTH_STATUSES,
+  type ConnectorAuthStatus,
+  type ConnectorAuthType,
+  type McpTransportKind,
+  type ToolClass,
+  type ToolState,
+} from "@errand/shared";
 
-// Tool classes, increasing danger; `unknown` is a class but is never allowed to run (GLOSSARY.md).
-export type ToolClass = "read" | "write" | "send" | "delete" | "spend" | "unknown";
+export { CONNECTOR_AUTH_STATUSES };
+export type { ConnectorAuthStatus, ConnectorAuthType, ToolClass, ToolState };
 
 // Trust tiers (GLOSSARY.md): `learner` needs a human tap; `license` auto-approves within caps.
 export type Tier = "learner" | "license";
 
-// Vault auth schemes for a connector; stdio is excluded (spec).
-export type ConnectorAuthType = "none" | "bearer" | "header" | "basic" | "oauth";
-
 // Verifier outcomes per change; `unverified` never implies success (GLOSSARY.md).
 export type VerificationOutcome = "matched" | "mismatched" | "unverified";
+
+// A slip's lifecycle: a request waits as pending until a human decides.
+export type SlipState = "pending" | "approved" | "denied" | "expired" | "burned";
 
 export const users = sqliteTable("users", {
   id: text("id").primaryKey(),
@@ -39,8 +47,11 @@ export const connectors = sqliteTable(
     userId: text("user_id").notNull().references(() => users.id),
     name: text("name").notNull(),
     url: text("url").notNull(),
-    transport: text("transport").notNull(),
+    transport: text("transport").notNull().$type<McpTransportKind>(),
     authType: text("auth_type").notNull().$type<ConnectorAuthType>(),
+    authStatus: text("auth_status").notNull().default("active").$type<ConnectorAuthStatus>(),
+    // Short, secret-free reason for the last authorization failure.
+    lastAuthError: text("last_auth_error"),
     createdAt: text("created_at").notNull(),
     updatedAt: text("updated_at").notNull(),
   },
@@ -68,7 +79,8 @@ export const credentials = sqliteTable(
   (t) => [index("credentials_user_id_idx").on(t.userId), index("credentials_service_id_idx").on(t.serviceId)],
 );
 
-// OAuth 2.1 + PKCE in-flight attempts (spec: ticket P2).
+// OAuth 2.1 + PKCE in-flight attempts (spec: ticket P2). The verifier and
+// discovery state live in the Vault under `oauth_attempt:<id>`, never here.
 export const oauthAttempts = sqliteTable(
   "oauth_attempts",
   {
@@ -76,7 +88,6 @@ export const oauthAttempts = sqliteTable(
     userId: text("user_id").notNull().references(() => users.id),
     connectorId: text("connector_id").notNull().references(() => connectors.id),
     state: text("state").notNull().unique(),
-    codeVerifier: text("code_verifier").notNull(),
     redirectUri: text("redirect_uri").notNull(),
     createdAt: text("created_at").notNull(),
     expiresAt: text("expires_at").notNull(),
@@ -93,17 +104,31 @@ export const tools = sqliteTable(
     userId: text("user_id").notNull().references(() => users.id),
     connectorId: text("connector_id").notNull().references(() => connectors.id),
     name: text("name").notNull(),
+    // What the agent sees: `<connector>__<tool>`, sanitised and unique per user.
+    agentName: text("agent_name").notNull().default(""),
+    // Pinned definition: exactly what the human saw and approved.
     description: text("description").notNull().default(""),
     inputSchema: text("input_schema").notNull().default("{}"),
+    annotations: text("annotations").notNull().default("{}"),
     class: text("class").notNull().default("unknown").$type<ToolClass>(),
+    // The hash the human saw and approved; observedHash follows the upstream definition.
     definitionHash: text("definition_hash").notNull(),
+    observedDescription: text("observed_description").notNull().default(""),
+    observedInputSchema: text("observed_input_schema").notNull().default("{}"),
+    observedAnnotations: text("observed_annotations").notNull().default("{}"),
+    observedClass: text("observed_class").notNull().default("unknown").$type<ToolClass>(),
+    observedHash: text("observed_hash").notNull().default(""),
+    state: text("state").notNull().default("new").$type<ToolState>(),
     requestable: integer("requestable", { mode: "boolean" }).notNull().default(false),
+    changedAt: text("changed_at"),
+    removedAt: text("removed_at"),
     createdAt: text("created_at").notNull(),
     updatedAt: text("updated_at").notNull(),
   },
   (t) => [
     index("tools_user_id_idx").on(t.userId),
     uniqueIndex("tools_connector_id_name_idx").on(t.connectorId, t.name),
+    uniqueIndex("tools_user_id_agent_name_idx").on(t.userId, t.agentName),
   ],
 );
 
@@ -115,7 +140,7 @@ export const slips = sqliteTable(
     userId: text("user_id").notNull().references(() => users.id),
     errandType: text("errand_type").notNull(),
     goal: text("goal").notNull().default(""),
-    state: text("state").notNull(),
+    state: text("state").notNull().$type<SlipState>(),
     tier: text("tier").notNull().$type<Tier>(),
     tools: text("tools").notNull().default("[]"),
     constraints: text("constraints").notNull().default("{}"),

@@ -1,0 +1,4 @@
+﻿agent_keys rows (there is no plaintext key column):
+  39f97ee5-6edf-4b2a-929e-274b34d9d766 name=proof agent key_hash=64 hex chars (prefix 9d5f01920622) created=2026-11-26T06:48:19.908Z revoked=2026-11-26T06:48:20.076Z
+  90872e16-268e-4a16-9ad0-16497f8f6737 name=friend key_hash=64 hex chars (prefix 35ba483c4785) created=2026-11-26T06:48:19.993Z revoked=no
+full key pattern occurrences across every text column: 0

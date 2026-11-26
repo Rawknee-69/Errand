@@ -1,0 +1,48 @@
+=== envelope round trip ===: 
+credential id: 263b3438-b6bc-4225-9bab-66cf952d8fda
+stored key id: 75bbf85e4aa788d5
+row ciphertext prefix: 7K/rLRGjinB7cvJn+ZciLbXQ
+row wrapped key bytes (base64): 61
+row contains plaintext secret: false
+: 
+=== usable at call time ===: 
+callback result (upstream status): 200
+upstream received header with secret: true
+: 
+=== negative: secret escaped through the callback ===: 
+callback returns the secret: VaultError/secret_escaped
+callback wraps it in an object: VaultError/secret_escaped
+: 
+=== negative: key id mismatch ===: 
+with other key id: VaultError/decrypt_failed
+: 
+=== negative: AAD mismatch ===: 
+with tampered credential id: VaultError/decrypt_failed
+: 
+=== negative: another user cannot read it ===: 
+user-b with the same service id: VaultError/credential_not_found
+: 
+=== rotation ===: 
+rotation result: {"fromKeyId":"75bbf85e4aa788d5","toKeyId":"58ae7a7c498795b1","rewrapped":1}
+ciphertext unchanged: true
+nonce unchanged: true
+auth tag unchanged: true
+wrapped data key changed: true
+decrypts with new key only: true
+: 
+=== agent keys ===: 
+issued key format: true
+stored hash length: 64
+database contains the plaintext key: false
+verify issued key: user-a
+verify altered key: not found
+: 
+=== leak scan ===: 
+secret found in api responses: false
+secret found in journal payloads: false
+secret found in receipts: false
+secret found in tools: false
+secret found in stored rows: false
+secret found in captured logs: false
+routes exposed: ["GET /health","GET /api/journal/verify"]
+upstream received secret: true

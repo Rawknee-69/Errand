@@ -54,7 +54,7 @@ function seedUser(db: Db, userId: string): void {
     .values({ id: p + "cred", userId, connectorId: p + "conn", serviceId: p + "conn", kind: "api_key", ciphertext: "x", nonce: "n", authTag: "t", wrappedDataKey: "w", keyId: "k", createdAt: TS, updatedAt: TS })
     .run();
   db.insert(oauthAttempts)
-    .values({ id: p + "oauth", userId, connectorId: p + "conn", state: p + "state", codeVerifier: "v", redirectUri: "https://example.com/cb", createdAt: TS, expiresAt: TS })
+    .values({ id: p + "oauth", userId, connectorId: p + "conn", state: p + "state", redirectUri: "https://example.com/cb", createdAt: TS, expiresAt: TS })
     .run();
   db.insert(tools)
     .values({ id: p + "tool", userId, connectorId: p + "conn", name: "t", definitionHash: "h", createdAt: TS, updatedAt: TS })
