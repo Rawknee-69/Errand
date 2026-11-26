@@ -1,16 +1,6 @@
-import type { ToolClass } from "../db/schema.ts";
+import { toolClassRank, type ToolClass } from "@errand/shared";
 
 export type { ToolClass };
-
-// Conflict between classifier sources resolves to the more dangerous class
-// (GLOSSARY.md). `unknown` is not ordered: it only stands when nothing matched.
-const danger: Record<Exclude<ToolClass, "unknown">, number> = {
-  read: 1,
-  write: 2,
-  send: 3,
-  delete: 4,
-  spend: 5,
-};
 
 export type ToolAnnotations = {
   title?: string;
@@ -162,7 +152,7 @@ function annotationClass(annotations: ToolAnnotations | undefined): ToolClass | 
 export function moreDangerous(left: ToolClass, right: ToolClass): ToolClass {
   if (left === "unknown") return right;
   if (right === "unknown") return left;
-  return danger[left] >= danger[right] ? left : right;
+  return toolClassRank[left] >= toolClassRank[right] ? left : right;
 }
 
 // Annotations first, then name heuristics. A disagreement resolves to the

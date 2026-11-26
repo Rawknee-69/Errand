@@ -36,20 +36,12 @@ const entries: ScreenInfo[] = [
     path: "/connectors",
     label: "Connectors",
     title: "Connectors",
-    placeholder: {
-      ticket: 17,
-      copy: "Each saved connection, its transport, last successful run and a reauth path when the upstream asks for one.",
-    },
   },
   {
     screen: "catalog",
     path: "/catalog",
     label: "Catalog",
     title: "Catalog",
-    placeholder: {
-      ticket: 17,
-      copy: "Every discovered tool, its class, and what your agent may request — with changed definitions blocked until you re-approve them.",
-    },
   },
   {
     screen: "slips",

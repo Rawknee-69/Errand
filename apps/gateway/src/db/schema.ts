@@ -48,6 +48,7 @@ export const connectors = sqliteTable(
     authStatus: text("auth_status").notNull().default("active").$type<ConnectorAuthStatus>(),
     // Short, secret-free reason for the last authorization failure.
     lastAuthError: text("last_auth_error"),
+    lastSuccessAt: text("last_success_at"),
     createdAt: text("created_at").notNull(),
     updatedAt: text("updated_at").notNull(),
   },
@@ -107,6 +108,8 @@ export const tools = sqliteTable(
     inputSchema: text("input_schema").notNull().default("{}"),
     annotations: text("annotations").notNull().default("{}"),
     class: text("class").notNull().default("unknown").$type<ToolClass>(),
+    // A human-set class outlives refresh and re-approval; null means classifier-owned.
+    classOverride: text("class_override").$type<ToolClass>(),
     // The hash the human saw and approved; observedHash follows the upstream definition.
     definitionHash: text("definition_hash").notNull(),
     observedDescription: text("observed_description").notNull().default(""),

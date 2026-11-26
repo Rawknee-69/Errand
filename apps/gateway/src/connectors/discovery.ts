@@ -14,9 +14,10 @@ export function applyDiscovery(
   connection: McpConnection,
   eventType: "catalog.ingested" | "catalog.refreshed",
 ): IngestSummary {
+  const now = new Date().toISOString();
   deps.db
     .update(connectors)
-    .set({ transport: connection.transport, updatedAt: new Date().toISOString() })
+    .set({ transport: connection.transport, lastSuccessAt: now, updatedAt: now })
     .where(and(eq(connectors.userId, deps.userId), eq(connectors.id, connectorId)))
     .run();
   const summary = ingestTools(deps.db, {

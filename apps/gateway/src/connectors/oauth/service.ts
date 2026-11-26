@@ -208,6 +208,48 @@ async function runAuthorizationLeg(
   }
 }
 
+// Both a fresh connection and a re-authorization start with the same leg: the
+// URL the human must visit, with the verifier kept in the vault.
+async function beginAuthorization(
+  deps: OAuthServiceDeps,
+  connectorId: string,
+  serverUrl: string,
+  store: OAuthStore,
+  attemptId: string,
+  state: string,
+): Promise<{ authorizationUrl: string }> {
+  let authorizationUrl: string | undefined;
+  await runAuthorizationLeg(deps, connectorId, serverUrl, store, {
+    attemptId,
+    state,
+    onAuthorizationUrl: (url) => {
+      authorizationUrl = url.href;
+    },
+  });
+  if (authorizationUrl === undefined) {
+    throw new Error("The authorization server did not return an authorization URL");
+  }
+  return { authorizationUrl };
+}
+
+function insertAttempt(
+  deps: OAuthServiceDeps,
+  values: { attemptId: string; connectorId: string; state: string; now: Date },
+): void {
+  deps.db
+    .insert(oauthAttempts)
+    .values({
+      id: values.attemptId,
+      userId: deps.userId,
+      connectorId: values.connectorId,
+      state: values.state,
+      redirectUri: deps.redirectUri,
+      createdAt: values.now.toISOString(),
+      expiresAt: new Date(values.now.getTime() + OAUTH_ATTEMPT_TTL_MS).toISOString(),
+    })
+    .run();
+}
+
 export async function startOAuthFlow(
   deps: OAuthServiceDeps,
   input: { name: string; url: string },
@@ -234,33 +276,18 @@ export async function startOAuthFlow(
       updatedAt: now.toISOString(),
     })
     .run();
-  deps.db
-    .insert(oauthAttempts)
-    .values({
-      id: attemptId,
-      userId: deps.userId,
-      connectorId,
-      state,
-      redirectUri: deps.redirectUri,
-      createdAt: now.toISOString(),
-      expiresAt: new Date(now.getTime() + OAUTH_ATTEMPT_TTL_MS).toISOString(),
-    })
-    .run();
+  insertAttempt(deps, { attemptId, connectorId, state, now });
 
   const store = new OAuthStore(deps.vault, deps.store);
-  let authorizationUrl: string | undefined;
-
   try {
-    await runAuthorizationLeg(deps, connectorId, normalized, store, {
+    const { authorizationUrl } = await beginAuthorization(
+      deps,
+      connectorId,
+      normalized,
+      store,
       attemptId,
       state,
-      onAuthorizationUrl: (url) => {
-        authorizationUrl = url.href;
-      },
-    });
-    if (authorizationUrl === undefined) {
-      throw new Error("The authorization server did not return an authorization URL");
-    }
+    );
     pruneAttempts(deps, connectorId);
     appendJournalEvent(deps.db, {
       userId: deps.userId,
@@ -275,6 +302,55 @@ export async function startOAuthFlow(
   } catch (error) {
     discardConnector(deps, connectorId, [attemptId]);
     throw asConnectorError(error, failureReason(error), "oauth_failed");
+  }
+}
+
+// Re-authorization keeps the connector, its catalog and its pinned approvals;
+// only the tokens are replaced when the callback completes.
+export async function startOAuthReauth(
+  deps: OAuthServiceDeps,
+  connectorId: string,
+): Promise<OAuthStartResult> {
+  pruneExpiredAttempts(deps);
+  const row = connectorRow(deps, connectorId);
+  if (row.authType !== "oauth") {
+    throw new ConnectorError("reauth", "Only an OAuth connector can be re-authorized in a browser");
+  }
+  const now = new Date();
+  const attemptId = randomUUID();
+  const state = randomBytes(32).toString("base64url");
+  insertAttempt(deps, { attemptId, connectorId, state, now });
+  deps.db
+    .update(connectors)
+    .set({ authStatus: "pending", updatedAt: now.toISOString() })
+    .where(and(eq(connectors.userId, deps.userId), eq(connectors.id, connectorId)))
+    .run();
+
+  const store = new OAuthStore(deps.vault, deps.store);
+  try {
+    const { authorizationUrl } = await beginAuthorization(
+      deps,
+      connectorId,
+      row.url,
+      store,
+      attemptId,
+      state,
+    );
+    pruneAttempts(deps, connectorId);
+    appendJournalEvent(deps.db, {
+      userId: deps.userId,
+      eventType: "connector.oauth_restarted",
+      payload: { connectorId, host: new URL(row.url).host },
+    });
+    return {
+      connector: connectorView(connectorRow(deps, connectorId)),
+      authorizationUrl,
+      attemptId,
+    };
+  } catch (error) {
+    deleteAttempt(store, deps, attemptId);
+    markNeedsReauth(deps, connectorId, failureReason(error));
+    throw asConnectorError(error, failureReason(error), "reauth");
   }
 }
 

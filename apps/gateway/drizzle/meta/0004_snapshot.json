@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "a47d616b-3a39-44cb-87e3-0589fcff0e8c",
+  "id": "b009eb28-c265-4b76-a8c6-36bf93772e28",
   "prevId": "8fb9a12c-b5ea-4acd-a1d9-f7c98e8a73f8",
   "tables": {
     "agent_keys": {
@@ -269,6 +269,13 @@
         },
         "last_auth_error": {
           "name": "last_auth_error",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "last_success_at": {
+          "name": "last_success_at",
           "type": "text",
           "primaryKey": false,
           "notNull": false,
@@ -834,14 +841,6 @@
           "autoincrement": false,
           "default": "'{}'"
         },
-        "trims": {
-          "name": "trims",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "'[]'"
-        },
         "call_cap": {
           "name": "call_cap",
           "type": "integer",
@@ -1029,6 +1028,13 @@
           "notNull": true,
           "autoincrement": false,
           "default": "'unknown'"
+        },
+        "class_override": {
+          "name": "class_override",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
         },
         "definition_hash": {
           "name": "definition_hash",
