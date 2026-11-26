@@ -38,6 +38,21 @@ Done means, in order: implementation complete, full suite green, typecheck
 clean, `/code-review` run and its findings addressed, PR opened, and — if CI is
 green with no conflicts — squash-merged into `integration`.
 
+Closing is part of done, and it is a command rather than a memory:
+
+```
+bun run scripts/complete-ticket.ts <issue> <report.md>
+```
+
+That ticks the acceptance criteria, attaches the report, closes as completed,
+and prints the tickets that just became runnable. A `--dry` run shows what it
+would do.
+
+Never close a ticket whose criteria are unmet, and never close one without a
+report. Closing releases every dependent ticket, so a false close is a false
+green: an agent starts work on a foundation nobody built. If a ticket is partly
+done, leave it open, comment what remains, and say so in the report.
+
 Then report in the brief's §31 format: files built, exact commands, pasted test
 output, versions changed, anything unverified, and a final line naming the next
 runnable ticket:

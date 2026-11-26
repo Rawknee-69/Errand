@@ -24,6 +24,9 @@ Read `docs/agents/workflow.md` before touching code. Non-negotiable summary:
   a phase gate. Never commit directly to `main` or `integration`.
 - One ticket per session. When the ticket is done and reviewed, stop and report
   the next runnable ticket; never start it in the same session.
+- Completion is evidence, not a status change: tick the criteria, attach the
+  §31 report and close with `bun run scripts/complete-ticket.ts <issue> <report>`.
+  Never close a ticket without a passing suite; closing unblocks dependents.
 - `/code-review` on every ticket, `/improve-codebase-architecture` at every
   phase gate.
 - Reuse before writing: a second caller extracts a shared helper instead of
