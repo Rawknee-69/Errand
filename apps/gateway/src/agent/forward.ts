@@ -16,12 +16,10 @@ import { ConnectorLimiter } from "../connectors/concurrency.ts";
 import { ConnectorError } from "../connectors/errors.ts";
 import type { DiscoverOptions } from "../connectors/mcp.ts";
 import { markConnectorNeedsReauth, markConnectorSuccess } from "../connectors/records.ts";
-import type { OAuthServiceDeps } from "../connectors/oauth/service.ts";
+import { createConnectorServiceDeps } from "../connectors/service.ts";
 import type { CallDecision } from "../policy/pipeline.ts";
-import { CredentialStore } from "../vault/credentials.ts";
 import { VaultError } from "../vault/common.ts";
 import type { VaultKeyring } from "../vault/keyring.ts";
-import { Vault } from "../vault/vault.ts";
 
 export type AdmittedCall = Extract<CallDecision, { outcome: "admitted" }>;
 
@@ -32,9 +30,11 @@ export type ForwardFailureCode =
   | "upstream_auth"
   | "credential_unavailable";
 
+export type NotForwardedReason = "outbox_not_installed" | "spend_tap_not_installed";
+
 export type ForwardOutcome =
   | { state: "forwarded"; result: ConnectorToolResult; durationMs: number }
-  | { state: "not_forwarded"; reason: "outbox_not_installed" | "spend_tap_not_installed" }
+  | { state: "not_forwarded"; reason: NotForwardedReason }
   | { state: "failed"; error: ForwardFailureCode; message: string; durationMs: number };
 
 export type ForwarderOptions = {
@@ -61,7 +61,7 @@ const FAILURE_CODES: Record<ConnectorCallFailure, ForwardFailureCode> = {
   upstream: "upstream_error",
 };
 
-function failureFrom(error: unknown, tool: string): { error: ForwardFailureCode; message: string } {
+function failureFrom(error: unknown, tool: string): ForwardFailure {
   if (error instanceof ConnectorCallError) {
     return { error: FAILURE_CODES[error.code], message: error.message };
   }
@@ -71,22 +71,42 @@ function failureFrom(error: unknown, tool: string): { error: ForwardFailureCode;
       message: `The vault could not supply a credential for ${tool}`,
     };
   }
-  if (error instanceof ConnectorError && error.code === "credential") {
-    return { error: "credential_unavailable", message: `The stored credential for ${tool} is unusable` };
+  if (error instanceof ConnectorError) {
+    if (error.code === "credential") {
+      return { error: "credential_unavailable", message: `The stored credential for ${tool} is unusable` };
+    }
+    if (error.code === "reauth" || error.code === "oauth_failed" || error.code === "oauth_issuer") {
+      return { error: "upstream_auth", message: `The connector for ${tool} needs to be authorized again` };
+    }
   }
   const detail = error instanceof Error ? error.message : String(error);
   return { error: "upstream_error", message: `The upstream call to ${tool} failed: ${detail.slice(0, 300)}` };
 }
 
-function serviceDeps(options: ForwarderOptions, userId: string): OAuthServiceDeps {
-  return {
-    db: options.db,
-    userId,
-    vault: new Vault(options.db, options.keyring, userId),
-    store: new CredentialStore(options.db, options.keyring, userId),
-    discoverOptions: options.discoverOptions,
-    redirectUri: options.redirectUri,
-  };
+type ForwardFailure = { error: ForwardFailureCode; message: string };
+
+function insertCall(
+  db: Db,
+  userId: string,
+  decision: AdmittedCall,
+  args: Record<string, unknown>,
+  outcome: { result: string | null; error: string | null },
+): string {
+  const callId = randomUUID();
+  db.insert(calls)
+    .values({
+      id: callId,
+      userId,
+      slipId: decision.slipId,
+      connectorId: decision.connectorId,
+      tool: decision.tool,
+      arguments: JSON.stringify(args),
+      result: outcome.result,
+      error: outcome.error,
+      createdAt: new Date().toISOString(),
+    })
+    .run();
+  return callId;
 }
 
 function recordSuccess(
@@ -97,20 +117,8 @@ function recordSuccess(
   result: ConnectorToolResult,
   durationMs: number,
 ): void {
-  const callId = randomUUID();
   const serialized = JSON.stringify(result);
-  db.insert(calls)
-    .values({
-      id: callId,
-      userId,
-      slipId: decision.slipId,
-      connectorId: decision.connectorId,
-      tool: decision.tool,
-      arguments: JSON.stringify(args),
-      result: serialized,
-      createdAt: new Date().toISOString(),
-    })
-    .run();
+  const callId = insertCall(db, userId, decision, args, { result: serialized, error: null });
   appendJournalEvent(db, {
     userId,
     eventType: "call.succeeded",
@@ -123,6 +131,7 @@ function recordSuccess(
       duration_ms: durationMs,
       result_bytes: Buffer.byteLength(serialized, "utf8"),
       truncated: result.truncated,
+      upstream_is_error: result.isError,
     },
   });
   markConnectorSuccess({ db, userId }, decision.connectorId);
@@ -133,22 +142,13 @@ function recordFailure(
   userId: string,
   decision: AdmittedCall,
   args: Record<string, unknown>,
-  failure: { error: ForwardFailureCode; message: string },
+  failure: ForwardFailure,
   durationMs: number,
 ): void {
-  const callId = randomUUID();
-  db.insert(calls)
-    .values({
-      id: callId,
-      userId,
-      slipId: decision.slipId,
-      connectorId: decision.connectorId,
-      tool: decision.tool,
-      arguments: JSON.stringify(args),
-      error: failure.message,
-      createdAt: new Date().toISOString(),
-    })
-    .run();
+  const callId = insertCall(db, userId, decision, args, {
+    result: null,
+    error: failure.message,
+  });
   appendJournalEvent(db, {
     userId,
     eventType: "call.failed",
@@ -168,25 +168,9 @@ function recordFailure(
   }
 }
 
-// Sends and spends are admitted by policy but not forwarded until the outbox
-// (ticket #12) and spend tap exist; deferring keeps them from running early.
-function defer(
-  db: Db,
-  userId: string,
-  decision: AdmittedCall,
-  reason: "outbox_not_installed" | "spend_tap_not_installed",
-): ForwardOutcome {
-  appendJournalEvent(db, {
-    userId,
-    eventType: "call.deferred",
-    payload: {
-      slip_id: decision.slipId,
-      tool: decision.tool,
-      connector_id: decision.connectorId,
-      class: decision.class,
-      reason,
-    },
-  });
+// Sends and spends are admitted by policy but cannot run until ticket #12
+// installs the outbox and the spend tap.
+function notForwarded(reason: NotForwardedReason): ForwardOutcome {
   return { state: "not_forwarded", reason };
 }
 
@@ -198,8 +182,24 @@ export function createForwarder(options: ForwarderOptions): Forwarder {
   const resultCapBytes = options.resultCapBytes ?? DEFAULT_RESULT_CAP_BYTES;
 
   return async (userId, decision, args) => {
-    if (decision.class === "send") return defer(options.db, userId, decision, "outbox_not_installed");
-    if (decision.class === "spend") return defer(options.db, userId, decision, "spend_tap_not_installed");
+    switch (decision.class) {
+      case "send":
+        return notForwarded("outbox_not_installed");
+      case "spend":
+        return notForwarded("spend_tap_not_installed");
+      case "unknown": {
+        const failure = {
+          error: "upstream_error" as const,
+          message: `${decision.tool} has no forwardable class`,
+        };
+        recordFailure(options.db, userId, decision, args, failure, 0);
+        return { state: "failed", ...failure, durationMs: 0 };
+      }
+      case "read":
+      case "write":
+      case "delete":
+        break;
+    }
 
     const connector = getConnector(options.db, userId, decision.connectorId);
     if (connector === undefined) {
@@ -212,12 +212,19 @@ export function createForwarder(options: ForwarderOptions): Forwarder {
     }
 
     const started = Date.now();
+    const deadline = started + callTimeoutMs;
     let result: ConnectorToolResult | undefined;
-    let failure: { error: ForwardFailureCode; message: string } | undefined;
+    let failure: ForwardFailure | undefined;
     try {
       result = await limiter.run(connector.id, () =>
         callConnectorTool(
-          serviceDeps(options, userId),
+          createConnectorServiceDeps(
+            options.db,
+            options.keyring,
+            userId,
+            options.discoverOptions,
+            options.redirectUri,
+          ),
           {
             id: connector.id,
             url: connector.url,
@@ -226,7 +233,7 @@ export function createForwarder(options: ForwarderOptions): Forwarder {
           },
           decision.upstreamTool,
           args,
-          { timeoutMs: callTimeoutMs, resultCapBytes },
+          { timeoutMs: Math.max(1, deadline - Date.now()), resultCapBytes },
         ),
       );
     } catch (error) {

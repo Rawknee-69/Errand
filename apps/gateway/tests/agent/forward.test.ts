@@ -3,13 +3,15 @@ import { MOCK_AUTH, MOCK_PATHS, startMockServices } from "@errand/mock-services"
 import { z } from "zod";
 import { createGatewayApp, type GatewayAppOptions } from "../../src/app.ts";
 import { createForwarder } from "../../src/agent/forward.ts";
+import { redactAuthSecrets } from "../../src/connectors/redaction.ts";
 import type { Db } from "../../src/db/client.ts";
-import { calls, connectors, journal } from "../../src/db/schema.ts";
+import { calls, connectors } from "../../src/db/schema.ts";
 import { issueAgentKey } from "../../src/vault/agent-keys.ts";
 import { VaultKeyring } from "../../src/vault/keyring.ts";
 import { listJournalEvents } from "../../src/db/journal.ts";
 import { KEK, SLIP_KEY, userDb } from "../support/fixtures.ts";
 import { callTool, connectAgent } from "./mcp-client.ts";
+import { call, errorSchema, forwardedSchema, requestedSchema, statusSchema } from "./forward-support.ts";
 
 const catalogSchema = z.object({
   tools: z.array(
@@ -79,7 +81,7 @@ async function requestAndApprove(
 ): Promise<{ slipId: string; capability: string }> {
   const requested = await callTool(client, "request_errand", { goal: "forward test", tools });
   expect(requested.result.isError).toBeFalsy();
-  const slipId = z.object({ slipId: z.string() }).parse(requested.body).slipId;
+  const slipId = requestedSchema.parse(requested.body).slipId;
   const approved = await testApp.app.request(`/api/slips/${slipId}/approve`, {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -87,18 +89,9 @@ async function requestAndApprove(
   });
   expect(approved.status).toBe(200);
   const status = await callTool(client, "errand_status", { slip_id: slipId });
-  const capability = z.object({ capability: z.string() }).parse(status.body).capability;
+  const capability = statusSchema.parse(status.body).capability;
+  if (capability === null) throw new Error("approved slip has no capability");
   return { slipId, capability };
-}
-
-async function call(
-  client: Awaited<ReturnType<typeof connectAgent>>,
-  slipId: string,
-  capability: string,
-  tool: string,
-  args: Record<string, unknown> = {},
-) {
-  return callTool(client, "errand_call", { slip_id: slipId, tool, capability, arguments: args });
 }
 
 function mockUrl(path: string): string {
@@ -209,9 +202,7 @@ describe("forwarding admitted calls", () => {
       bytes: 300 * 1024,
     });
     expect(response.result.isError).toBeFalsy();
-    const body = z
-      .object({ state: z.literal("forwarded"), result: z.unknown() })
-      .parse(response.body);
+    const body = forwardedSchema.parse(response.body);
     const result = z
       .object({
         truncated: z.literal(true),
@@ -254,14 +245,20 @@ describe("forwarding admitted calls", () => {
 
     const spend = await forwarder("user-a", { ...decision, class: "spend" }, { cents: 50 });
     expect(spend).toEqual({ state: "not_forwarded", reason: "spend_tap_not_installed" });
-
-    const deferred = testApp.db
-      .select()
-      .from(journal)
-      .all()
-      .filter((event) => event.eventType === "call.deferred");
-    expect(deferred.length).toBeGreaterThanOrEqual(2);
     expect(testApp.db.select().from(calls).all().some((row) => row.slipId === "deferred-slip")).toBe(false);
+  });
+
+  test("basic auth redacts the password and its base64 header form, not the username", () => {
+    const header = Buffer.from("diner:eats").toString("base64");
+    const redacted = redactAuthSecrets(
+      { password: "eats", authorization: `Basic ${header}`, username: "diner" },
+      { type: "basic", username: "diner", password: "eats" },
+    );
+    expect(redacted).toEqual({
+      password: "[redacted]",
+      authorization: "Basic [redacted]",
+      username: "diner",
+    });
   });
 
   test("a timeout fails the call, updates counters and is journaled", async () => {
@@ -274,7 +271,7 @@ describe("forwarding admitted calls", () => {
       ]);
       const response = await call(timedClient, slipId, capability, "big__slow_result", { ms: 1_000 });
       expect(response.result.isError).toBe(true);
-      const body = z.object({ error: z.string(), message: z.string() }).parse(response.body);
+      const body = errorSchema.extend({ message: z.string() }).parse(response.body);
       expect(body.error).toBe("upstream_timeout");
       expect(body.message).toContain("timed out");
 

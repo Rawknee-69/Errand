@@ -1,17 +1,14 @@
 import {
-  Client,
-  SSEClientTransport,
   SdkError,
   SdkErrorCode,
-  StreamableHTTPClientTransport,
-  type Transport,
 } from "@modelcontextprotocol/client";
 import { z } from "zod";
 import type { McpTransportKind } from "@errand/shared";
 import type { ConnectorAuthType } from "../db/schema.ts";
-import { EgressRefusal, egressRequest } from "../egress/guard.ts";
-import { authHeaders, authSecrets, parseCredential, redactAuthSecrets, redactText, type ConnectorAuth } from "./auth.ts";
-import type { DiscoverOptions } from "./mcp.ts";
+import { EgressRefusal } from "../egress/guard.ts";
+import { authSecrets, parseCredential, type ConnectorAuth } from "./auth.ts";
+import { createMcpTransport, type DiscoverOptions } from "./mcp.ts";
+import { redactAuthSecrets, redactText } from "./redaction.ts";
 import { refreshOAuthAccessToken, type OAuthServiceDeps } from "./oauth/service.ts";
 
 export const DEFAULT_CALL_TIMEOUT_MS = 15_000;
@@ -90,7 +87,8 @@ function boundedResult(raw: RawResult, capBytes: number): ConnectorToolResult {
   };
   const serialized = JSON.stringify(base);
   const originalBytes = Buffer.byteLength(serialized, "utf8");
-  if (originalBytes <= capBytes) return { ...base, truncated: false, originalBytes };
+  const whole: ConnectorToolResult = { ...base, truncated: false, originalBytes };
+  if (Buffer.byteLength(JSON.stringify(whole), "utf8") <= capBytes) return whole;
 
   const marker = "\n…[result truncated]";
   let previewBytes = Math.max(0, capBytes - Buffer.byteLength(marker, "utf8") - 256);
@@ -150,27 +148,10 @@ async function invoke(
   discoverOptions: DiscoverOptions,
   timeoutMs: number,
 ): Promise<unknown> {
-  const endpoint = new URL(connector.url);
-  const headers = authHeaders(auth);
-  const guardedFetch = (input: string | URL | Request, init?: RequestInit): Promise<Response> => {
-    const target = input instanceof Request ? input.url : input;
-    const requestInit = input instanceof Request ? { ...init, method: init?.method ?? input.method } : init;
-    return egressRequest(target, requestInit ?? {}, { ...discoverOptions, timeoutMs });
-  };
-  const transport: Transport =
-    connector.transport === "streamable-http"
-      ? new StreamableHTTPClientTransport(endpoint, {
-          fetch: guardedFetch,
-          requestInit: { headers },
-          redirectPolicy: "follow",
-        })
-      : new SSEClientTransport(endpoint, {
-          fetch: guardedFetch,
-          requestInit: { headers },
-          redirectPolicy: "follow",
-        });
-
-  const client = new Client({ name: "errand-gateway", version: "0.1.0" });
+  const { client, transport } = createMcpTransport(connector.transport, connector.url, auth, {
+    ...discoverOptions,
+    timeoutMs,
+  });
   const deadline = Date.now() + timeoutMs;
   const remaining = (): number => Math.max(1, deadline - Date.now());
   try {

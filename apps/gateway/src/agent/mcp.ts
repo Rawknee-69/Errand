@@ -160,6 +160,7 @@ function agentServer(
         return errorResult(outcome.error, outcome.message, {
           slipId: decision.slipId,
           tool: decision.tool,
+          remaining,
         });
       }
       if (outcome.state === "not_forwarded") {

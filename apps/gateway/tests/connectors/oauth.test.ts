@@ -3,10 +3,13 @@ import { startMockServices } from "@errand/mock-services";
 import { z } from "zod";
 import { createGatewayApp, type GatewayAppOptions } from "../../src/app.ts";
 import { createMigratedDatabase, type Db } from "../../src/db/client.ts";
-import { connectors, credentials, journal, oauthAttempts, users } from "../../src/db/schema.ts";
+import { connectors, calls, credentials, journal, oauthAttempts, users } from "../../src/db/schema.ts";
 import { verifyJournal } from "../../src/db/journal.ts";
+import { issueAgentKey } from "../../src/vault/agent-keys.ts";
 import { Vault } from "../../src/vault/vault.ts";
 import { VaultKeyring } from "../../src/vault/keyring.ts";
+import { callTool, connectAgent } from "../agent/mcp-client.ts";
+import { SLIP_KEY } from "../support/fixtures.ts";
 import {
   connectResponseSchema,
   errorResponseSchema,
@@ -121,6 +124,7 @@ function createTestApp(
     discoverOptions: { allowLocalhostDev: true, timeoutMs: 5_000 },
     oauthRedirectUri: overrides.oauthRedirectUri ?? REDIRECT_URI,
     ...(overrides.webOrigin === undefined ? {} : { webOrigin: overrides.webOrigin }),
+    hmacKey: SLIP_KEY,
     auth: "disabled",
   });
 }
@@ -402,5 +406,43 @@ describe("OAuth 2.1 + PKCE via the SDK", () => {
     expect(
       db.select().from(journal).all().filter((event) => event.eventType === "connector.needs_reauth"),
     ).toHaveLength(1);
+  });
+
+  test("an authorized connector forwards a call with its stored OAuth token", async () => {
+    await authorizeFlow();
+    const key = issueAgentKey(db, USER, "oauth forward").key;
+    const server = Bun.serve({ port: 0, fetch: app.fetch });
+    const client = await connectAgent(`http://127.0.0.1:${server.port}`, key);
+    try {
+      const requested = await callTool(client, "request_errand", {
+        goal: "read the calendar",
+        tools: ["oauth_calendar__list_events"],
+      });
+      expect(requested.result.isError).toBeFalsy();
+      const slipId = z.object({ slipId: z.string() }).parse(requested.body).slipId;
+      const approved = await post(`/api/slips/${slipId}/approve`, {});
+      expect(approved.status).toBe(200);
+      const status = await callTool(client, "errand_status", { slip_id: slipId });
+      const capability = z.object({ capability: z.string() }).parse(status.body).capability;
+
+      const response = await callTool(client, "errand_call", {
+        slip_id: slipId,
+        tool: "oauth_calendar__list_events",
+        capability,
+      });
+      expect(response.result.isError).toBeFalsy();
+      expect(response.body).toMatchObject({ state: "forwarded", class: "read" });
+      expect(JSON.stringify(response.body)).toContain("Dinner with Sam");
+
+      const callRow = db.select().from(calls).all().find((row) => row.slipId === slipId);
+      expect(callRow?.error).toBeNull();
+      expect(callRow?.result).not.toBeNull();
+      expect(
+        db.select().from(journal).all().some((event) => event.eventType === "call.succeeded"),
+      ).toBe(true);
+    } finally {
+      await client.close();
+      server.stop(true);
+    }
   });
 });

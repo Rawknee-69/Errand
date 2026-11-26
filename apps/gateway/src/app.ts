@@ -37,6 +37,7 @@ import { ConnectorError, type ConnectorErrorCode } from "./connectors/errors.ts"
 import {
   approveCatalogTool,
   connectConnector,
+  createConnectorServiceDeps,
   listConnectors,
   probeUrl,
   refreshConnector,
@@ -45,9 +46,7 @@ import {
 } from "./connectors/service.ts";
 import { agentKeyView, issueAgentKey, revokeAgentKey, verifyAgentKey } from "./vault/agent-keys.ts";
 import { completeOAuthFlow, startOAuthFlow, startOAuthReauth } from "./connectors/oauth/service.ts";
-import { CredentialStore } from "./vault/credentials.ts";
 import { VaultKeyring } from "./vault/keyring.ts";
-import { Vault } from "./vault/vault.ts";
 import { approveSlip, denySlip, SlipError } from "./slips/approval.ts";
 import { getSlipDetail, listSlipSummaries } from "./slips/view.ts";
 
@@ -188,15 +187,14 @@ export function createGatewayApp(
     if (keyring === undefined) {
       throw new ConnectorError("credential", "The vault is not configured on this gateway");
     }
-    return {
+    return createConnectorServiceDeps(
       db,
+      keyring,
       userId,
-      vault: new Vault(db, keyring, userId),
-      store: new CredentialStore(db, keyring, userId),
       discoverOptions,
-      redirectUri: oauthRedirectUri,
-      ...(options.maxConnectors === undefined ? {} : { maxConnectors: options.maxConnectors }),
-    };
+      oauthRedirectUri,
+      options.maxConnectors,
+    );
   }
 
   function connectorDetail(result: ConnectResult, userId: string): ConnectorDetail {

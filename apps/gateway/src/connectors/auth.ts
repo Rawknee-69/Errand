@@ -55,31 +55,8 @@ export function authSecrets(auth: ConnectorAuth): string[] {
     case "header":
       return [auth.value];
     case "basic":
-      return [auth.username, auth.password];
+      return [auth.password, Buffer.from(`${auth.username}:${auth.password}`).toString("base64")];
   }
-}
-
-export function redactText(text: string, secrets: string[]): string {
-  let redacted = text;
-  for (const secret of secrets) {
-    if (secret !== "") redacted = redacted.split(secret).join("[redacted]");
-  }
-  return redacted;
-}
-
-function redactValue(value: unknown, secrets: string[]): unknown {
-  if (typeof value === "string") return redactText(value, secrets);
-  if (Array.isArray(value)) return value.map((item) => redactValue(item, secrets));
-  if (value !== null && typeof value === "object") {
-    const redacted: Record<string, unknown> = {};
-    for (const [key, item] of Object.entries(value)) redacted[key] = redactValue(item, secrets);
-    return redacted;
-  }
-  return value;
-}
-
-export function redactAuthSecrets(value: unknown, auth: ConnectorAuth): unknown {
-  return redactValue(value, authSecrets(auth));
 }
 
 export function serialiseCredential(auth: ConnectorAuth): string | undefined {

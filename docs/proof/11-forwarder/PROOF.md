@@ -42,10 +42,10 @@
 
 ## Not proven here
 
-- OAuth credential forwarding was not driven live. The forwarder resolves OAuth
-  through the existing refresh seam (`refreshOAuthAccessToken`), which the OAuth
-  connector tests already exercise, but no live call was made through an OAuth
-  connector in this ticket.
+- OAuth credential forwarding is covered in process by
+  `apps/gateway/tests/connectors/oauth.test.ts` (a live OAuth consent flow, then
+  a forwarded read through the stored token), but the live transcript in this
+  directory uses bearer and header credentials only.
 - Send and spend deferral is covered in process (`forward.test.ts`) but not in
   the live transcript; the outbox and spend tap are ticket #12.
 - An upstream response above the 10 MB egress ceiling is refused rather than

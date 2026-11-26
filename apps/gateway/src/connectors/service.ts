@@ -5,8 +5,9 @@ import type { Db } from "../db/client.ts";
 import { appendJournalEvent } from "../db/journal.ts";
 import { scopedList } from "../db/scoped-reads.ts";
 import { connectors, credentials, type ConnectorAuthType } from "../db/schema.ts";
-import type { CredentialStore } from "../vault/credentials.ts";
-import type { Vault } from "../vault/vault.ts";
+import { CredentialStore } from "../vault/credentials.ts";
+import type { VaultKeyring } from "../vault/keyring.ts";
+import { Vault } from "../vault/vault.ts";
 import { assertFetchableUrl } from "../egress/guard.ts";
 import { parseCredential, serialiseCredential, type ConnectorAuth } from "./auth.ts";
 import { getCatalogTool, pinToolDefinition, type DiscoveredTool, type IngestSummary } from "./catalog.ts";
@@ -31,6 +32,25 @@ export type ConnectorServiceDeps = ConnectorBaseDeps & {
   redirectUri: string;
   maxConnectors?: number;
 };
+
+export function createConnectorServiceDeps(
+  db: Db,
+  keyring: VaultKeyring,
+  userId: string,
+  discoverOptions: DiscoverOptions,
+  redirectUri: string,
+  maxConnectors?: number,
+): ConnectorServiceDeps {
+  return {
+    db,
+    userId,
+    vault: new Vault(db, keyring, userId),
+    store: new CredentialStore(db, keyring, userId),
+    discoverOptions,
+    redirectUri,
+    ...(maxConnectors === undefined ? {} : { maxConnectors }),
+  };
+}
 
 export type { AuthHint, ProbeResult };
 

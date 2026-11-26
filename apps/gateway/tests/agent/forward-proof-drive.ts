@@ -5,6 +5,14 @@ import { z } from "zod";
 import { createMigratedDatabase } from "../../src/db/client.ts";
 import { calls, journal, tools } from "../../src/db/schema.ts";
 import { callTool, connectAgent } from "./mcp-client.ts";
+import {
+  bytes,
+  call as callAgent,
+  errorSchema,
+  forwardedSchema,
+  requestedSchema,
+  statusSchema,
+} from "./forward-support.ts";
 import { humanRequests, parse, step } from "../support/proof-drive.ts";
 
 const base = process.argv[2] ?? "http://127.0.0.1:8841";
@@ -15,14 +23,6 @@ const passphrase = process.env.OWNER_PASSPHRASE ?? "proof-passphrase";
 const sessionSchema = z.object({ authenticated: z.boolean() });
 const keySchema = z.object({ key: z.string(), mcpUrl: z.string(), agentKey: z.object({ id: z.string() }) });
 const connectorSchema = z.object({ connector: z.object({ id: z.string() }) });
-const requestedSchema = z.object({ slipId: z.string(), state: z.string() });
-const statusSchema = z.object({ state: z.string(), capability: z.string().nullable(), callsUsed: z.number() });
-const forwardedSchema = z.object({
-  state: z.literal("forwarded"),
-  slipId: z.string(),
-  tool: z.string(),
-  result: z.unknown(),
-});
 
 step("log in as the owner");
 const login = await fetch(`${base}/api/auth/login`, {
@@ -108,11 +108,7 @@ async function approve(slipId: string): Promise<string> {
 }
 
 async function call(slipId: string, capability: string, tool: string, args: Record<string, unknown> = {}) {
-  return callTool(agent, "errand_call", { slip_id: slipId, tool, capability, arguments: args });
-}
-
-function bytes(value: unknown): number {
-  return Buffer.byteLength(JSON.stringify(value), "utf8");
+  return callAgent(agent, slipId, capability, tool, args);
 }
 
 step("the top layer still lists exactly four tools");
@@ -139,7 +135,7 @@ const write = await call(writeSlip, writeCapability, "calendar__create_event", {
   start: "2026-12-01T19:00:00Z",
 });
 console.log(JSON.stringify(write.body, null, 2));
-assert.equal((write.body as { state: string }).state, "forwarded");
+assert.equal(forwardedSchema.parse(write.body).state, "forwarded");
 assert.match(JSON.stringify(write.body), /evt-new/);
 
 step("a delete call forwards only when the slip explicitly includes it");
@@ -147,10 +143,10 @@ const deleteSlip = await request(["calendar__delete_event"]);
 const deleteCapability = await approve(deleteSlip);
 const deleted = await call(deleteSlip, deleteCapability, "calendar__delete_event", { id: "evt-1" });
 console.log(JSON.stringify(deleted.body, null, 2));
-assert.equal((deleted.body as { state: string }).state, "forwarded");
+assert.equal(forwardedSchema.parse(deleted.body).state, "forwarded");
 const offSlip = await call(readSlip, readCapability, "calendar__delete_event", { id: "evt-1" });
 console.log(JSON.stringify({ isError: offSlip.result.isError, body: offSlip.body }, null, 2));
-assert.equal((offSlip.body as { error: string }).error, "out_of_scope");
+assert.equal(errorSchema.parse(offSlip.body).error, "out_of_scope");
 
 step("a result over 256 KB is truncated and flagged");
 const largeSlip = await request(["big__large_result"]);
@@ -192,7 +188,7 @@ const slowSlip = await request(["big__slow_result"]);
 const slowCapability = await approve(slowSlip);
 const slow = await call(slowSlip, slowCapability, "big__slow_result", { ms: 1_500 });
 console.log(JSON.stringify({ isError: slow.result.isError, body: slow.body }, null, 2));
-assert.equal((slow.body as { error: string }).error, "upstream_timeout");
+assert.equal(errorSchema.parse(slow.body).error, "upstream_timeout");
 const slowStatus = statusSchema.parse((await callTool(agent, "errand_status", { slip_id: slowSlip })).body);
 console.log(JSON.stringify({ callsUsed: slowStatus.callsUsed }));
 assert.equal(slowStatus.callsUsed, 1);

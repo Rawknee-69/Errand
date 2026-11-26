@@ -1,18 +1,10 @@
 bun test v1.4.4 (38afee6c8)
-bun : 
-At line:1 char:1
-+ bun test 2>&1 | Tee-Object -FilePath D:\errand\docs\proof\11-forwarde ...
-+ ~~~~~~~~~~~~~
-    + CategoryInfo          : NotSpecified: (:String) [], RemoteException
-    + FullyQualifiedErrorId : NativeCommandError
- 
-apps\gateway\tests\connectors\oauth.test.ts:
-[mcp-sdk] OAuth "invalid_grant" ΓÇö invalidating the stored tokens and retrying authorization. Cause: "refresh token 
-is invalid, rotated or revoked"
-[mcp-sdk] OAuth "invalid_grant" ΓÇö invalidating the stored tokens and retrying authorization. Cause: "refresh token 
-is invalid, rotated or revoked"
 
- 328 pass
+apps\gateway\tests\connectors\oauth.test.ts:
+[mcp-sdk] OAuth "invalid_grant" — invalidating the stored tokens and retrying authorization. Cause: "refresh token is invalid, rotated or revoked"
+[mcp-sdk] OAuth "invalid_grant" — invalidating the stored tokens and retrying authorization. Cause: "refresh token is invalid, rotated or revoked"
+
+ 330 pass
  0 fail
- 1017 expect() calls
-Ran 328 tests across 42 files. [4.34s]
+ 1030 expect() calls
+Ran 330 tests across 42 files. [2.96s]
