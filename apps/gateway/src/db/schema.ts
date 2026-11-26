@@ -9,13 +9,11 @@ import {
   type Tier,
   type ToolClass,
   type ToolState,
+  type VerificationOutcome,
 } from "@errand/shared";
 
 export { CONNECTOR_AUTH_STATUSES };
 export type { ConnectorAuthStatus, ConnectorAuthType, SlipState, Tier, ToolClass, ToolState };
-
-// Verifier outcomes per change; `unverified` never implies success (GLOSSARY.md).
-export type VerificationOutcome = "matched" | "mismatched" | "unverified";
 
 export const users = sqliteTable("users", {
   id: text("id").primaryKey(),
@@ -193,6 +191,8 @@ export const receipts = sqliteTable(
     callId: text("call_id").references(() => calls.id),
     errandType: text("errand_type").notNull(),
     verification: text("verification").notNull().$type<VerificationOutcome>(),
+    toolClass: text("tool_class").notNull().default("unknown").$type<ToolClass>(),
+    irreversible: integer("irreversible", { mode: "boolean" }).notNull().default(false),
     summary: text("summary").notNull().default(""),
     createdAt: text("created_at").notNull(),
   },
@@ -208,7 +208,10 @@ export const undoActions = sqliteTable(
     receiptId: text("receipt_id").references(() => receipts.id),
     callId: text("call_id").references(() => calls.id),
     inverse: text("inverse").notNull(),
+    startedAt: text("started_at"),
     appliedAt: text("applied_at"),
+    verification: text("verification").$type<VerificationOutcome>(),
+    summary: text("summary"),
     createdAt: text("created_at").notNull(),
   },
   (t) => [index("undo_actions_user_id_idx").on(t.userId)],

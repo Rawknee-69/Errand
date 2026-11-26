@@ -57,6 +57,13 @@
       "when": 1795690417806,
       "tag": "0007_green_sleeper",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1795691295957,
+      "tag": "0008_good_rhino",
+      "breakpoints": true
     }
   ]
 }

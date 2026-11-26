@@ -1,0 +1,14 @@
+# Network requests observed while driving /slips (desktop 1440×900)
+
+GET  /                             200
+GET  /@vite/client                 200
+GET  /src/main.tsx                 200
+GET  /src/App.tsx                  200
+GET  /src/screens/Slips.tsx        200
+GET  /api/auth/session             200
+POST /api/auth/login               200
+GET  /api/slips                    200
+GET  /api/events                   200  (SSE; replayed the receipt.created frames)
+GET  /api/slips                    200
+
+No 4xx or 5xx responses. No credential appears in any request URL or body.

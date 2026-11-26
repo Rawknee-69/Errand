@@ -1,0 +1,5 @@
+# Browser console — desktop 1440×900, /slips live feed after the ticket-14 drive
+
+Level: error
+
+(none)

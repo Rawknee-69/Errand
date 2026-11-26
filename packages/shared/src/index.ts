@@ -119,6 +119,41 @@ export const slipApprovedSchema = z.object({
 });
 export type SlipApproved = z.infer<typeof slipApprovedSchema>;
 
+export const verificationOutcomeSchema = z.enum(["matched", "mismatched", "unverified"]);
+export type VerificationOutcome = z.infer<typeof verificationOutcomeSchema>;
+
+export const receiptUndoSchema = z.object({
+  id: z.string(),
+  appliedAt: z.string().nullable(),
+  verification: verificationOutcomeSchema.nullable(),
+  summary: z.string().nullable(),
+});
+export type ReceiptUndo = z.infer<typeof receiptUndoSchema>;
+
+export const receiptViewSchema = z.object({
+  id: z.string(),
+  slipId: z.string(),
+  callId: z.string().nullable(),
+  errandType: z.string(),
+  verification: verificationOutcomeSchema,
+  summary: z.string(),
+  toolClass: toolClassSchema,
+  irreversible: z.boolean(),
+  undo: receiptUndoSchema.nullable(),
+  createdAt: z.string(),
+});
+export type ReceiptView = z.infer<typeof receiptViewSchema>;
+
+export const receiptListResponseSchema = z.object({ receipts: z.array(receiptViewSchema) });
+export type ReceiptListResponse = z.infer<typeof receiptListResponseSchema>;
+
+export const undoApplyResponseSchema = z.object({
+  verification: verificationOutcomeSchema,
+  summary: z.string(),
+  receipt: receiptViewSchema,
+});
+export type UndoApplyResponse = z.infer<typeof undoApplyResponseSchema>;
+
 export const feedPayloadSchema = z.record(z.string(), z.unknown());
 
 export const feedEventSchema = z.object({

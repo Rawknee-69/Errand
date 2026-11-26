@@ -191,6 +191,7 @@ function agentServer(
         result: outcome.result,
         durationMs: outcome.durationMs,
         remaining,
+        ...(outcome.receipt === undefined ? {} : { receipt: outcome.receipt }),
       });
     },
   );

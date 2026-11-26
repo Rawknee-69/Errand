@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { MOCK_AUTH, MOCK_PATHS, startMockServices } from "@errand/mock-services";
+import { receiptViewSchema, type ReceiptView } from "@errand/shared";
 import { z } from "zod";
 import { createGatewayApp, type GatewayAppOptions } from "../../src/app.ts";
 import { createForwarder } from "../../src/agent/forward.ts";
@@ -18,6 +19,7 @@ const catalogSchema = z.object({
     z.object({
       id: z.string(),
       connectorId: z.string(),
+      name: z.string(),
       agentName: z.string(),
       class: z.string(),
       requestable: z.boolean(),
@@ -91,6 +93,30 @@ async function requestAndApprove(
 
 function mockUrl(path: string): string {
   return `http://127.0.0.1:${mockServer.port}${path}`;
+}
+
+const receiptSchema = receiptViewSchema;
+
+async function listReceipts(testApp: TestApp): Promise<ReceiptView[]> {
+  const response = await testApp.app.request("/api/receipts");
+  expect(response.status).toBe(200);
+  return z.object({ receipts: z.array(receiptSchema) }).parse(await response.json()).receipts;
+}
+
+async function setCalendarFault(mode: "none" | "drop_write"): Promise<void> {
+  const response = await fetch(mockUrl("/mock/calendar/fault"), {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ mode }),
+  });
+  expect(response.status).toBe(200);
+}
+
+function firstText(result: unknown): string {
+  const parsed = z
+    .object({ content: z.array(z.object({ type: z.string(), text: z.string().optional() })) })
+    .parse(result);
+  return parsed.content.map((item) => item.text ?? "").join("");
 }
 
 let mockServer: ReturnType<typeof startMockServices>;
@@ -173,7 +199,7 @@ describe("forwarding admitted calls", () => {
     });
     expect(written.result.isError).toBeFalsy();
     expect(written.body).toMatchObject({ state: "forwarded", class: "write" });
-    expect(JSON.stringify(written.body)).toContain("evt-new");
+    expect(JSON.stringify(written.body)).toContain("evt-2");
 
     const deletion = await requestAndApprove(testApp, client, ["calendar__delete_event"]);
     const deleted = await call(client, deletion.slipId, deletion.capability, "calendar__delete_event", {
@@ -324,3 +350,210 @@ describe("forwarding admitted calls", () => {
     }
   });
 });
+
+describe("receipts, verification and undo", () => {
+  afterAll(async () => {
+    await setCalendarFault("none");
+  });
+
+  test("a calendar create is verified by reading state back and offers an undo", async () => {
+    await setCalendarFault("none");
+    const { slipId, capability } = await requestAndApprove(testApp, client, [
+      "calendar__create_event",
+    ]);
+    const response = await call(client, slipId, capability, "calendar__create_event", {
+      title: "Dinner with Sam",
+      start: "2026-12-01T19:00:00Z",
+    });
+    expect(response.result.isError).toBeFalsy();
+
+    const receipt = z.object({ receipt: receiptSchema }).parse(response.body).receipt;
+    expect(receipt).toMatchObject({
+      slipId,
+      verification: "matched",
+      toolClass: "write",
+      irreversible: false,
+    });
+    expect(receipt.undo).not.toBeNull();
+    expect(receipt.undo?.appliedAt).toBeNull();
+    expect(receipt.summary.toLowerCase()).toContain("read");
+
+    const stored = await listReceipts(testApp);
+    expect(stored.some((entry) => entry.id === receipt.id)).toBe(true);
+
+    const created = listJournalEvents(testApp.db, "user-a").filter(
+      (event) => event.eventType === "receipt.created",
+    );
+    expect(created.at(-1)?.payload).toContain(receipt.id);
+  });
+
+  test("a forced mismatch is reported as mismatched, not as success", async () => {
+    await setCalendarFault("drop_write");
+    try {
+      const { slipId, capability } = await requestAndApprove(testApp, client, [
+        "calendar__create_event",
+      ]);
+      const response = await call(client, slipId, capability, "calendar__create_event", {
+        title: "Ghost event",
+        start: "2026-12-02T09:00:00Z",
+      });
+      expect(response.result.isError).toBeFalsy();
+
+      const receipt = z.object({ receipt: receiptSchema }).parse(response.body).receipt;
+      expect(receipt.verification).toBe("mismatched");
+      expect(receipt.summary.toLowerCase()).toContain("did not");
+      expect(receipt.undo).toBeNull();
+    } finally {
+      await setCalendarFault("none");
+    }
+  });
+
+  test("undo applies the inverse, verifies it and is journaled", async () => {
+    await setCalendarFault("none");
+    const created = await requestAndApprove(testApp, client, ["calendar__create_event"]);
+    const response = await call(client, created.slipId, created.capability, "calendar__create_event", {
+      title: "Undo me",
+      start: "2026-12-03T18:00:00Z",
+    });
+    const receipt = z.object({ receipt: receiptSchema }).parse(response.body).receipt;
+
+    const undoResponse = await testApp.app.request(`/api/receipts/${receipt.id}/undo`, {
+      method: "POST",
+    });
+    expect(undoResponse.status).toBe(200);
+    const undoBody = z
+      .object({
+        verification: z.enum(["matched", "mismatched", "unverified"]),
+        receipt: receiptSchema,
+      })
+      .parse(await undoResponse.json());
+    expect(undoBody.verification).toBe("matched");
+    expect(undoBody.receipt.undo?.appliedAt).not.toBeNull();
+
+    const read = await requestAndApprove(testApp, client, ["calendar__list_events"]);
+    const listed = await call(client, read.slipId, read.capability, "calendar__list_events");
+    expect(firstText(z.object({ result: z.unknown() }).parse(listed.body).result)).not.toContain(
+      "Undo me",
+    );
+
+    const journaled = listJournalEvents(testApp.db, "user-a").filter(
+      (event) => event.eventType === "undo.applied",
+    );
+    expect(journaled.at(-1)?.payload).toContain(receipt.id);
+
+    const again = await testApp.app.request(`/api/receipts/${receipt.id}/undo`, {
+      method: "POST",
+    });
+    expect(again.status).toBe(409);
+  });
+
+  test("an undo that does not land is recorded as mismatched and can be retried", async () => {
+    await setCalendarFault("none");
+    const created = await requestAndApprove(testApp, client, ["calendar__create_event"]);
+    const response = await call(client, created.slipId, created.capability, "calendar__create_event", {
+      title: "Stubborn event",
+      start: "2026-12-05T17:00:00Z",
+    });
+    const receipt = z.object({ receipt: receiptSchema }).parse(response.body).receipt;
+
+    await setCalendarFault("drop_write");
+    try {
+      const undoResponse = await testApp.app.request(`/api/receipts/${receipt.id}/undo`, {
+        method: "POST",
+      });
+      expect(undoResponse.status).toBe(200);
+      const undoBody = z
+        .object({
+          verification: z.enum(["matched", "mismatched", "unverified"]),
+          receipt: receiptSchema,
+        })
+        .parse(await undoResponse.json());
+      expect(undoBody.verification).toBe("mismatched");
+      expect(undoBody.receipt.undo?.appliedAt).toBeNull();
+      expect(undoBody.receipt.undo?.verification).toBe("mismatched");
+
+      const stored = await testApp.app.request(`/api/receipts/${receipt.id}`);
+      const storedReceipt = z
+        .object({ receipt: receiptSchema })
+        .parse(await stored.json()).receipt;
+      expect(storedReceipt.undo?.verification).toBe("mismatched");
+    } finally {
+      await setCalendarFault("none");
+    }
+
+    const retry = await testApp.app.request(`/api/receipts/${receipt.id}/undo`, {
+      method: "POST",
+    });
+    expect(retry.status).toBe(200);
+    const retryBody = z
+      .object({ verification: z.enum(["matched", "mismatched", "unverified"]), receipt: receiptSchema })
+      .parse(await retry.json());
+    expect(retryBody.verification).toBe("matched");
+    expect(retryBody.receipt.undo?.appliedAt).not.toBeNull();
+    expect(retryBody.receipt.undo?.verification).toBe("matched");
+  });
+
+  test("a delete is verified, irreversible and has no undo", async () => {
+    await setCalendarFault("none");
+    const created = await requestAndApprove(testApp, client, ["calendar__create_event"]);
+    const write = await call(client, created.slipId, created.capability, "calendar__create_event", {
+      title: "Temporary event",
+      start: "2026-12-04T08:00:00Z",
+    });
+    const event = z
+      .object({ id: z.string() })
+      .parse(JSON.parse(firstText(z.object({ result: z.unknown() }).parse(write.body).result)));
+
+    const deletion = await requestAndApprove(testApp, client, ["calendar__delete_event"]);
+    const deleted = await call(
+      client,
+      deletion.slipId,
+      deletion.capability,
+      "calendar__delete_event",
+      { id: event.id },
+    );
+    expect(deleted.result.isError).toBeFalsy();
+
+    const receipt = z.object({ receipt: receiptSchema }).parse(deleted.body).receipt;
+    expect(receipt).toMatchObject({
+      verification: "matched",
+      toolClass: "delete",
+      irreversible: true,
+      undo: null,
+    });
+    expect(receipt.summary.toLowerCase()).toContain("cannot be undone");
+  });
+
+  test("a connector without a verifier yields unverified and says so plainly", async () => {
+    const dineOutConnectorId = await connectConnector(testApp, "Dine out", MOCK_PATHS.dineOutSse, {
+      authType: "basic",
+      username: MOCK_AUTH.dineOutUser,
+      password: MOCK_AUTH.dineOutPassword,
+    });
+    const listed = await catalog(testApp);
+    const reserve = listed.tools.find(
+      (entry) => entry.connectorId === dineOutConnectorId && entry.name === "reserve_table",
+    );
+    if (reserve === undefined) throw new Error("missing dine-out reserve_table");
+    expect(reserve.class).toBe("write");
+    await setRequestable(testApp, reserve.id, true);
+
+    const { slipId, capability } = await requestAndApprove(testApp, client, [reserve.agentName]);
+    const response = await call(client, slipId, capability, reserve.agentName, {
+      restaurant: "The Table",
+      party: 2,
+    });
+    expect(response.result.isError).toBeFalsy();
+
+    const receipt = z.object({ receipt: receiptSchema }).parse(response.body).receipt;
+    expect(receipt).toMatchObject({
+      verification: "unverified",
+      toolClass: "write",
+      irreversible: false,
+      undo: null,
+    });
+    expect(receipt.summary.toLowerCase()).toContain("unverified");
+    expect(receipt.summary.toLowerCase()).toContain("no verifier");
+  });
+});
+
