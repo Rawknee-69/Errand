@@ -1,0 +1,20 @@
+In-app browser window — GET http://127.0.0.1:8787/health, then GET http://127.0.0.1:8787/api/catalog
+
+Console (level: warning and above): none
+Page errors: none
+
+Network
+cc2b846a-378d-4854-8b09-d2c494708d65:6  GET  http://127.0.0.1:8787/api/catalog
+  resourceType: document
+  status: 200
+  state: completed
+  durationMs: 4.48
+
+Screens
+- screens/01-health.png — live /health response.
+- screens/02-catalog-live.png — live /api/catalog response, downscaled to fit the
+  300 KB proof limit. Raw values are in logs/curl-transcript.txt.
+
+The product control panel is ticket #16 (P7) and does not exist yet; this
+ticket's surface is the JSON API, so the browser was used to view the live
+responses and the curl transcript is the complete behavioural evidence.

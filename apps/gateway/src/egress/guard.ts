@@ -6,6 +6,7 @@ import { classifyAddress, stripBrackets, type BlockedReason } from "./address.ts
 
 export type EgressRefusalCode =
   | "invalid-url"
+  | "invalid-request"
   | "scheme"
   | "dns"
   | "blocked-address"
@@ -148,31 +149,51 @@ export async function egressFetch(
   input: string | URL,
   options: EgressOptions = {},
 ): Promise<Response> {
+  return egressRequest(input, { method: "GET" }, options);
+}
+
+type RequestOnceOptions = {
+  method: string;
+  headers: Headers;
+  body: Buffer | undefined;
+  signal: AbortSignal | null | undefined;
+};
+
+export async function egressRequest(
+  input: string | URL,
+  init: RequestInit = {},
+  options: EgressOptions = {},
+): Promise<Response> {
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const maxResponseBytes = options.maxResponseBytes ?? DEFAULT_MAX_RESPONSE_BYTES;
-  const deadline = AbortSignal.timeout(timeoutMs);
 
   let url = parseUrl(input);
+  let method = (init.method ?? "GET").toUpperCase();
+  let headers = new Headers(init.headers);
+  let body = await requestBody(init.body);
+
   for (let followed = 0; ; followed++) {
     const target = await validateTarget(url, options);
 
-    let response: IncomingMessage;
+    let pending: { response: IncomingMessage; deadline: AbortSignal; cleanup: () => void };
     try {
-      response = await requestOnce(target, deadline);
+      pending = await requestOnce(target, { method, headers, body, signal: init.signal }, timeoutMs);
     } catch (error) {
-      if (deadline.aborted) {
-        throw new EgressRefusal("timeout", `${target.url.href} did not answer within ${timeoutMs}ms`);
-      }
+      if (error instanceof EgressRefusal) throw error;
+      const reason = abortReason(init.signal);
+      if (reason !== undefined) throw reason;
       throw error;
     }
 
+    const { response, deadline } = pending;
     if (!redirectStatuses.has(response.statusCode ?? 0)) {
-      return toResponse(response, target.url, maxResponseBytes, deadline);
+      return toResponse(response, target.url, maxResponseBytes, deadline, pending.cleanup);
     }
 
     const location = response.headers.location;
     response.on("error", () => undefined);
     response.destroy();
+    pending.cleanup();
     if (location === undefined || location === "") {
       throw new EgressRefusal(
         "redirect-without-location",
@@ -185,25 +206,92 @@ export async function egressFetch(
         `${target.url.href} exceeded ${MAX_REDIRECTS} redirects`,
       );
     }
-    url = parseUrl(new URL(location, target.url));
+
+    const next = parseUrl(new URL(location, target.url));
+    const status = response.statusCode ?? 0;
+    if (status === 303 || ((status === 301 || status === 302) && method === "POST")) {
+      method = "GET";
+      body = undefined;
+      headers.delete("content-type");
+      headers.delete("content-length");
+    }
+    if (next.origin !== target.url.origin) stripOriginHeaders(headers);
+    url = next;
   }
 }
 
-function requestOnce(target: Target, deadline: AbortSignal): Promise<IncomingMessage> {
+async function requestBody(body: RequestInit["body"]): Promise<Buffer | undefined> {
+  if (body === null || body === undefined) return undefined;
+  if (typeof body === "string") return Buffer.from(body);
+  if (body instanceof Uint8Array) return Buffer.from(body);
+  if (body instanceof ArrayBuffer) return Buffer.from(body);
+  if (body instanceof URLSearchParams) return Buffer.from(body.toString());
+  throw new EgressRefusal("invalid-request", "Unsupported request body for an egress request");
+}
+
+function stripOriginHeaders(headers: Headers): void {
+  for (const name of [...headers.keys()]) {
+    if (name === "authorization" || name === "cookie" || name.startsWith("x-")) {
+      headers.delete(name);
+    }
+  }
+}
+
+function abortReason(signal: AbortSignal | null | undefined): EgressRefusal | undefined {
+  if (!signal?.aborted) return undefined;
+  return signal.reason instanceof EgressRefusal
+    ? signal.reason
+    : new EgressRefusal("timeout", "The request was aborted");
+}
+
+function requestOnce(
+  target: Target,
+  request: RequestOnceOptions,
+  timeoutMs: number,
+): Promise<{ response: IncomingMessage; deadline: AbortSignal; cleanup: () => void }> {
   const transport = target.url.protocol === "https:" ? httpsRequest : httpRequest;
+  const controller = new AbortController();
+  const onCallerAbort = (): void => controller.abort(request.signal?.reason);
+  if (request.signal?.aborted === true) onCallerAbort();
+  else request.signal?.addEventListener("abort", onCallerAbort, { once: true });
+
+  const timer = setTimeout(() => {
+    controller.abort(
+      new EgressRefusal("timeout", `${target.url.href} did not answer within ${timeoutMs}ms`),
+    );
+  }, timeoutMs);
+
+  const cleanup = (): void => {
+    clearTimeout(timer);
+    request.signal?.removeEventListener("abort", onCallerAbort);
+  };
+
   return new Promise((resolve, reject) => {
-    const request = transport(
+    const outgoing = transport(
       target.url,
       {
-        method: "GET",
+        method: request.method,
+        headers: Object.fromEntries(request.headers.entries()),
         agent: false,
-        signal: deadline,
+        signal: controller.signal,
         lookup: pinnedLookup(target.address),
       },
-      resolve,
+      (response) => {
+        clearTimeout(timer);
+        resolve({ response, deadline: controller.signal, cleanup });
+      },
     );
-    request.on("error", reject);
-    request.end();
+    outgoing.on("error", (error) => {
+      cleanup();
+      if (controller.signal.aborted) {
+        const reason = controller.signal.reason;
+        reject(reason instanceof EgressRefusal ? reason : error);
+        return;
+      }
+      reject(error);
+    });
+    if (request.body !== undefined) outgoing.write(request.body);
+    outgoing.end();
   });
 }
 
@@ -222,6 +310,7 @@ function toResponse(
   url: URL,
   maxBytes: number,
   deadline: AbortSignal,
+  cleanup: () => void,
 ): Response {
   const headers = new Headers();
   for (const [name, value] of Object.entries(response.headers)) {
@@ -233,6 +322,7 @@ function toResponse(
   const declared = Number(headers.get("content-length"));
   if (Number.isFinite(declared) && declared > maxBytes) {
     response.destroy();
+    cleanup();
     throw new EgressRefusal(
       "response-too-large",
       `${url.href} declares ${declared} bytes; the limit is ${maxBytes}`,
@@ -242,18 +332,22 @@ function toResponse(
   const status = response.statusCode ?? 502;
   if (status === 204 || status === 205 || status === 304) {
     response.resume();
+    cleanup();
     return new Response(null, { status, statusText: response.statusMessage ?? "", headers });
   }
 
   let seen = 0;
   let finished = false;
+  const failWith = (error: unknown): unknown =>
+    deadline.aborted && deadline.reason instanceof EgressRefusal ? deadline.reason : error;
   const body = new ReadableStream<Uint8Array>({
     start(controller) {
       const fail = (error: unknown): void => {
         if (finished) return;
         finished = true;
+        cleanup();
         response.destroy();
-        controller.error(error);
+        controller.error(failWith(error));
       };
       response.on("data", (chunk: Buffer) => {
         if (finished) return;
@@ -272,25 +366,19 @@ function toResponse(
       response.on("end", () => {
         if (finished) return;
         finished = true;
+        cleanup();
         controller.close();
       });
       response.on("error", (error) => {
-        fail(
-          deadline.aborted
-            ? new EgressRefusal("timeout", `${url.href} timed out`)
-            : error,
-        );
+        fail(error);
       });
       response.on("aborted", () => {
-        fail(
-          deadline.aborted
-            ? new EgressRefusal("timeout", `${url.href} timed out`)
-            : new Error(`${url.href} closed the response early`),
-        );
+        fail(new Error(`${url.href} closed the response early`));
       });
     },
     cancel() {
       finished = true;
+      cleanup();
       response.destroy();
     },
   });
