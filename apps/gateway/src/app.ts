@@ -1,6 +1,8 @@
 import {
   CONNECTORS_PATH,
   escapeHtml,
+  outboxItemResponseSchema,
+  outboxListResponseSchema,
   slipApprovalInputSchema,
   slipApprovedSchema,
   slipDetailSchema,
@@ -17,7 +19,7 @@ import { Hono, type Context } from "hono";
 import { streamSSE } from "hono/streaming";
 import gatewayPackage from "../package.json" with { type: "json" };
 import { AGENT_PATH, createAgentHandler } from "./agent/mcp.ts";
-import { createForwarder, type Forwarder } from "./agent/forward.ts";
+import { createForwarder } from "./agent/forward.ts";
 import { registerAuth, requestUserId, type AuthOptions, type GatewayEnv } from "./auth/api.ts";
 import { DEFAULT_OWNER_ID } from "./auth/owner.ts";
 import { webOriginSchema } from "./config.ts";
@@ -53,6 +55,7 @@ import { approveSlip, denySlip, SlipError } from "./slips/approval.ts";
 import { getSlipDetail, listSlipSummaries } from "./slips/view.ts";
 import { applyUndo, getReceiptView, listReceiptViews } from "./receipts/receipts.ts";
 import { streamFeed, type FeedStreamOptions } from "./feed/stream.ts";
+import { OutboxError } from "./outbox/service.ts";
 
 export { DEFAULT_OWNER_ID };
 export const DEFAULT_OAUTH_REDIRECT_URI = "http://127.0.0.1:8787/api/oauth/callback";
@@ -69,6 +72,8 @@ export type GatewayAppOptions = {
   connectorConcurrency?: number;
   resultCapBytes?: number;
   feed?: FeedStreamOptions;
+  // The worker is production wiring; tests drive `releaseDue` themselves.
+  outboxReleaseIntervalMs?: number;
   auth: AuthOptions | "disabled";
 };
 
@@ -171,7 +176,7 @@ export function createGatewayApp(
   const oauthRedirectUri = options.oauthRedirectUri ?? DEFAULT_OAUTH_REDIRECT_URI;
   const webOrigin =
     options.webOrigin === undefined ? undefined : webOriginSchema.parse(options.webOrigin);
-  const forwarder: Forwarder | undefined =
+  const agentForwarder =
     keyring === undefined
       ? undefined
       : createForwarder({
@@ -179,13 +184,25 @@ export function createGatewayApp(
           keyring,
           discoverOptions,
           redirectUri: oauthRedirectUri,
+          hmacKey: options.hmacKey,
           ...(options.callTimeoutMs === undefined ? {} : { callTimeoutMs: options.callTimeoutMs }),
           ...(options.connectorConcurrency === undefined
             ? {}
             : { connectorConcurrency: options.connectorConcurrency }),
           ...(options.resultCapBytes === undefined ? {} : { resultCapBytes: options.resultCapBytes }),
         });
-  const agentHandler = createAgentHandler(db, options.hmacKey, forwarder);
+  const outbox = agentForwarder?.outbox;
+  const agentHandler = createAgentHandler(db, options.hmacKey, agentForwarder?.forward);
+
+  const releaseIntervalMs = options.outboxReleaseIntervalMs ?? 0;
+  if (outbox !== undefined && releaseIntervalMs > 0) {
+    const timer = setInterval(() => {
+      void outbox.releaseDue().catch((error: unknown) => {
+        console.error("The outbox release worker failed", error);
+      });
+    }, releaseIntervalMs);
+    timer.unref?.();
+  }
 
   if (options.auth !== "disabled") registerAuth(app, db, options.auth);
 
@@ -356,6 +373,25 @@ export function createGatewayApp(
     );
   });
 
+  app.get("/api/outbox", (c) => {
+    const userId = userIdFor(c);
+    return c.json(outboxListResponseSchema.parse({ items: outbox?.list(userId) ?? [] }));
+  });
+
+  app.post("/api/outbox/:id/cancel", (c) => {
+    const userId = userIdFor(c);
+    if (outbox === undefined) return c.json({ error: "not_found" }, 404);
+    const item = outbox.cancel(userId, c.req.param("id"));
+    return c.json(outboxItemResponseSchema.parse({ item }));
+  });
+
+  app.post("/api/outbox/:id/confirm", async (c) => {
+    const userId = userIdFor(c);
+    if (outbox === undefined) return c.json({ error: "not_found" }, 404);
+    const item = await outbox.confirm(userId, c.req.param("id"));
+    return c.json(outboxItemResponseSchema.parse({ item }));
+  });
+
   app.get("/api/events", (c) => {
     const userId = userIdFor(c);
     const cursor = c.req.header("last-event-id") ?? c.req.query("since");
@@ -458,6 +494,12 @@ export function createGatewayApp(
   });
 
   app.onError((error, c) => {
+    if (error instanceof OutboxError) {
+      return c.json(
+        { error: error.code, message: error.message },
+        error.code === "not_found" ? 404 : 409,
+      );
+    }
     if (error instanceof SlipError) {
       const status =
         error.code === "not_found"

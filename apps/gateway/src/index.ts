@@ -23,6 +23,7 @@ const app = createGatewayApp(db, {
   hmacKey: config.HMAC_KEY,
   callTimeoutMs: config.CALL_TIMEOUT_MS,
   connectorConcurrency: config.CONNECTOR_CONCURRENCY,
+  outboxReleaseIntervalMs: 1_000,
   auth: {
     passphrase: config.OWNER_PASSPHRASE,
     sessionSecret: config.JWT_SECRET,

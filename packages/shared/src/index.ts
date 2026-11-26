@@ -154,6 +154,49 @@ export const undoApplyResponseSchema = z.object({
 });
 export type UndoApplyResponse = z.infer<typeof undoApplyResponseSchema>;
 
+// Sends wait out a short cancel window; spends wait for a human tap. `releasing`
+// is the claimed state while the gateway is forwarding, so a second worker skips it.
+export const outboxClassSchema = z.enum(["send", "spend"]);
+export type OutboxClass = z.infer<typeof outboxClassSchema>;
+
+export const outboxStateSchema = z.enum([
+  "held",
+  "needs_human",
+  "releasing",
+  "released",
+  "confirmed",
+  "failed",
+  "cancelled",
+  "expired",
+]);
+export type OutboxState = z.infer<typeof outboxStateSchema>;
+
+export function isPendingOutboxState(state: OutboxState): boolean {
+  return state === "held" || state === "needs_human";
+}
+
+export const outboxItemSchema = z.object({
+  id: z.string(),
+  slipId: z.string(),
+  goal: z.string(),
+  tool: z.string(),
+  connectorName: z.string(),
+  toolClass: outboxClassSchema,
+  state: outboxStateSchema,
+  amountCents: z.number().int().nonnegative(),
+  releaseAt: z.string().nullable(),
+  expiresAt: z.string(),
+  reason: z.string().nullable(),
+  createdAt: z.string(),
+});
+export type OutboxItem = z.infer<typeof outboxItemSchema>;
+
+export const outboxListResponseSchema = z.object({ items: z.array(outboxItemSchema) });
+export type OutboxListResponse = z.infer<typeof outboxListResponseSchema>;
+
+export const outboxItemResponseSchema = z.object({ item: outboxItemSchema });
+export type OutboxItemResponse = z.infer<typeof outboxItemResponseSchema>;
+
 export const feedPayloadSchema = z.record(z.string(), z.unknown());
 
 export const feedEventSchema = z.object({

@@ -140,6 +140,61 @@ export function describeFeedEvent(event: FeedEvent): FeedItem {
         humanise(reason ?? "not sent"),
         "muted",
       );
+    case "outbox.held":
+      return item(
+        `Send held: ${tool ?? "a tool"}`,
+        "30 seconds to stop it before it goes",
+        "accent",
+      );
+    case "outbox.needs_human": {
+      const amount = count(payload, "amount_cents");
+      return item(
+        `Spend needs your tap: ${tool ?? "a tool"}`,
+        amount === null ? "No money moves without you" : `${formatMoney(amount)} · no money moves without you`,
+        "accent",
+      );
+    }
+    case "outbox.confirmed": {
+      const amount = count(payload, "amount_cents");
+      return item(
+        `Spend tapped: ${tool ?? "a tool"}`,
+        amount === null ? "Running after your tap" : `${formatMoney(amount)} · running after your tap`,
+        "accent",
+      );
+    }
+    case "outbox.completed": {
+      const amount = count(payload, "amount_cents");
+      const failed = text(payload, "outcome") === "failed";
+      return item(
+        failed ? `Spend failed: ${tool ?? "a tool"}` : `Spend settled: ${tool ?? "a tool"}`,
+        failed
+          ? (reason ?? "The upstream call failed; nothing moved")
+          : amount === null
+            ? "The money moved after your tap"
+            : `${formatMoney(amount)} moved after your tap`,
+        failed ? "danger" : "ok",
+      );
+    }
+    case "outbox.released": {
+      const failed = text(payload, "outcome") === "failed";
+      return item(
+        failed ? `Send failed: ${tool ?? "a tool"}` : `Send released: ${tool ?? "a tool"}`,
+        failed ? (reason ?? "The upstream call failed") : "The cancel window closed and it was sent",
+        failed ? "danger" : "ok",
+      );
+    }
+    case "outbox.cancelled":
+      return item(
+        `Stopped: ${tool ?? "a tool"}`,
+        reason === null || reason === "human_cancelled" ? "You stopped it; nothing was sent" : humanise(reason),
+        "muted",
+      );
+    case "outbox.expired":
+      return item(
+        `Expired, never fired: ${tool ?? "a tool"}`,
+        reason === null ? "The window closed before it could run" : humanise(reason),
+        "danger",
+      );
     case "call.scope_violation":
       return item(
         `Scope violation: ${tool ?? "a tool"}`,

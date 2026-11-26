@@ -5,6 +5,8 @@ import {
   type ConnectorAuthStatus,
   type ConnectorAuthType,
   type McpTransportKind,
+  type OutboxClass,
+  type OutboxState,
   type SlipState,
   type Tier,
   type ToolClass,
@@ -13,7 +15,16 @@ import {
 } from "@errand/shared";
 
 export { CONNECTOR_AUTH_STATUSES };
-export type { ConnectorAuthStatus, ConnectorAuthType, SlipState, Tier, ToolClass, ToolState };
+export type {
+  ConnectorAuthStatus,
+  ConnectorAuthType,
+  OutboxClass,
+  OutboxState,
+  SlipState,
+  Tier,
+  ToolClass,
+  ToolState,
+};
 
 export const users = sqliteTable("users", {
   id: text("id").primaryKey(),
@@ -179,6 +190,35 @@ export const calls = sqliteTable(
     createdAt: text("created_at").notNull(),
   },
   (t) => [index("calls_user_id_idx").on(t.userId), index("calls_slip_id_idx").on(t.slipId)],
+);
+
+// A send held for a short cancel window, or a spend waiting for the human tap.
+// `expires_at` is the point after which it is too late to run at all.
+export const outbox = sqliteTable(
+  "outbox",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id").notNull().references(() => users.id),
+    slipId: text("slip_id").notNull().references(() => slips.id),
+    connectorId: text("connector_id").notNull().references(() => connectors.id),
+    tool: text("tool").notNull(),
+    toolClass: text("tool_class").notNull().$type<OutboxClass>(),
+    arguments: text("arguments").notNull().default("{}"),
+    // The capability the agent presented; release re-checks it before forwarding.
+    capability: text("capability").notNull(),
+    amountCents: integer("amount_cents").notNull().default(0),
+    state: text("state").notNull().$type<OutboxState>(),
+    releaseAt: text("release_at"),
+    expiresAt: text("expires_at").notNull(),
+    callId: text("call_id").references(() => calls.id),
+    reason: text("reason"),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (t) => [
+    index("outbox_user_id_idx").on(t.userId),
+    index("outbox_state_release_at_idx").on(t.state, t.releaseAt),
+  ],
 );
 
 // Human-readable result of an errand; never claims verification it did not perform (GLOSSARY.md).

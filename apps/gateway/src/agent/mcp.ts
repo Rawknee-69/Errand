@@ -122,7 +122,7 @@ function agentServer(
     "errand_call",
     {
       description:
-        "Submit one call for an approved slip, with the capability from errand_status. The call is checked against the signed slip and the spend, call and rate caps, then forwarded for read, write and delete classes.",
+        "Submit one call for an approved slip, with the capability from errand_status. The call is checked against the signed slip and the spend, call and rate caps. Reads, writes and deletes run at once; a send returns held for a short cancel window; a spend returns needs_human until a human confirms it.",
       inputSchema: z.object({
         slip_id: z.string().min(1),
         tool: z.string().min(1),
@@ -174,12 +174,16 @@ function agentServer(
           remaining,
         });
       }
-      if (outcome.state === "not_forwarded") {
+      if (outcome.state === "held" || outcome.state === "needs_human") {
         return textResult({
-          state: "not_forwarded",
+          state: outcome.state,
           slipId: decision.slipId,
           tool: decision.tool,
-          reason: outcome.reason,
+          outboxId: outcome.outboxId,
+          ...(outcome.state === "held"
+            ? { releaseAt: outcome.releaseAt }
+            : { amountCents: outcome.amountCents }),
+          expiresAt: outcome.expiresAt,
           remaining,
         });
       }

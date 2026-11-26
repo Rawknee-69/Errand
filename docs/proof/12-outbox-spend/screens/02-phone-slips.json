@@ -1,0 +1,12 @@
+{
+  "viewport": {
+    "width": 390,
+    "height": 844
+  },
+  "title": "Errand",
+  "url": "http://127.0.0.1:5173/slips",
+  "bodyWidth": 390,
+  "overflowX": false,
+  "console": [],
+  "failedRequests": []
+}

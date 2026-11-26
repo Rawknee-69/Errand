@@ -91,6 +91,54 @@ describe("describeFeedEvent", () => {
       tone: "muted",
     });
     expect(
+      describeFeedEvent(event(13, "outbox.held", { tool: "pay__send_receipt" })),
+    ).toMatchObject({
+      title: "Send held: pay__send_receipt",
+      detail: "30 seconds to stop it before it goes",
+      tone: "accent",
+    });
+    expect(
+      describeFeedEvent(event(14, "outbox.needs_human", { tool: "pay__charge_card", amount_cents: 500 })),
+    ).toMatchObject({
+      title: "Spend needs your tap: pay__charge_card",
+      detail: "$5.00 · no money moves without you",
+      tone: "accent",
+    });
+    expect(
+      describeFeedEvent(event(15, "outbox.confirmed", { tool: "pay__charge_card", amount_cents: 500 })),
+    ).toMatchObject({ title: "Spend tapped: pay__charge_card", tone: "accent" });
+    expect(
+      describeFeedEvent(
+        event(19, "outbox.completed", {
+          tool: "pay__charge_card",
+          amount_cents: 500,
+          outcome: "succeeded",
+        }),
+      ),
+    ).toMatchObject({ title: "Spend settled: pay__charge_card", tone: "ok" });
+    expect(
+      describeFeedEvent(
+        event(20, "outbox.completed", {
+          tool: "pay__charge_card",
+          outcome: "failed",
+          reason: "The upstream call failed",
+        }),
+      ),
+    ).toMatchObject({ title: "Spend failed: pay__charge_card", tone: "danger" });
+    expect(
+      describeFeedEvent(event(16, "outbox.released", { tool: "pay__send_receipt", outcome: "succeeded" })),
+    ).toMatchObject({ title: "Send released: pay__send_receipt", tone: "ok" });
+    expect(
+      describeFeedEvent(event(17, "outbox.cancelled", { tool: "pay__send_receipt", reason: "human_cancelled" })),
+    ).toMatchObject({
+      title: "Stopped: pay__send_receipt",
+      detail: "You stopped it; nothing was sent",
+      tone: "muted",
+    });
+    expect(
+      describeFeedEvent(event(18, "outbox.expired", { tool: "pay__send_receipt", reason: "burned" })),
+    ).toMatchObject({ title: "Expired, never fired: pay__send_receipt", detail: "Burned", tone: "danger" });
+    expect(
       describeFeedEvent(event(5, "receipt.created", { summary: "Event created", verification: "matched" })),
     ).toMatchObject({ title: "Receipt", tone: "ok" });
     expect(

@@ -7,6 +7,7 @@ import {
   connectors,
   credentials,
   oauthAttempts,
+  outbox,
   receipts,
   slips,
   tools,
@@ -95,6 +96,13 @@ export function listCalls(db: Db, userId: string) {
 }
 export function getCall(db: Db, userId: string, id: string) {
   return scopedGet(db, calls, calls.userId, userId, calls.id, id);
+}
+
+export function listOutbox(db: Db, userId: string) {
+  return scopedList(db, outbox, outbox.userId, userId);
+}
+export function getOutboxItem(db: Db, userId: string, id: string) {
+  return scopedGet(db, outbox, outbox.userId, userId, outbox.id, id);
 }
 
 export function listReceipts(db: Db, userId: string) {

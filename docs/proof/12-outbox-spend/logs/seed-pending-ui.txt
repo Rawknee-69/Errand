@@ -1,0 +1,10 @@
+
+== log in and create a browser-proof agent key
+
+== create one held send and one spend waiting for the tap
+{"send":{"outboxId":"61c0a861-9929-4ca6-a613-b76f903d73c1","slipId":"88e2974c-110c-4e05-a8bb-96b6d53484f4","state":"held"},"spend":{"outboxId":"eef20d69-fb10-47b2-9a0b-6783003ff2f3","slipId":"80cb14d9-8ae8-466b-8dfe-c840fd3c5d9a","state":"needs_human"}}
+
+== log in and create a browser-proof agent key
+
+== create one held send and one spend waiting for the tap
+{"send":{"outboxId":"097b831c-877b-42a3-8ddb-20a747a29fc9","slipId":"95143d88-b8c3-4cd4-bd96-65c8b3c4f09e","state":"held"},"spend":{"outboxId":"f1a82118-f162-4a1f-9c3e-9b74b5ae04fd","slipId":"49bc5105-8d3f-4a17-bf08-d01a08b78d97","state":"needs_human"}}

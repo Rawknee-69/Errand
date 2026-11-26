@@ -1,0 +1,40 @@
+
+== log in and create a browser-proof agent key
+
+== create one held send and one spend waiting for the tap
+{"send":{"outboxId":"9882b175-b80d-478c-8271-795e1c6019a8","slipId":"dc7db65f-c804-4e83-b625-39c26d1ce2ec","state":"held"},"spend":{"outboxId":"167719d8-5ce3-4197-b136-aa2d38d4a9bf","slipId":"34f100b0-3c09-413a-923f-91609367a4b8","state":"needs_human"}}
+
+== log in and create a browser-proof agent key
+
+== create one held send and one spend waiting for the tap
+{"send":{"outboxId":"924abd30-d66f-4e66-8742-527d6bdea0d8","slipId":"71a3c5ad-7775-430e-be34-045d72f24579","state":"held"},"spend":{"outboxId":"50d966b4-ddc5-464f-9a32-03916e687fb2","slipId":"16d2938a-9d18-4997-9d01-7121cfff56a6","state":"needs_human"}}
+
+== log in and create a browser-proof agent key
+
+== create one held send and one spend waiting for the tap
+{"send":{"outboxId":"45a0b0fe-274b-4e19-a616-b619e7b8383f","slipId":"89a99b45-aba4-4e52-b87c-500c89b4904b","state":"held"},"spend":{"outboxId":"ef677509-493b-4566-afc0-9a6d269aba5e","slipId":"8974f420-6fe2-4f39-8526-d6882cbe5b3f","state":"needs_human"}}
+
+== log in and create a browser-proof agent key
+
+== create one held send and one spend waiting for the tap
+{"send":{"outboxId":"9fce6863-8744-4031-9d98-2b7e030ead75","slipId":"37147d65-3e67-4904-b5f4-7996c1799438","state":"held"},"spend":{"outboxId":"36129127-d50f-4983-b896-64012d805a34","slipId":"aba0e6ba-4adf-45cc-9ca9-278555037074","state":"needs_human"}}
+
+== log in and create a browser-proof agent key
+
+== create one held send and one spend waiting for the tap
+{"send":{"outboxId":"3563ca55-1307-4395-8908-9291fefb8d7d","slipId":"ed7ba77b-158b-4ec6-a710-aa5e2aa7ef0d","state":"held"},"spend":{"outboxId":"87de3f85-4f00-4c4a-900f-916c85650925","slipId":"91a23c09-6552-406d-b2e9-cc0dde57f31f","state":"needs_human"}}
+
+== log in and create a browser-proof agent key
+
+== create one held send and one spend waiting for the tap
+{"send":{"outboxId":"498af131-d2e5-4f31-91ff-ff1d5bba77d3","slipId":"b6f639a8-7b59-4ad0-ba9e-63f0db7836ac","state":"held"},"spend":{"outboxId":"783019b9-b95d-48be-a429-0b5ee0e107d0","slipId":"cda1d877-e26c-4d28-a62d-4d55480a9dcc","state":"needs_human"}}
+
+== log in and create a browser-proof agent key
+
+== create one held send and one spend waiting for the tap
+{"send":{"outboxId":"f65056c8-2a06-4179-83af-ae4368f89479","slipId":"f978bae4-756e-4644-9594-4a0e6e8a161c","state":"held"},"spend":{"outboxId":"9270406e-71d6-47df-9b1b-e91e3fca3a33","slipId":"c6b44505-27ba-43b1-8bbb-ada79cf9b68f","state":"needs_human"}}
+
+== log in and create a browser-proof agent key
+
+== create one held send and one spend waiting for the tap
+{"send":{"outboxId":"5ad4a0d9-4868-47df-8104-7b259292a8c2","slipId":"1d702334-61dd-45c0-a50f-80d98d2216e3","state":"held"},"spend":{"outboxId":"8182fdaa-a2d4-4959-9798-1af50278c672","slipId":"259159ca-05c9-4a3d-9f47-54aae68ed17d","state":"needs_human"}}
