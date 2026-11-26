@@ -19,6 +19,7 @@ import { ConnectorError } from "../connectors/errors.ts";
 import type { DiscoverOptions } from "../connectors/mcp.ts";
 import { markConnectorNeedsReauth, markConnectorSuccess } from "../connectors/records.ts";
 import { createConnectorServiceDeps, type ConnectorServiceDeps } from "../connectors/service.ts";
+import { createOutboxService, type OutboxService } from "../outbox/service.ts";
 import type { CallDecision } from "../policy/pipeline.ts";
 import { recordReceipt } from "../receipts/receipts.ts";
 import { verifyChange, type UpstreamRead } from "../receipts/verifier.ts";
@@ -36,16 +37,16 @@ export type ForwardFailureCode =
   | "upstream_auth"
   | "credential_unavailable";
 
-export type NotForwardedReason = "outbox_not_installed" | "spend_tap_not_installed";
-
 export type ForwardOutcome =
   | {
       state: "forwarded";
       result: ConnectorToolResult;
       durationMs: number;
+      callId: string;
       receipt?: ReceiptView;
     }
-  | { state: "not_forwarded"; reason: NotForwardedReason }
+  | { state: "held"; outboxId: string; releaseAt: string | null; expiresAt: string }
+  | { state: "needs_human"; outboxId: string; amountCents: number; expiresAt: string }
   | { state: "failed"; error: ForwardFailureCode; message: string; durationMs: number };
 
 export type ForwarderOptions = {
@@ -53,6 +54,7 @@ export type ForwarderOptions = {
   keyring: VaultKeyring;
   discoverOptions: DiscoverOptions;
   redirectUri: string;
+  hmacKey?: string | undefined;
   callTimeoutMs?: number;
   connectorConcurrency?: number;
   resultCapBytes?: number;
@@ -63,6 +65,11 @@ export type Forwarder = (
   decision: AdmittedCall,
   args: Record<string, unknown>,
 ) => Promise<ForwardOutcome>;
+
+export type AgentForwarder = {
+  forward: Forwarder;
+  outbox: OutboxService;
+};
 
 const FAILURE_CODES: Record<ConnectorCallFailure, ForwardFailureCode> = {
   auth: "upstream_auth",
@@ -156,7 +163,7 @@ function recordFailure(
   args: Record<string, unknown>,
   failure: ForwardFailure,
   durationMs: number,
-): void {
+): string {
   const callId = insertCall(db, userId, decision, args, {
     result: null,
     error: failure.message,
@@ -178,29 +185,7 @@ function recordFailure(
   if (failure.error === "upstream_auth" || failure.error === "credential_unavailable") {
     markConnectorNeedsReauth({ db, userId }, decision.connectorId, failure.error);
   }
-}
-
-// Sends and spends are admitted by policy but cannot run until ticket #12
-// installs the outbox and the spend tap. The journal still records the outcome,
-// because admission has already consumed the call and spend counters.
-function notForwarded(
-  db: Db,
-  userId: string,
-  decision: AdmittedCall,
-  reason: NotForwardedReason,
-): ForwardOutcome {
-  appendJournalEvent(db, {
-    userId,
-    eventType: "call.not_forwarded",
-    payload: {
-      slip_id: decision.slipId,
-      tool: decision.tool,
-      connector_id: decision.connectorId,
-      class: decision.class,
-      reason,
-    },
-  });
-  return { state: "not_forwarded", reason };
+  return callId;
 }
 
 type ReceiptContext = {
@@ -247,7 +232,9 @@ async function receiptForChange(context: ReceiptContext): Promise<ReceiptView | 
   });
 }
 
-export function createForwarder(options: ForwarderOptions): Forwarder {
+// The only path that touches an upstream tool. Held calls are re-admitted and
+// then come here, so the outbox never forwards from its own dispatch branch.
+export function createUpstreamForwarder(options: ForwarderOptions): Forwarder {
   const limiter = new ConnectorLimiter(
     options.connectorConcurrency ?? DEFAULT_CONNECTOR_CONCURRENCY,
   );
@@ -255,17 +242,6 @@ export function createForwarder(options: ForwarderOptions): Forwarder {
   const resultCapBytes = options.resultCapBytes ?? DEFAULT_RESULT_CAP_BYTES;
 
   return async (userId, decision, args) => {
-    switch (decision.class) {
-      case "send":
-        return notForwarded(options.db, userId, decision, "outbox_not_installed");
-      case "spend":
-        return notForwarded(options.db, userId, decision, "spend_tap_not_installed");
-      case "read":
-      case "write":
-      case "delete":
-        break;
-    }
-
     const connector = getConnector(options.db, userId, decision.connectorId);
     if (connector === undefined) {
       const failure = {
@@ -350,7 +326,47 @@ export function createForwarder(options: ForwarderOptions): Forwarder {
       state: "forwarded",
       result,
       durationMs,
+      callId,
       ...(receipt === undefined ? {} : { receipt }),
     };
+  };
+}
+
+export function createForwarder(options: ForwarderOptions): AgentForwarder {
+  const upstream = createUpstreamForwarder(options);
+  const outbox = createOutboxService({
+    db: options.db,
+    forward: upstream,
+    hmacKey: options.hmacKey,
+  });
+
+  return {
+    outbox,
+    async forward(userId, decision, args) {
+      switch (decision.class) {
+        case "send": {
+          const item = outbox.hold(userId, decision, args);
+          return {
+            state: "held",
+            outboxId: item.id,
+            releaseAt: item.releaseAt,
+            expiresAt: item.expiresAt,
+          };
+        }
+        case "spend": {
+          const item = outbox.needsHuman(userId, decision, args);
+          return {
+            state: "needs_human",
+            outboxId: item.id,
+            amountCents: item.amountCents,
+            expiresAt: item.expiresAt,
+          };
+        }
+        case "read":
+        case "write":
+        case "delete":
+          return upstream(userId, decision, args);
+      }
+    },
   };
 }

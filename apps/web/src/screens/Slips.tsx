@@ -9,6 +9,7 @@ import type {
   SlipSummary,
 } from "@errand/shared";
 import { api, errorMessage } from "../api.ts";
+import { OutboxPanel } from "../components/OutboxPanel.tsx";
 import { describeFeedEvent, type FeedItem } from "../feed.ts";
 import {
   formatCalls,
@@ -20,6 +21,7 @@ import {
 } from "../format.ts";
 import { describeTrim, describeTrims, parseCapEdits, slipStateView } from "../slips.ts";
 import { useLiveFeed, type FeedStatus } from "../useLiveFeed.ts";
+import { useOutbox } from "../useOutbox.ts";
 import { useSlips } from "../useSlips.ts";
 
 type Decision =
@@ -315,11 +317,13 @@ function Feed({ items, status }: { items: FeedItem[]; status: FeedStatus }) {
 
 export function Slips() {
   const { data, loading, error, reload, removePending } = useSlips();
+  const outboxState = useOutbox();
   const [decision, setDecision] = useState<Decision | null>(null);
   const reloadTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const onEvent = useCallback(
     (event: FeedEvent) => {
+      if (/^outbox\./.test(event.eventType)) void outboxState.reload();
       if (!/^(slip|call|receipt)\./.test(event.eventType)) return;
       if (reloadTimer.current !== null) clearTimeout(reloadTimer.current);
       reloadTimer.current = setTimeout(() => {
@@ -327,7 +331,7 @@ export function Slips() {
         void reload(true);
       }, 200);
     },
-    [reload],
+    [reload, outboxState.reload],
   );
 
   useEffect(
@@ -370,6 +374,14 @@ export function Slips() {
       {decision !== null && (
         <DecisionPanel decision={decision} onDismiss={() => setDecision(null)} />
       )}
+
+      <OutboxPanel
+        data={outboxState.data}
+        error={outboxState.error}
+        busy={outboxState.busy}
+        onCancel={(id) => void outboxState.decide(id, "cancel")}
+        onConfirm={(id) => void outboxState.decide(id, "confirm")}
+      />
 
       <div className="slips-layout">
         <div className="stack">

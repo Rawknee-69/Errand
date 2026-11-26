@@ -43,6 +43,23 @@ function failureReason(slip: SlipRow, amountCents: number): ReservationFailure {
   throw new Error(`Reservation for slip ${slip.id} failed without a cap reason`);
 }
 
+// Returns a held call's reservation when the human cancels it or its window
+// expires. The SQL max keeps a double release from underflowing a counter.
+export function releaseCall(
+  db: Pick<Db, "update">,
+  input: { userId: string; slipId: string; amountCents: number; now: Date },
+): void {
+  db.update(slips)
+    .set({
+      callsUsed: sql`max(0, ${slips.callsUsed} - 1)`,
+      spendUsedCents: sql`max(0, ${slips.spendUsedCents} - ${input.amountCents})`,
+      rateWindowCalls: sql`max(0, ${slips.rateWindowCalls} - 1)`,
+      updatedAt: input.now.toISOString(),
+    })
+    .where(and(eq(slips.userId, input.userId), eq(slips.id, input.slipId)))
+    .run();
+}
+
 // Calls, call rate and spend are reserved in one conditional update, so two
 // concurrent attempts cannot both consume the last unit of a cap.
 export function reserveCall(db: Db, input: ReserveCallInput): ReservationResult {

@@ -10,6 +10,7 @@ import { checkCapability, type CapabilityFailure } from "./capability.ts";
 import { verifySlipSignature } from "./slip-signing.ts";
 import { reserveCall, type ReservationFailure } from "./reservation.ts";
 import { spendRequestCents } from "./spend.ts";
+import { remainingAllowance } from "../slips/caps.ts";
 
 export type CallDenialReason =
   | CapabilityFailure
@@ -50,6 +51,7 @@ export type CallDecision =
       connectorId: string;
       upstreamTool: string;
       class: ForwardableClass;
+      capability: string;
       amountCents: number;
       callsRemaining: number;
       spendRemainingCents: number;
@@ -64,6 +66,8 @@ export type CallDecision =
 export type CallOptions = {
   now?: Date;
   hmacKey?: string | undefined;
+  // A held call was reserved at admission; re-checking it must not reserve again.
+  reserve?: boolean;
 };
 
 function deny(reason: CallDenialReason, message: string): CallDecision {
@@ -157,6 +161,22 @@ export function admitCall(
     return deny("invalid_spend_amount", "A spend call needs an integer cents amount");
   }
 
+  if (options.reserve === false) {
+    const allowance = remainingAllowance(slip, now);
+    return {
+      outcome: "admitted",
+      slipId: slip.id,
+      tool: input.tool,
+      connectorId: tool.connectorId,
+      upstreamTool: tool.name,
+      class: slipTool.class,
+      capability: input.capability,
+      amountCents,
+      callsRemaining: allowance.callsRemaining,
+      spendRemainingCents: allowance.spendRemainingCents,
+    };
+  }
+
   const reservation = reserveCall(db, {
     userId,
     slipId: slip.id,
@@ -180,6 +200,7 @@ export function admitCall(
     connectorId: tool.connectorId,
     upstreamTool: tool.name,
     class: slipTool.class,
+    capability: input.capability,
     amountCents,
     callsRemaining: reservation.callsRemaining,
     spendRemainingCents: reservation.spendRemainingCents,

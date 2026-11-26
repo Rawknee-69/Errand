@@ -3,10 +3,9 @@ import { MOCK_AUTH, MOCK_PATHS, startMockServices } from "@errand/mock-services"
 import { receiptViewSchema, type ReceiptView } from "@errand/shared";
 import { z } from "zod";
 import { createGatewayApp, type GatewayAppOptions } from "../../src/app.ts";
-import { createForwarder } from "../../src/agent/forward.ts";
 import { redactAuthSecrets } from "../../src/connectors/redaction.ts";
 import type { Db } from "../../src/db/client.ts";
-import { calls, connectors, journal } from "../../src/db/schema.ts";
+import { calls, connectors } from "../../src/db/schema.ts";
 import { issueAgentKey } from "../../src/vault/agent-keys.ts";
 import { VaultKeyring } from "../../src/vault/keyring.ts";
 import { listJournalEvents } from "../../src/db/journal.ts";
@@ -236,45 +235,6 @@ describe("forwarding admitted calls", () => {
     const callRow = testApp.db.select().from(calls).all().find((row) => row.slipId === slipId);
     expect(callRow?.result).not.toBeNull();
     expect(Buffer.byteLength(callRow?.result ?? "", "utf8")).toBeLessThanOrEqual(256 * 1024);
-  });
-
-  test("send and spend classes are held until their handlers exist", async () => {
-    const payConnectorId = await connectConnector(testApp, "Pay", MOCK_PATHS.pay, {
-      authType: "header",
-      headerName: MOCK_AUTH.payHeaderName,
-      headerValue: MOCK_AUTH.payHeaderValue,
-    });
-    const forwarder = createForwarder({
-      db: testApp.db,
-      keyring: new VaultKeyring(KEK),
-      discoverOptions: { allowLocalhostDev: true, timeoutMs: 5_000 },
-      redirectUri: "http://127.0.0.1:8787/api/oauth/callback",
-    });
-    const decision = {
-      outcome: "admitted" as const,
-      slipId: "deferred-slip",
-      tool: "pay__send_receipt",
-      connectorId: payConnectorId,
-      upstreamTool: "send_receipt",
-      class: "send" as const,
-      amountCents: 0,
-      callsRemaining: 1,
-      spendRemainingCents: 0,
-    };
-    const outcome = await forwarder("user-a", decision, { id: "rcpt-1" });
-    expect(outcome).toEqual({ state: "not_forwarded", reason: "outbox_not_installed" });
-
-    const spend = await forwarder("user-a", { ...decision, class: "spend" }, { cents: 50 });
-    expect(spend).toEqual({ state: "not_forwarded", reason: "spend_tap_not_installed" });
-    expect(testApp.db.select().from(calls).all().some((row) => row.slipId === "deferred-slip")).toBe(false);
-    const notForwarded = testApp.db
-      .select()
-      .from(journal)
-      .all()
-      .filter((event) => event.eventType === "call.not_forwarded");
-    expect(notForwarded).toHaveLength(2);
-    expect(notForwarded.map((event) => event.payload).join("\n")).toContain("outbox_not_installed");
-    expect(notForwarded.map((event) => event.payload).join("\n")).toContain("spend_tap_not_installed");
   });
 
   test("basic auth redacts the password and its base64 header form, not the username", () => {

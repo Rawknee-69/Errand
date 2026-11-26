@@ -7,6 +7,8 @@ import {
   connectorReauthResponseSchema,
   errorResponseSchema,
   oauthStartResponseSchema,
+  outboxItemResponseSchema,
+  outboxListResponseSchema,
   probeResultSchema,
   sessionViewSchema,
   slipApprovedSchema,
@@ -19,6 +21,8 @@ import {
   type ConnectorDetail,
   type ConnectorReauthResponse,
   type OAuthStartResponse,
+  type OutboxItemResponse,
+  type OutboxListResponse,
   type ProbeResult,
   type SessionView,
   type SlipApprovalInput,
@@ -134,6 +138,15 @@ export const api = {
       "POST",
       reason === undefined ? {} : { reason },
     );
+  },
+  outbox(): Promise<OutboxListResponse> {
+    return send(outboxListResponseSchema, "/api/outbox", "GET");
+  },
+  cancelOutbox(id: string): Promise<OutboxItemResponse> {
+    return send(outboxItemResponseSchema, `/api/outbox/${encodeURIComponent(id)}/cancel`, "POST", {});
+  },
+  confirmOutbox(id: string): Promise<OutboxItemResponse> {
+    return send(outboxItemResponseSchema, `/api/outbox/${encodeURIComponent(id)}/confirm`, "POST", {});
   },
 };
 

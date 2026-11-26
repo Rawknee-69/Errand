@@ -1335,6 +1335,101 @@ pre {
   }
 }
 
+/* Outbox and spend tap */
+
+.outbox {
+  gap: 12px;
+  border-color: rgba(232, 180, 90, 0.32);
+  background:
+    linear-gradient(180deg, rgba(232, 180, 90, 0.06), transparent 40%),
+    var(--surface);
+}
+
+.outbox-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.outbox-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.outbox-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface-2);
+}
+
+.outbox-copy {
+  flex: 1 1 240px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.outbox-tool {
+  font-weight: 650;
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+
+.outbox-amount {
+  margin-left: 8px;
+  color: var(--accent);
+}
+
+.outbox-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.outbox-actions .button {
+  width: auto;
+  min-height: 40px;
+  padding: 8px 12px;
+  font-size: 12px;
+}
+
+.outbox-recent-title {
+  margin-top: 8px;
+}
+
+.outbox-recent {
+  opacity: 0.82;
+}
+
+@media (max-width: 620px) {
+  .outbox-row {
+    flex-direction: column;
+  }
+
+  .outbox-copy {
+    flex: 0 0 auto;
+  }
+
+  .outbox-actions {
+    justify-content: flex-start;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .screen {
     animation: none;

@@ -64,6 +64,13 @@
       "when": 1795691295957,
       "tag": "0008_good_rhino",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1795694275830,
+      "tag": "0009_misty_pride",
+      "breakpoints": true
     }
   ]
 }
