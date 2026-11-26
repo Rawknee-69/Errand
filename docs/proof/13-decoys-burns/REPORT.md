@@ -74,6 +74,8 @@ Ran 367 tests across 45 files.
   showing the burns and scope violations without a refresh.
 - `docs/proof/13-decoys-burns/logs/gateway-server.txt`,
   `logs/mock-services.txt`, `logs/web-server.txt` — the same window.
+- `docs/proof/13-decoys-burns/logs/console.txt`,
+  `logs/network.txt` — no console error or warning, no failed API request.
 - `docs/proof/13-decoys-burns/logs/test-output.txt`,
   `logs/typecheck.txt` — the full suite and typecheck above.
 
@@ -159,4 +161,7 @@ sub-agents.
 
 ## Next
 
-Pending the frontier printed by `scripts/complete-ticket.ts`.
+`/implement 12` (branch `ticket/12-outbox-spend-tap`) — unblocked when #13
+closed. `/implement 14` (branch `ticket/14-verifier-receipts`) is also
+unblocked and already running in parallel; #15, #19, #20 and #22 stay blocked
+behind #14/#12.
