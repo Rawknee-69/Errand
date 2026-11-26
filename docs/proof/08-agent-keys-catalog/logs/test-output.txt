@@ -1,12 +1,6 @@
 ﻿bun test v1.4.4 (38afee6c8)
-bun : 
-At line:1 char:155
-+ ... proof/08-agent-keys-catalog/logs/typecheck.txt; bun test 2>&1 | Out-F ...
-+                                                     ~~~~~~~~~~~~~
-    + CategoryInfo          : NotSpecified: (:String) [], RemoteException
-    + FullyQualifiedErrorId : NativeCommandError
- 
- 221 pass
+
+ 224 pass
  0 fail
- 485 expect() calls
-Ran 221 tests across 28 files. [997.00ms]
+ 492 expect() calls
+Ran 224 tests across 29 files. [1057.00ms]

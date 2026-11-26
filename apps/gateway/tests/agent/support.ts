@@ -1,8 +1,8 @@
-import { createMigratedDatabase, type Db } from "../../src/db/client.ts";
-import { connectors, tools, users } from "../../src/db/schema.ts";
+import type { Db } from "../../src/db/client.ts";
+import { connectors, tools, type ToolClass, type ToolState } from "../../src/db/schema.ts";
+import { TS } from "../support/fixtures.ts";
 
-export const TS = "2026-01-01T00:00:00.000Z";
-export const KEK = "vault-key-material-that-is-long-enough-for-aes";
+export { TS, userDb } from "../support/fixtures.ts";
 
 export type SeededTool = {
   id: string;
@@ -10,18 +10,10 @@ export type SeededTool = {
   name: string;
   agentName: string;
   description?: string;
-  class?: "read" | "write" | "send" | "delete" | "spend" | "unknown";
+  class?: ToolClass;
   requestable?: boolean;
-  state?: "new" | "active" | "changed" | "removed";
+  state?: ToolState;
 };
-
-export function userDb(userIds: string[] = ["user-a"]): Db {
-  const db = createMigratedDatabase(":memory:");
-  for (const id of userIds) {
-    db.insert(users).values({ id, name: id, createdAt: TS }).run();
-  }
-  return db;
-}
 
 export function seedConnector(db: Db, userId: string, id: string, name: string): void {
   db.insert(connectors)

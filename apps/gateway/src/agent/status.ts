@@ -1,26 +1,14 @@
-import { z } from "zod";
 import type { Db } from "../db/client.ts";
 import { getSlip } from "../db/scoped-reads.ts";
-import type { SlipState, Tier, ToolClass } from "../db/schema.ts";
-
-export const slipToolsSchema = z.array(
-  z.object({
-    name: z.string(),
-    connectorId: z.string(),
-    class: z.enum(["read", "write", "send", "delete", "spend", "unknown"]),
-  }),
-);
-
-export function parseSlipTools(raw: string): { name: string; connectorId: string; class: ToolClass }[] {
-  return slipToolsSchema.parse(JSON.parse(raw));
-}
+import type { SlipState, Tier } from "../db/schema.ts";
+import { parseSlipTools, type SlipTool } from "./slip-tools.ts";
 
 export type ErrandStatusResult = {
   slipId: string;
   state: SlipState;
   tier: Tier;
   goal: string;
-  tools: { name: string; connectorId: string; class: ToolClass }[];
+  tools: SlipTool[];
   callCap: number;
   callsUsed: number;
   spendCapCents: number;
@@ -38,9 +26,11 @@ export function errandStatus(
   const slip = getSlip(db, userId, slipId);
   if (slip === undefined) return undefined;
   const expired = Date.parse(slip.expiresAt) <= now.getTime();
+  const state: SlipState =
+    expired && (slip.state === "pending" || slip.state === "approved") ? "expired" : slip.state;
   return {
     slipId: slip.id,
-    state: slip.state === "pending" && expired ? "expired" : slip.state,
+    state,
     tier: slip.tier,
     goal: slip.goal,
     tools: parseSlipTools(slip.tools),

@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { Client, StreamableHTTPClientTransport, type CallToolResult } from "@modelcontextprotocol/client";
 import { z } from "zod";
 import { createMigratedDatabase } from "../../src/db/client.ts";
 import { connectors, tools, users } from "../../src/db/schema.ts";
 import { issueAgentKey } from "../../src/vault/agent-keys.ts";
+import { callTool, connectAgent } from "./mcp-client.ts";
 
 const base = process.argv[2] ?? "http://127.0.0.1:8828";
 const databasePath = process.argv[3] ?? "docs/proof/08-agent-keys-catalog/proof.db";
@@ -13,6 +13,7 @@ const TS = "2026-04-01T00:00:00.000Z";
 
 const keyResponse = z.object({
   key: z.string(),
+  mcpUrl: z.string(),
   agentKey: z.object({ id: z.string(), name: z.string(), revokedAt: z.string().nullable() }),
 });
 const connectorResponse = z.object({ connector: z.object({ id: z.string() }) });
@@ -28,30 +29,6 @@ async function parse<T>(response: Response, schema: z.ZodType<T>): Promise<T> {
   return schema.parse(JSON.parse(text));
 }
 
-function agent(gatewayBase: string) {
-  return {
-    async connect(key: string): Promise<Client> {
-      const client = new Client({ name: "proof-agent", version: "1.0.0" });
-      const transport = new StreamableHTTPClientTransport(new URL(`${gatewayBase}/mcp`), {
-        requestInit: { headers: { authorization: `Bearer ${key}` } },
-      });
-      await client.connect(transport, { timeout: 5_000 });
-      return client;
-    },
-    async call(client: Client, name: string, args: Record<string, unknown>): Promise<CallToolResult> {
-      return client.callTool({ name, arguments: args }, { timeout: 5_000 });
-    },
-  };
-}
-
-function textOf(result: CallToolResult): unknown {
-  const block = result.content[0];
-  assert.equal(block?.type, "text", "tool result had no text block");
-  return JSON.parse(block.text);
-}
-
-const api = agent(base);
-
 step("create the agent key (shown once)");
 const created = await parse(
   await fetch(`${base}/api/agent-keys`, {
@@ -65,6 +42,7 @@ console.log(
   `key: errand_… redacted (${created.key.length} chars), id ${created.agentKey.id}, revoked ${created.agentKey.revokedAt}`,
 );
 console.log(`sha256(key) prefix: ${createHash("sha256").update(created.key).digest("hex").slice(0, 12)}`);
+console.log(`one URL for the agent: ${created.mcpUrl}`);
 
 step("the list returns the key's metadata and never the key or its hash");
 const listedKeys = await fetch(`${base}/api/agent-keys`);
@@ -137,7 +115,7 @@ const friendKey = issueAgentKey(db, "user-b", "friend").key;
 console.log(`seeded decoy, user-b and notion__search_pages; friend key ${friendKey.length} chars`);
 
 step("a real MCP client lists the top layer");
-const owner = await api.connect(created.key);
+const owner = await connectAgent(base, created.key);
 const listed = await owner.listTools();
 console.log(`tools: ${listed.tools.map((tool) => tool.name).sort().join(", ")}`);
 assert.deepEqual(
@@ -146,7 +124,7 @@ assert.deepEqual(
 );
 
 step("errand_catalog: requestable only, no decoys, no blocked delete");
-const catalog = textOf(await api.call(owner, "errand_catalog", {}));
+const catalog = (await callTool(owner, "errand_catalog")).body;
 console.log(JSON.stringify(catalog, null, 2));
 assert.deepEqual(
   (catalog as { tools: { name: string }[] }).tools.map((tool) => tool.name),
@@ -154,33 +132,39 @@ assert.deepEqual(
 );
 
 step("request_errand: over-max limits are clamped and a pending slip returns at once");
-const requested = textOf(
-  await api.call(owner, "request_errand", {
+const requested = (
+  await callTool(owner, "request_errand", {
     goal: "Find a dinner slot",
     tools: ["calendar__list_events"],
     limits: { calls: 900, spend_cents: 12_345_678, minutes: 1_440 },
-  }),
-);
+  })
+).body;
 console.log(JSON.stringify(requested, null, 2));
 const slipId = (requested as { slipId: string }).slipId;
 assert.equal((requested as { state: string }).state, "pending");
 
 step("errand_status reads the persisted pending slip");
-const status = textOf(await api.call(owner, "errand_status", { slip_id: slipId }));
+const status = (await callTool(owner, "errand_status", { slip_id: slipId })).body;
 console.log(JSON.stringify(status, null, 2));
 assert.equal((status as { state: string }).state, "pending");
 
 step("errand_call is denied before approval and never reaches upstream");
-const run = textOf(
-  await api.call(owner, "errand_call", { slip_id: slipId, tool: "calendar__list_events", arguments: {} }),
-);
+const run = (await callTool(owner, "errand_call", { slip_id: slipId, tool: "calendar__list_events" })).body;
 console.log(JSON.stringify(run, null, 2));
 assert.equal((run as { state: string }).state, "not_forwarded");
+
+step("errand_call for a tool outside the slip is refused");
+const offSlip = await callTool(owner, "errand_call", {
+  slip_id: slipId,
+  tool: "calendar__delete_event",
+});
+console.log(JSON.stringify({ isError: offSlip.result.isError, body: offSlip.body }, null, 2));
+assert.equal(offSlip.result.isError, true);
 await owner.close();
 
 step("the friend's key sees only the friend's connector");
-const friend = await api.connect(friendKey);
-const friendCatalog = textOf(await api.call(friend, "errand_catalog", {}));
+const friend = await connectAgent(base, friendKey);
+const friendCatalog = (await callTool(friend, "errand_catalog")).body;
 console.log(JSON.stringify(friendCatalog, null, 2));
 assert.deepEqual(
   (friendCatalog as { tools: { name: string }[] }).tools.map((tool) => tool.name),
@@ -195,7 +179,7 @@ const revoked = await parse(
 );
 console.log(`revokedAt: ${revoked.agentKey.revokedAt}`);
 try {
-  const denied = await api.connect(created.key);
+  const denied = await connectAgent(base, created.key);
   await denied.close();
   throw new Error("revoked key connected");
 } catch (error) {

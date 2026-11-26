@@ -1,22 +1,18 @@
 import { randomUUID } from "node:crypto";
 import type { Db } from "../db/client.ts";
 import { appendJournalEvent } from "../db/journal.ts";
-import { slips, type Tier, type ToolClass } from "../db/schema.ts";
+import { slips, type Tier } from "../db/schema.ts";
 import { listCatalog } from "../connectors/catalog.ts";
+import { isRequestableTool } from "./catalog.ts";
 import { isDecoyToolName } from "../policy/decoys.ts";
 import { errandTypeFor } from "../policy/errand-type.ts";
 import { resolveLimits, type ClampedLimit, type RequestedLimits } from "./limits.ts";
+import type { SlipTool } from "./slip-tools.ts";
 
 export type RequestErrandInput = {
   goal: string;
   tools: string[];
   limits?: RequestedLimits;
-};
-
-export type SlipTool = {
-  name: string;
-  connectorId: string;
-  class: ToolClass;
 };
 
 export type RequestErrandResult = {
@@ -60,7 +56,7 @@ export function requestErrand(
       throw new ErrandRequestError("decoy", `${name} is bait and can never be requested`, name);
     }
     const tool = catalog.get(name);
-    if (tool === undefined || !tool.requestable) {
+    if (tool === undefined || !isRequestableTool(tool)) {
       throw new ErrandRequestError("unknown_tool", `${name} is not requestable`, name);
     }
     return { name: tool.agentName, connectorId: tool.connectorId, class: tool.class };

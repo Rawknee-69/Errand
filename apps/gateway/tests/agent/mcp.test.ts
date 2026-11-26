@@ -1,8 +1,8 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
-import { Client, StreamableHTTPClientTransport, type CallToolResult } from "@modelcontextprotocol/client";
 import { createGatewayApp } from "../../src/app.ts";
 import type { Db } from "../../src/db/client.ts";
 import { issueAgentKey } from "../../src/vault/agent-keys.ts";
+import { callTool, connectAgent } from "./mcp-client.ts";
 import { seedConnector, seedTool, userDb } from "./support.ts";
 
 const AGENT_TOOLS = ["errand_call", "errand_catalog", "errand_status", "request_errand"];
@@ -12,22 +12,8 @@ let server: ReturnType<typeof Bun.serve>;
 let key: string;
 let keyId: string;
 
-type ToolCall = { name: string; arguments?: Record<string, unknown> };
-
-async function connect(agentKey: string): Promise<Client> {
-  const client = new Client({ name: "proof-agent", version: "1.0.0" });
-  const transport = new StreamableHTTPClientTransport(new URL(`http://127.0.0.1:${server.port}/mcp`), {
-    requestInit: { headers: { authorization: `Bearer ${agentKey}` } },
-  });
-  await client.connect(transport, { timeout: 5_000 });
-  return client;
-}
-
-async function call(client: Client, call: ToolCall): Promise<{ result: CallToolResult; body: unknown }> {
-  const result = await client.callTool({ name: call.name, arguments: call.arguments ?? {} }, { timeout: 5_000 });
-  const block = result.content[0];
-  if (block?.type !== "text") throw new Error(`No text content from ${call.name}`);
-  return { result, body: JSON.parse(block.text) };
+function connect(agentKey: string) {
+  return connectAgent(`http://127.0.0.1:${server.port}`, agentKey);
 }
 
 async function createKey(): Promise<{ key: string; id: string }> {
@@ -96,7 +82,7 @@ describe("agent MCP endpoint", () => {
   test("errand_catalog lists requestable tools only and never another user's connectors", async () => {
     const client = await connect(key);
     try {
-      const { body } = await call(client, { name: "errand_catalog" });
+      const { body } = await callTool(client, "errand_catalog");
       expect(body).toMatchObject({
         tools: [
           {
@@ -115,7 +101,7 @@ describe("agent MCP endpoint", () => {
     const otherKey = issueAgentKey(db, "user-b", "friend").key;
     const otherClient = await connect(otherKey);
     try {
-      const { body } = await call(otherClient, { name: "errand_catalog" });
+      const { body } = await callTool(otherClient, "errand_catalog");
       expect(body).toMatchObject({ tools: [{ name: "notion__search_pages" }] });
     } finally {
       await otherClient.close();
@@ -125,13 +111,10 @@ describe("agent MCP endpoint", () => {
   test("request_errand persists a pending slip, clamps caps and returns before approval", async () => {
     const client = await connect(key);
     try {
-      const requested = await call(client, {
-        name: "request_errand",
-        arguments: {
-          goal: "Find a dinner slot",
-          tools: ["calendar__list_events"],
-          limits: { calls: 900, spend_cents: 12_345_678 },
-        },
+      const requested = await callTool(client, "request_errand", {
+        goal: "Find a dinner slot",
+        tools: ["calendar__list_events"],
+        limits: { calls: 900, spend_cents: 12_345_678 },
       });
 
       expect(requested.result.isError).toBeFalsy();
@@ -152,14 +135,21 @@ describe("agent MCP endpoint", () => {
       });
 
       const slipId = (requested.body as { slipId: string }).slipId;
-      const status = await call(client, { name: "errand_status", arguments: { slip_id: slipId } });
+      const status = await callTool(client, "errand_status", { slip_id: slipId });
       expect(status.body).toMatchObject({ slipId, state: "pending", callsUsed: 0, spendUsedCents: 0 });
 
-      const run = await call(client, {
-        name: "errand_call",
-        arguments: { slip_id: slipId, tool: "calendar__list_events", arguments: {} },
+      const run = await callTool(client, "errand_call", {
+        slip_id: slipId,
+        tool: "calendar__list_events",
       });
       expect(run.body).toMatchObject({ state: "not_forwarded", slipId });
+
+      const offSlip = await callTool(client, "errand_call", {
+        slip_id: slipId,
+        tool: "calendar__delete_event",
+      });
+      expect(offSlip.result.isError).toBe(true);
+      expect(offSlip.body).toMatchObject({ error: "out_of_scope", tool: "calendar__delete_event" });
     } finally {
       await client.close();
     }
@@ -169,9 +159,9 @@ describe("agent MCP endpoint", () => {
     const client = await connect(key);
     try {
       for (const tool of ["calendar__export_all_contacts", "calendar__delete_event"]) {
-        const { result, body } = await call(client, {
-          name: "request_errand",
-          arguments: { goal: "x", tools: [tool] },
+        const { result, body } = await callTool(client, "request_errand", {
+          goal: "x",
+          tools: [tool],
         });
         expect(result.isError).toBe(true);
         expect(body).toMatchObject({ tool });

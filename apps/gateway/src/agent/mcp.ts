@@ -3,7 +3,7 @@ import { z } from "zod";
 import gatewayPackage from "../../package.json" with { type: "json" };
 import type { Db } from "../db/client.ts";
 import { agentCatalog } from "./catalog.ts";
-import { callErrand } from "./call.ts";
+import { acknowledgeCall } from "./call.ts";
 import { AGENT_LIMITS, type RequestedLimits } from "./limits.ts";
 import { ErrandRequestError, requestErrand } from "./request.ts";
 import { errandStatus } from "./status.ts";
@@ -116,17 +116,19 @@ function agentServer(db: Db, userId: string): McpServer {
     "errand_call",
     {
       description:
-        "Make one call through an approved slip. Calls are checked against the slip before anything reaches a service.",
+        "Submit one call for an approved slip. Until the policy pipeline is installed this returns not_forwarded and never contacts a service.",
       inputSchema: z.object({
         slip_id: z.string().min(1),
         tool: z.string().min(1),
-        arguments: z.record(z.string(), z.unknown()).optional(),
       }),
       annotations: { readOnlyHint: false },
     },
     async ({ slip_id, tool }) => {
-      const result = callErrand(db, userId, slip_id, tool);
+      const result = acknowledgeCall(db, userId, slip_id, tool);
       if (result === undefined) return errorResult("not_found", `No slip ${slip_id} for this key`);
+      if (result.state === "out_of_scope") {
+        return errorResult("out_of_scope", `${tool} is not in slip ${slip_id}`, { tool });
+      }
       return textResult(result);
     },
   );

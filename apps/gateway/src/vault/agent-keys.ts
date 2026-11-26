@@ -2,6 +2,7 @@ import { createHash, randomBytes, randomUUID, timingSafeEqual } from "node:crypt
 import { and, eq, isNull } from "drizzle-orm";
 import type { Db } from "../db/client.ts";
 import { agentKeys } from "../db/schema.ts";
+import { getAgentKey } from "../db/scoped-reads.ts";
 
 export type AgentKeyRecord = typeof agentKeys.$inferSelect;
 export type IssuedAgentKey = { key: string; record: AgentKeyRecord };
@@ -66,21 +67,13 @@ export function revokeAgentKey(
   id: string,
   now = new Date().toISOString(),
 ): RevokeResult | undefined {
-  const row = db
-    .select()
-    .from(agentKeys)
-    .where(and(eq(agentKeys.userId, userId), eq(agentKeys.id, id)))
-    .all()[0];
+  const row = getAgentKey(db, userId, id);
   if (row === undefined) return undefined;
   if (row.revokedAt !== null) return { record: row, changed: false };
   db.update(agentKeys)
     .set({ revokedAt: now })
     .where(and(eq(agentKeys.userId, userId), eq(agentKeys.id, id), isNull(agentKeys.revokedAt)))
     .run();
-  const record = db
-    .select()
-    .from(agentKeys)
-    .where(and(eq(agentKeys.userId, userId), eq(agentKeys.id, id)))
-    .all()[0];
+  const record = getAgentKey(db, userId, id);
   return record === undefined ? undefined : { record, changed: true };
 }

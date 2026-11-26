@@ -26,10 +26,12 @@ describe("agent key API", () => {
     expect(response.status).toBe(201);
     const created = (await response.json()) as {
       key: string;
+      mcpUrl: string;
       agentKey: { id: string; name: string; createdAt: string; revokedAt: string | null };
     };
 
     expect(created.key).toMatch(/^errand_[A-Za-z0-9_-]{43}$/);
+    expect(created.mcpUrl).toMatch(/\/mcp$/);
     expect(created.agentKey).toMatchObject({ name: "laptop", revokedAt: null });
 
     const listed = (await (await app.request("/api/agent-keys")).json()) as {

@@ -1,6 +1,6 @@
 import type { Db } from "../db/client.ts";
 import type { ToolClass } from "../db/schema.ts";
-import { listCatalog } from "../connectors/catalog.ts";
+import { listCatalog, type CatalogTool } from "../connectors/catalog.ts";
 import { listConnectors } from "../db/scoped-reads.ts";
 import { sanitiseDescription } from "../connectors/sanitise.ts";
 import { isDecoyToolName } from "../policy/decoys.ts";
@@ -19,11 +19,18 @@ function labelFor(connectorName: string, toolName: string): string {
   return sanitiseDescription(`${connector}: ${action}`, 80);
 }
 
+export function isRequestableTool(tool: CatalogTool): boolean {
+  return (
+    tool.requestable &&
+    !isDecoyToolName(tool.name) &&
+    !isDecoyToolName(tool.agentName)
+  );
+}
+
 export function agentCatalog(db: Db, userId: string): AgentCatalogTool[] {
   const connectorNames = new Map(listConnectors(db, userId).map((row) => [row.id, row.name]));
   return listCatalog(db, userId)
-    .filter((tool) => tool.requestable)
-    .filter((tool) => !isDecoyToolName(tool.name) && !isDecoyToolName(tool.agentName))
+    .filter(isRequestableTool)
     .map((tool) => {
       const connector = connectorNames.get(tool.connectorId) ?? "";
       return {

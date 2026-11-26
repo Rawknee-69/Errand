@@ -153,7 +153,14 @@ export function createGatewayApp(
       eventType: "agent_key.created",
       payload: { agent_key_id: issued.record.id, name: issued.record.name },
     });
-    return c.json({ key: issued.key, agentKey: agentKeyView(issued.record) }, 201);
+    return c.json(
+      {
+        key: issued.key,
+        agentKey: agentKeyView(issued.record),
+        mcpUrl: new URL(AGENT_PATH, c.req.url).toString(),
+      },
+      201,
+    );
   });
 
   app.post("/api/agent-keys/:id/revoke", (c) => {
@@ -179,6 +186,7 @@ export function createGatewayApp(
         { "www-authenticate": 'Bearer realm="errand"' },
       );
     }
+    // The SDK names the authenticated principal `clientId`; here it is the key's owner.
     const authInfo: AuthInfo = { token: record.id, clientId: record.userId, scopes: [] };
     return agentHandler.fetch(c.req.raw, { authInfo });
   });
