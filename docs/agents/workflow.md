@@ -67,8 +67,8 @@ Rules:
 - One action per stop. Do not stack three URLs and hope.
 - Never put a secret, token or key in the URL or the chat. Credentials are
   entered in the web app or `.env`, never here.
-- Push the same short message to the notification channel, then **stop**. Do
-  not poll, sleep, or re-ask; the session resumes when the human replies.
+- Then **stop**. Do not poll, sleep, or re-ask; the session resumes when the
+  human replies.
 - If an OAuth flow is needed, give the authorization URL and say what will
   appear on screen. The callback lands in the gateway; the human's reply is
   what resumes the work.
@@ -116,13 +116,10 @@ disagreement is about a rule, not taste.
 
 ## Notifications
 
-The channel is an ntfy topic, posted to from the shell. Payload: ticket number,
-status, the one thing needed, and a URL if there is one. Never a secret.
+There is no external push channel. A session that needs the human ends with the
+`HUMAN ACTION` block above and nothing else; the human finds it by opening the
+session from their phone over Tailscale.
 
-```
-ntfy publish <topic> "<message>"
-```
-
-Until a topic is confirmed, this is the one blocked piece of the workflow:
-sessions still stop correctly, but the push is missing, so a waiting session
-is found by checking the conversation rather than by a phone alert.
+Consequence to design around: a blocked session produces no alert, so blocking
+is the last resort, not the first. Do the part that can be done without the
+human before stopping, and say in the report which step is waiting on them.
