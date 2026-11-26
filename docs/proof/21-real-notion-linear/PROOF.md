@@ -1,7 +1,7 @@
 # Proof - #21 Real Notion and Linear through the paste-a-URL flow
 
-> Status: **Notion connected; paused for Linear sign-in and the slip pipeline
-> (#10, #11).**
+> Status: **Both real services connected, classified and pinned; the read-only
+> slip call is blocked on the P4/P5 pipeline (#10, #11).**
 > This is not a final proof. It records what was driven, what was observed, and
 > exactly what remains.
 
@@ -43,13 +43,18 @@
    Errand's real consent screen with the registered redirect URI
    `http://127.0.0.1:8787/api/oauth/callback` and scopes Read, Write:
    `screens/02-linear-oauth-choice.png`, `screens/03-linear-consent.png`.
-   Pressing **Continue** led to Linear's login page, which still needs the
-   owner's session.
-6. Direct HTTP drives of the same flow outside the browser, with the gateway
+   Before the owner signed in, **Continue** landed on Linear's login page.
+6. After the owner signed in, the same flow completed: the code exchange
+   succeeded and the callback page reported success
+   (`screens/09-linear-connected.png`). Pinned catalog: 70 Linear tools - 38
+   read, 6 write, 1 send, 25 delete, every `definition_hash` equal to its
+   `observed_hash`; delete and send tools are not requestable
+   (`logs/catalog-both-active.txt`: Linear 70/70 pinned, Notion 77/77 pinned).
+7. Direct HTTP drives of the same flow outside the browser, with the gateway
    in-process and an in-memory database, completed discovery, registration and
    PKCE for both real services and returned authorization URLs:
    `logs/real-oauth-start.txt`.
-7. To prove the whole paste-a-URL OAuth path mechanically against a real MCP
+8. To prove the whole paste-a-URL OAuth path mechanically against a real MCP
    server (not a stub), connected the mock authorization server's
    `http://127.0.0.1:4001/oauth/mcp`: consent (`screens/04-mock-oauth-consent.png`),
    callback (`screens/05-mock-connected.png`), then ingested catalog with classes
@@ -58,10 +63,13 @@
    `delete_event` delete/human-only, every row with `definition_hash` equal to
    its `observed_hash`.
 
+9. Refreshed both connected connectors through the API with the stored tokens:
+   Notion re-listed 77 tools (all unchanged), Linear 70 (all unchanged),
+   proving the tokens work beyond the first exchange
+   (`logs/connector-refresh.txt`).
+
 ## Not driven
 
-- Linear consent and tool catalog: the browser stops at Linear's login page,
-  which needs the owner's session.
 - A read-only slip running end to end: the branch has no approval, policy
   pipeline or forwarder yet (tickets #10 and #11 are open). The agent surface
   stops at `request_errand` and acknowledges calls as `awaiting_approval`.
@@ -70,14 +78,14 @@
 
 | # | Severity | What happened | Artifact | Status |
 |---|---|---|---|---|
-| 1 | blocker | Linear consent cannot be granted until the owner signs in in the browser | `screens/03-linear-consent.png` | blocked on human |
+| 1 | high | Before the owner signed in, Linear consent stopped at its login page | `screens/03-linear-consent.png` | resolved after sign-in (`screens/09-linear-connected.png`) |
 | 2 | blocker | A read-only slip cannot run end to end without the P4/P5 pipeline (#10, #11) | `logs/agent-read-only-request.txt` | blocked on tickets |
 | 3 | low | After the OAuth callback the browser lands on a plain gateway page with a link to the JSON catalog; there is no route back into the web app | `screens/05-mock-connected.png` | filed as #43 |
 | 4 | medium | Abandoned or expired OAuth attempts leave a permanently `pending` connector row; no UI or API deletes it | `logs/catalog-after-mock-oauth.txt` (four pending rows from three starts) | filed as #42 |
 
 ## Verdict
 
-Verdict: fail - not because a step misbehaved, but because two required steps
-have not been driven: Linear consent (owner sign-in) and the read-only slip
-call (needs #10/#11). Notion is connected, classified and pinned. Re-run the
-two remaining steps, then replace this verdict.
+Verdict: fail - one required step has not been driven: a read-only slip
+actually running (needs #10/#11). Both real services connect, classify and pin,
+and a read-only slip can be requested against Notion. Re-run the call once the
+pipeline exists, then replace this verdict.

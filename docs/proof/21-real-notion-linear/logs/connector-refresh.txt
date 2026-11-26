@@ -1,0 +1,19 @@
+POST /api/connectors/:id/refresh against the live gateway, real tokens, 2026-11-26.
+
+Requests were made for every connector whose URL is Notion's or Linear's,
+including the stale pending rows left by earlier abandoned attempts (#42).
+
+[
+  { "name": "Notion",  "status": 409, "error": "reauth", "message": "This connector has no tokens; sign in again" },
+  { "name": "Linear",  "status": 409, "error": "reauth", "message": "This connector has no tokens; sign in again" },
+  { "name": "Notion",  "status": 409, "error": "reauth", "message": "This connector has no tokens; sign in again" },
+  { "name": "Notion",  "status": 200, "authStatus": "active",
+    "summary": { "changed": 0, "new": 0, "removed": 0, "total": 77, "unchanged": 77 } },
+  { "name": "Linear",  "status": 409, "error": "reauth", "message": "This connector has no tokens; sign in again" },
+  { "name": "Linear",  "status": 200, "authStatus": "active",
+    "summary": { "changed": 0, "new": 0, "removed": 0, "total": 70, "unchanged": 70 } }
+]
+
+The two active connectors re-listed their whole tool set through the stored
+OAuth token and found no drift. The 409s are the orphan pending rows from
+abandoned starts, not the connected ones.

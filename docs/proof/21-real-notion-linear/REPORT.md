@@ -81,9 +81,11 @@ Ran 251 tests across 33 files. [1433.00ms]
 - A real agent key requested a read-only slip for `notion__notion_search`
   (`pending`, `learner`) and `errand_call` returned `not_forwarded` /
   `awaiting_approval` (`logs/agent-read-only-request.txt`).
-- Linear accepts the registered redirect URI and shows Errand's consent screen
-  (`screens/03-linear-consent.png`); pressing Continue still lands on Linear's
-  login.
+- Linear consent completed after the owner signed in: the code exchange
+  succeeded and 70 tools were ingested and pinned
+  (`screens/09-linear-connected.png`, `logs/catalog-both-active.txt`). Classes:
+  38 read, 6 write, 1 send, 25 delete; every `definition_hash` equals
+  `observed_hash`; Linear 70/70 and Notion 77/77 pinned.
 - The full paste-a-URL OAuth path, consent, callback and catalog ingestion works
   against the local MCP authorization server:
   `screens/04-mock-oauth-consent.png`, `screens/05-mock-connected.png`,
@@ -93,18 +95,12 @@ Ran 251 tests across 33 files. [1433.00ms]
 
 ## Unverified / blocked
 
-1. **Linear consent.** The in-app browser has no Linear session, so the human
-   must sign in. The authorization URL cannot complete the code exchange
-   without it.
-2. **Read-only slip end to end.** The branch has no approval, capability or
+1. **Read-only slip end to end.** The branch has no approval, capability or
    forwarding pipeline; `apps/gateway/src/agent/call.ts` acknowledges calls as
    `awaiting_approval` / `policy_pipeline_not_installed`. Tickets #10 and #11
    are open. The slip request works against Notion, but the call does not run.
-3. **Linear tool catalog.** Classification and pinning for Linear is
-   unverified until (1) completes. Notion's is proven.
-4. The ticket's DEVIATIONS rule is recorded as row 6: Notion is connected;
-   Linear reaches its own login, consent awaits the owner's signed-in browser
-   session, and nothing was simulated.
+2. The ticket's DEVIATIONS rule no longer applies: both workspaces are
+   available, connected and catalogued, and nothing was simulated.
 
 ## Side finding
 
@@ -113,5 +109,5 @@ Filed as #42 with the evidence; not fixed here because it is outside #21.
 
 ## Next
 
-Human sign-in for Linear, then re-run consent and capture its catalog. Finish
-the slip criterion after #10/#11.
+Finish the slip criterion after #10/#11: request a read-only slip against the
+now-connected Notion or Linear and capture the forwarded call and result.
