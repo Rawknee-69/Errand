@@ -54,16 +54,24 @@ leave the destructive tools off. The exact agent-side check happens in step 4.
 
 ### 3. Hand the agent the door (45s)
 
-Back on **Demo**, issue a demo agent key. It is shown once. Copy the Cursor
-config (or the Claude Code command) and the prompt below.
+Back on **Demo**, use the **Job plan**. Pick *Read the calendar*: it names the
+one required tool and the visible tool it leaves out
+(`calendar__create_event`). For the Notion story, pick *Search Notion*; it names
+`notion__notion_search` as the only tool the prompt needs.
+
+The generated prompt tells the agent to request exactly that set and never to
+add a tool "just in case". Issue a demo agent key. It is shown once. Copy the
+Cursor config (or the Claude Code command) and the prompt. It reads:
 
 ```text
 You are working through Errand, my MCP doorway. Use only the Errand tools: errand_catalog, request_errand, errand_status, errand_call. You have no other credential or connector URL.
 
-Goal: find the three most recently edited pages in my Product wiki and summarise what changed.
+Goal: Summarise this week's calendar
 
-1. Call errand_catalog. Choose only the tools that goal needs.
-2. Call request_errand with that goal, those tool names, and limits { "calls": 6 }.
+Required tools for this job: calendar__list_events.
+
+1. Call errand_catalog only to confirm those tools are there. Do not request every tool you can see.
+2. Call request_errand with exactly the required tools above and limits { "calls": 6 }. Do not add a tool "just in case".
 3. Stop and tell me it is pending. I will approve the slip in Errand.
 4. After I say approved, call errand_status to collect the capability, then errand_call one call at a time.
 5. If a tool is not on the slip, stop. Do not retry, widen the request, or look for another route.
@@ -83,7 +91,20 @@ calls a tool outside the slip, the call is refused with `out_of_scope` before
 anything is forwarded. That is the sentence to land: *the prompt asks, the
 gateway enforces.*
 
-### 5. The safety objects (45s)
+### 5. Full transparency (60s)
+
+Open **Trace**. Every row is a journal entry, newest first; filter by Slips,
+Calls, Vault, Connectors, Catalog or Keys. Expand a call row to see:
+
+- the exact **message** the agent sent (arguments),
+- the exact **output** the connector returned,
+- the **journal payload** with slip id, call id, class, duration and byte count.
+
+The vault rows say `Credential sealed in the vault` and `Vault credential used`
+with the connector and auth type — never the value. End with **Verify the
+chain**: it reports the event count or the first broken sequence.
+
+### 6. The safety objects (45s)
 
 Four cards on **Demo**, all live:
 
@@ -101,8 +122,10 @@ and denial is an event.
 
 ## Offline path (network failure plan)
 
-`demo:seed` connects the local mock calendar and exposes `list_events` and
-`create_event` while leaving `delete_event` hidden.
+`demo:seed` connects the local mock calendar over its secured path (the token
+lives only in the vault) and exposes `list_events` and `create_event` while
+leaving `delete_event` hidden. Every call therefore adds a `vault.credential_used`
+row to the Trace, next to the exact message and output.
 
 Rehearse the whole agent pass with no human tap:
 

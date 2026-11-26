@@ -557,3 +557,28 @@ export const journalVerifySchema = z.union([
   }),
 ]);
 export type JournalVerify = z.infer<typeof journalVerifySchema>;
+
+export const traceCallSchema = z.object({
+  id: z.string(),
+  slipId: z.string(),
+  connectorId: z.string(),
+  tool: z.string(),
+  arguments: z.string(),
+  result: z.string().nullable(),
+  error: z.string().nullable(),
+  createdAt: z.string(),
+});
+export type TraceCall = z.infer<typeof traceCallSchema>;
+
+export const traceEventSchema = z.object({
+  seq: z.number().int().positive(),
+  eventType: z.string(),
+  createdAt: z.string(),
+  payload: feedPayloadSchema,
+  connectorName: z.string().nullable(),
+  call: traceCallSchema.nullable(),
+});
+export type TraceEvent = z.infer<typeof traceEventSchema>;
+
+export const traceResponseSchema = z.object({ events: z.array(traceEventSchema) });
+export type TraceResponse = z.infer<typeof traceResponseSchema>;

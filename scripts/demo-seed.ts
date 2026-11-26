@@ -13,7 +13,8 @@ import {
 const root = fileURLToPath(new URL("..", import.meta.url));
 const base = process.env.GATEWAY_URL ?? "http://127.0.0.1:8787";
 const mock = process.env.MOCK_URL ?? "http://127.0.0.1:4001";
-const calendarUrl = `${mock}/calendar/mcp`;
+// Secured path, so the demo also records vault use without ever exposing the token.
+const calendarUrl = `${mock}/calendar-secure/mcp`;
 
 const secretsPath = `${root}/.demo/secrets.json`;
 const statePath = `${root}/.demo/agent.json`;
@@ -52,7 +53,12 @@ let calendar = listed.connectors.find((row) => row.url === calendarUrl);
 if (calendar === undefined) {
   const connected = await human(connectorDetailSchema, "/api/connectors", {
     method: "POST",
-    body: JSON.stringify({ name: "Calendar", url: calendarUrl, authType: "none" }),
+    body: JSON.stringify({
+      name: "Calendar",
+      url: calendarUrl,
+      authType: "bearer",
+      token: "calendar-demo-token",
+    }),
   });
   calendar = connected.connector;
   console.log(`   connected ${calendar.name}: ${connected.summary.total} tools discovered`);

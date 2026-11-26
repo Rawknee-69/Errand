@@ -31,15 +31,42 @@ const REASON_LABEL: Record<HiddenToolReason, string> = {
   decoy: "decoy",
 };
 
-const DEMO_PROMPT = `You are working through Errand, my MCP doorway. Use only the Errand tools: errand_catalog, request_errand, errand_status, errand_call. You have no other credential or connector URL.
+type Job = {
+  id: string;
+  label: string;
+  goal: string;
+  tools: string[];
+};
 
-Goal: find the three most recently edited pages in my Product wiki and summarise what changed.
+const CALENDAR_JOB: Job = {
+  id: "calendar",
+  label: "Read the calendar",
+  goal: "Summarise this week's calendar",
+  tools: ["calendar__list_events"],
+};
 
-1. Call errand_catalog. Choose only the tools that goal needs.
-2. Call request_errand with that goal, those tool names, and limits { "calls": 6 }.
+const NOTION_JOB: Job = {
+  id: "notion",
+  label: "Search Notion",
+  goal: "Find the three most recently edited pages in my Product wiki and summarise what changed",
+  tools: ["notion__notion_search"],
+};
+
+const JOBS: Job[] = [CALENDAR_JOB, NOTION_JOB];
+
+function promptFor(job: Job): string {
+  return `You are working through Errand, my MCP doorway. Use only the Errand tools: errand_catalog, request_errand, errand_status, errand_call. You have no other credential or connector URL.
+
+Goal: ${job.goal}
+
+Required tools for this job: ${job.tools.join(", ")}.
+
+1. Call errand_catalog only to confirm those tools are there. Do not request every tool you can see.
+2. Call request_errand with exactly the required tools above and limits { "calls": 6 }. Do not add a tool "just in case".
 3. Stop and tell me it is pending. I will approve the slip in Errand.
 4. After I say approved, call errand_status to collect the capability, then errand_call one call at a time.
 5. If a tool is not on the slip, stop. Do not retry, widen the request, or look for another route.`;
+}
 
 const HIDDEN_PREVIEW = 12;
 
@@ -51,6 +78,7 @@ export function Demo({ user, onNavigate }: Props) {
   const [boundary, setBoundary] = useState<Boundary | null>(null);
   const [slips, setSlips] = useState<SlipSummary[]>([]);
   const [issued, setIssued] = useState<AgentKeyCreated | null>(null);
+  const [job, setJob] = useState<Job>(CALENDAR_JOB);
   const [verify, setVerify] = useState<JournalVerify | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -102,6 +130,10 @@ export function Demo({ user, onNavigate }: Props) {
   const approved = slips.filter((slip) => slip.state === "approved").length;
   const hiddenPreview = boundary?.hidden.slice(0, HIDDEN_PREVIEW) ?? [];
   const mcpUrl = issued?.mcpUrl ?? new URL("/mcp", window.location.origin).toString();
+  const visible = boundary?.visible ?? [];
+  const notNeeded = visible.filter((tool) => !job.tools.includes(tool.name));
+  const missingTools = job.tools.filter((name) => !visible.some((tool) => tool.name === name));
+  const prompt = promptFor(job);
 
   return (
     <section className="screen">
@@ -236,10 +268,70 @@ export function Demo({ user, onNavigate }: Props) {
           <button type="button" className="button small" onClick={() => onNavigate("catalog")}>
             Open the Catalog
           </button>
+          <button type="button" className="button small" onClick={() => onNavigate("trace")}>
+            Open the Trace
+          </button>
           <button type="button" className="button small" onClick={() => void refresh()}>
             Refresh
           </button>
         </div>
+      </section>
+
+      <section className="panel stack" aria-label="Job plan">
+        <div className="group-head">
+          <div>
+            <p className="eyebrow">Job plan</p>
+            <h2>Only what this prompt needs</h2>
+          </div>
+          <span className="badge ok">
+            {job.tools.length} {plural(job.tools.length, "tool")} required
+          </span>
+        </div>
+        <div className="chips" role="group" aria-label="Choose a job">
+          {JOBS.map((option) => (
+            <button
+              key={option.id}
+              type="button"
+              className={option.id === job.id ? "chip is-selected" : "chip"}
+              onClick={() => setJob(option)}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+        <p className="hint">Goal: {job.goal}</p>
+        <ul className="layer-list job-tools">
+          {job.tools.map((name) => {
+            const tool = visible.find((entry) => entry.name === name);
+            return (
+              <li key={name}>
+                <span className="mono">{name}</span>
+                {tool === undefined ? (
+                  <span className="hidden-reason">not exposed yet</span>
+                ) : (
+                  <span className={`class class-${tool.class}`}>{tool.class}</span>
+                )}
+                <span className="hidden-reason">required</span>
+              </li>
+            );
+          })}
+        </ul>
+        <p className="hint">
+          {notNeeded.length === 0
+            ? "No other visible tool is on this job."
+            : `Left out of the request: ${notNeeded.map((tool) => tool.name).join(", ")}.`}
+        </p>
+        {missingTools.length > 0 && (
+          <p className="alert" role="alert">
+            {missingTools.join(", ")} is not exposed yet. Add it in the Catalog, or switch to the
+            calendar job.
+          </p>
+        )}
+        <p className="hint">
+          The slip is signed with exactly {job.tools.length}{" "}
+          {plural(job.tools.length, "tool")}. A call to anything else is refused before it is
+          forwarded.
+        </p>
       </section>
 
       <section className="panel stack" aria-label="Agent connection and prompt">
@@ -272,8 +364,8 @@ export function Demo({ user, onNavigate }: Props) {
         )}
         <div className="snippet">
           <p className="eyebrow">Paste this prompt into the agent</p>
-          <pre>{DEMO_PROMPT}</pre>
-          <CopyButton value={DEMO_PROMPT} label="Copy prompt" />
+          <pre>{prompt}</pre>
+          <CopyButton value={prompt} label="Copy prompt" />
         </div>
       </section>
 

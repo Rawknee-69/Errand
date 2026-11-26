@@ -162,6 +162,11 @@ export async function connectConnector(
   try {
     if (secret !== undefined) {
       deps.store.store({ serviceId: id, kind: input.auth.type, secret, connectorId: id });
+      appendJournalEvent(deps.db, {
+        userId: deps.userId,
+        eventType: "vault.credential_sealed",
+        payload: { connector_id: id, auth_type: input.auth.type },
+      });
     }
     const connection = await discoverWithStoredAuth(deps, id, input.auth.type, normalized);
     appendJournalEvent(deps.db, {

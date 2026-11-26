@@ -20,6 +20,7 @@ import {
   slipApprovedSchema,
   slipDetailSchema,
   slipListResponseSchema,
+  traceResponseSchema,
   trustListResponseSchema,
   undoApplyResponseSchema,
   type AgentKeyCreated,
@@ -44,6 +45,7 @@ import {
   type SlipDetail,
   type SlipListResponse,
   type ToolClass,
+  type TraceResponse,
   type TrustCaps,
   type TrustListResponse,
   type UndoApplyResponse,
@@ -118,6 +120,9 @@ export const api = {
   },
   journalVerify(): Promise<JournalVerify> {
     return send(journalVerifySchema, "/api/journal/verify", "GET");
+  },
+  trace(): Promise<TraceResponse> {
+    return send(traceResponseSchema, "/api/trace?limit=300", "GET");
   },
   refreshConnector(id: string): Promise<ConnectorDetail> {
     return send(connectorDetailSchema, `/api/connectors/${id}/refresh`, "POST", {});

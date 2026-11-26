@@ -6,6 +6,7 @@ export type Screen =
   | "connectors"
   | "catalog"
   | "slips"
+  | "trace"
   | "receipts"
   | "trust"
   | "journal"
@@ -51,6 +52,12 @@ const entries: ScreenInfo[] = [
     path: "/slips",
     label: "Slips",
     title: "Slips",
+  },
+  {
+    screen: "trace",
+    path: "/trace",
+    label: "Trace",
+    title: "Transparency",
   },
   {
     screen: "receipts",

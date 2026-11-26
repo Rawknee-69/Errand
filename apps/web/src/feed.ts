@@ -21,12 +21,12 @@ export type FeedItem = {
   tone: FeedTone;
 };
 
-function text(payload: Record<string, unknown>, key: string): string | null {
+export function text(payload: Record<string, unknown>, key: string): string | null {
   const value = payload[key];
   return typeof value === "string" && value !== "" ? value : null;
 }
 
-function count(payload: Record<string, unknown>, key: string): number | null {
+export function count(payload: Record<string, unknown>, key: string): number | null {
   const value = payload[key];
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }

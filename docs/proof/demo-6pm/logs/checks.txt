@@ -1,8 +1,8 @@
 bun test
- 361 pass
+ 364 pass
  0 fail
- 1142 expect() calls
- Ran 361 tests across 46 files
+ 1155 expect() calls
+ Ran 364 tests across 47 files
 
 bun run typecheck
  @errand/shared typecheck: Exited with code 0

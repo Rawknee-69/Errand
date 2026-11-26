@@ -8,6 +8,7 @@ import { Shell } from "./screens/Shell.tsx";
 import { Demo } from "./screens/Demo.tsx";
 import { Connect } from "./screens/Connect.tsx";
 import { Catalog } from "./screens/Catalog.tsx";
+import { Trace } from "./screens/Trace.tsx";
 import { Connectors } from "./screens/Connectors.tsx";
 import { Slips } from "./screens/Slips.tsx";
 import { Receipts } from "./screens/Receipts.tsx";
@@ -71,6 +72,7 @@ export function App() {
     catalog: <Catalog onOpenConnect={openConnect} />,
     connectors: <Connectors onOpenConnect={openConnect} />,
     slips: <Slips />,
+    trace: <Trace />,
     receipts: <Receipts />,
     trust: <Trust />,
     journal: <Journal />,

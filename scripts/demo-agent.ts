@@ -125,6 +125,14 @@ try {
     `   slip ${requested.slipId}: ${requested.state}, tier=${requested.tier}, calls=${requested.callCap}, spend=$${(requested.spendCapCents / 100).toFixed(2)}`,
   );
   console.log(`   tools on it: ${requested.tools.map((tool) => tool.name).join(", ")}`);
+  const visibleNames = catalog.tools.map((tool) => tool.name);
+  const leftOut = visibleNames.filter(
+    (name) => !requested.tools.some((tool) => tool.name === name),
+  );
+  console.log(
+    `   requested ${requested.tools.length} of ${visibleNames.length} visible tools; left out: ${leftOut.length === 0 ? "none" : leftOut.join(", ")}`,
+  );
+  console.log("   every message and output is on the Trace screen after the call");
 
   section("4. Human approval");
   if (autoApprove) {

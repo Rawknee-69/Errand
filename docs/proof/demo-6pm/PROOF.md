@@ -33,8 +33,15 @@
    calls 4 → 2. The agent received the capability, made the allowed call, and
    was refused an exposed-but-out-of-slip call (`out_of_scope`).
 7. Ran `bun run demo:agent -- --auto-approve` as the rehearsal path.
-8. Verified the journal: chain intact, 19 events.
-9. Captured the same screens at 390×844 with Chromium device metrics.
+8. Opened **Trace**. Ten journal rows: credential sealed, connector connected,
+   catalog ingested, agent key created, slip requested, slip approved, call
+   allowed, vault credential used, call succeeded, scope violation. Expanded
+   the success row and read the exact message (`{}`) and output (178 bytes) next
+   to the journal payload. Verified the chain.
+9. Used the **Job plan**: the calendar job requires exactly
+   `calendar__list_events`; `calendar__create_event` is named as left out; the
+   generated prompt tells the agent to request exactly that set.
+10. Captured the same screens at 390×844 with Chromium device metrics.
 
 ## Findings
 
@@ -45,6 +52,9 @@
 | 3 | low | Probe said “it asks for oauth” | `screens/04-connect-notion-oauth.png` (before fix) | Fixed: `AUTH_HINT_LABEL` wording |
 | 4 | low | Demo copy claimed receipts arrive on the live feed, but no Receipts screen is built on this branch | `screens/06-slips-feed.png` | Fixed: copy says calls, approvals and denials |
 | 5 | info | Burned state is displayed nowhere on Demo because the burn path is not wired on this branch | `screens/05-slips-pending.png`, `logs/agent-run.txt` | Stayed honest: docs say demo the `out_of_scope` denial, not a burn |
+| 6 | medium | The Trace showed raw connector UUIDs and a bare event count; a viewer could not tell which service was involved | Trace screen before the fix | Fixed: `connectorName` is resolved in `traceView` and summaries name the host, auth type and tool counts |
+| 7 | high | A no-auth connector produced zero vault rows, so the vault story was not visible | Trace at 8 events, `0 vault uses` | Fixed: `demo:seed` uses the mock calendar's secured path; Trace now records `Credential sealed in the vault` and `Vault credential used` (bearer · Calendar), never the value |
+| 8 | low | Job plan read “signed with exactly these 1 tool” | `screens/09-demo-job-plan.png` (before) | Fixed: “exactly 1 tool” |
 
 No console errors were recorded in the browser during the pass.
 
@@ -59,6 +69,10 @@ No console errors were recorded in the browser during the pass.
 - `screens/06-slips-feed.png` — decided slip and live feed with allowed call,
   scope violation and approval.
 - `screens/07-phone-demo.png` — 390×844 demo screen.
+- `screens/08-trace-vault.png` — full Trace with the vault row expanded: auth
+  type, connector name and purpose, with the value absent.
+- `screens/09-demo-job-plan.png` — job plan naming the one required tool and
+  the visible tool left out.
 - `logs/agent-run.txt` — hidden-tool refusal, approval, capability, forwarded
   call, out-of-scope refusal, journal check.
 - `logs/checks.txt` — suite, typecheck, build, seed and both agent runs.
@@ -66,6 +80,8 @@ No console errors were recorded in the browser during the pass.
 ## Verdict
 
 **pass** — the UI's numbers come from the running gateway; the agent saw 2 of 3
-discovered tools, could not request the hidden tool, and could not step outside
-the approved slip. Notion's probe and OAuth choice are live; the human consent
-tap is the one step not repeated on this branch.
+discovered tools, requested 1 of those 2, could not request the hidden tool, and
+could not step outside the approved slip. The Trace shows the exact message and
+output for the call, and records vault sealing and use without the value.
+Notion's probe and OAuth choice are live; the human consent tap is the one step
+not repeated on this branch.

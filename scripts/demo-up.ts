@@ -53,10 +53,17 @@ async function waitFor(url: string, label: string, logPath: string): Promise<voi
 
 await mkdir(logDir, { recursive: true });
 if (fresh) {
-  for (const suffix of ["", "-shm", "-wal"]) {
-    await rm(`${databasePath}${suffix}`, { force: true });
+  try {
+    for (const suffix of ["", "-shm", "-wal"]) {
+      await rm(`${databasePath}${suffix}`, { force: true });
+    }
+  } catch {
+    console.error(
+      "Cannot reset the demo database because another gateway still holds it.\n" +
+        "Stop the running demo first, then run `bun run demo:up --fresh`.",
+    );
+    process.exit(1);
   }
-
 }
 const secrets = await loadSecrets();
 
