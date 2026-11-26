@@ -1,0 +1,1 @@
+desktop FAILED GET http://localhost:8088/api/events net::ERR_ABORTED

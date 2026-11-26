@@ -94,6 +94,19 @@ describe("loadConfig", () => {
     );
   });
 
+  test("treats blank optional values as absent", () => {
+    const config = loadConfig({
+      ...keys,
+      VAULT_KEY_PREVIOUS: "",
+      WEB_ORIGIN: "",
+      OAUTH_REDIRECT_URI: "",
+    });
+
+    expect(config.VAULT_KEY_PREVIOUS).toBeUndefined();
+    expect(config.WEB_ORIGIN).toBeUndefined();
+    expect(config.OAUTH_REDIRECT_URI).toBeUndefined();
+  });
+
   test("accepts an absent or absolute WEB_ORIGIN", () => {
     expect(loadConfig({ ...keys }).WEB_ORIGIN).toBeUndefined();
     expect(loadConfig({ ...keys, WEB_ORIGIN: "https://app.example" }).WEB_ORIGIN).toBe(

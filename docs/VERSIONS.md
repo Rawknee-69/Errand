@@ -56,6 +56,20 @@ jose => latest 6.2.18
 ajv => latest 8.20.0
 ```
 
+## Deployment images
+
+Checked on **2026-11-26** against the GitHub release tag and the Docker Hub tag
+the compose file pins.
+
+| Image | Tag | Evidence |
+|---|---|---|
+| `caddy` | `2.11.9` | `caddy/caddy` latest release tag |
+| `litestream/litestream` | `0.5.18` | `benbjohnson/litestream` latest release tag |
+| `oven/bun` | `1.4.4-slim` | matches the runtime that built and passed the suite |
+
+`docker compose` CLI used to validate the manifests: v5.8.0 (standalone,
+Windows). The engine was not available on the build machine.
+
 ## Verified but not installed yet
 
 The brief's remaining stack, checked at the same time. These are installed by

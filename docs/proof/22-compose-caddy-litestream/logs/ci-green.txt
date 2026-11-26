@@ -1,0 +1,12 @@
+# CircleCI clean-runner compose proof
+
+pipeline: https://app.circleci.com/pipelines/github/Rawknee-69/Errand/8
+workflow: e74f0a53-6a8c-4fe2-8cc3-1a5f1cf787fb
+commit: 8f89802
+machine: ubuntu-2404:current (CircleCI machine executor)
+
+checks: success  https://app.circleci.com/workflow/e74f0a53-6a8c-4fe2-8cc3-1a5f1cf787fb/job/1f258fea-a12e-4234-ae71-b92e9c05639e
+compose: success https://app.circleci.com/workflow/e74f0a53-6a8c-4fe2-8cc3-1a5f1cf787fb/job/ff59c5f5-d823-4231-bc20-cf57b5458990
+
+The compose job ran docker compose up -d --build and
+scripts/verify-stack.sh; its probe output is circleci-compose-probe.txt.

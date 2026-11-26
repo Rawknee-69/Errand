@@ -716,8 +716,12 @@ describe("errand_call policy pipeline", () => {
       );
       const outputs = await Promise.all(
         runs.map(async (run) => {
-          const text = await new Response(run.stdout).text();
-          await run.exited;
+          const [text, stderr] = await Promise.all([
+            new Response(run.stdout).text(),
+            new Response(run.stderr).text(),
+          ]);
+          const status = await run.exited;
+          if (status !== 0) throw new Error(`reserve worker exited ${status}: ${stderr}`);
           return text;
         }),
       );

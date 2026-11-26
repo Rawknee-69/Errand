@@ -1,0 +1,25 @@
+# replica file listing
+$ find replica -type f
+/c/Users/Rem/AppData/Local/Temp/opencode/proof22b/replica/errand.db/ltx/0/0000000000000001-0000000000000001.ltx
+/c/Users/Rem/AppData/Local/Temp/opencode/proof22b/replica/errand.db/ltx/0/0000000000000002-0000000000000002.ltx
+/c/Users/Rem/AppData/Local/Temp/opencode/proof22b/replica/errand.db/ltx/1/0000000000000001-0000000000000002.ltx
+/c/Users/Rem/AppData/Local/Temp/opencode/proof22b/replica/errand.db/ltx/9/0000000000000001-0000000000000001.ltx
+
+# restore the replica to a plain SQLite file, then scan that
+$ litestream restore -o restored.db data/errand.db
+restored.db bytes: 225280
+
+# grep exit 1 means no match; the positive control must be 0
+$ grep -rF connector.connected restored.db -> exit 0
+$ grep -rF <agent key> restored.db -> exit 1
+$ grep -rF <VAULT_KEY> restored.db -> exit 1
+
+# the restored credential row, whose sealed columns are base64, not the key
+# read from restored.db with bun:sqlite; sealed columns truncated at 64 chars
+connector: stack-probe
+kind: bearer
+key_id: 5685381f16809b76
+ciphertext: <sealed, 84 base64 chars>
+nonce: <sealed, 16 base64 chars>
+auth_tag: <sealed, 24 base64 chars>
+wrapped_data_key: <sealed, 84 base64 chars>

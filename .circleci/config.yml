@@ -1,0 +1,70 @@
+version: 2.1
+
+jobs:
+  checks:
+    docker:
+      - image: cimg/base:stable
+    steps:
+      - checkout
+      - run:
+          name: Install Bun 1.4.4
+          command: |
+            sudo apt-get update
+            sudo apt-get install -y --no-install-recommends unzip
+            curl -fsSL https://bun.sh/install | bash -s "bun-v1.4.4"
+            echo 'export PATH="$HOME/.bun/bin:$PATH"' >> "$BASH_ENV"
+      - run:
+          name: Install dependencies
+          command: bun install --frozen-lockfile
+      - run:
+          name: Typecheck
+          command: bun run typecheck
+      - run:
+          name: Test
+          command: bun test
+
+  compose:
+    machine:
+      image: ubuntu-2404:current
+    steps:
+      - checkout
+      - run:
+          name: Fill a clean .env with fresh secrets
+          command: |
+            cp .env.example .env
+            vault_key="$(openssl rand -base64 32)"
+            hmac_key="$(openssl rand -base64 32)"
+            jwt_secret="$(openssl rand -base64 32)"
+            owner_passphrase="$(openssl rand -base64 24)"
+            sed -i "s|^VAULT_KEY=.*|VAULT_KEY=${vault_key}|" .env
+            sed -i "s|^HMAC_KEY=.*|HMAC_KEY=${hmac_key}|" .env
+            sed -i "s|^JWT_SECRET=.*|JWT_SECRET=${jwt_secret}|" .env
+            sed -i "s|^OWNER_PASSPHRASE=.*|OWNER_PASSPHRASE=${owner_passphrase}|" .env
+            sed -i "s|^SITE_ADDRESS=.*|SITE_ADDRESS=localhost|" .env
+            {
+              echo "export VAULT_KEY='${vault_key}'"
+              echo "export HMAC_KEY='${hmac_key}'"
+              echo "export JWT_SECRET='${jwt_secret}'"
+              echo "export OWNER_PASSPHRASE='${owner_passphrase}'"
+            } >> "$BASH_ENV"
+      - run:
+          name: Build and start the stack
+          command: docker compose -f compose.yaml -f deploy/compose.ci.yaml up -d --build
+          no_output_timeout: 20m
+      - run:
+          name: Probe the running stack
+          command: bash scripts/verify-stack.sh
+      - run:
+          name: Logs
+          when: on_fail
+          command: docker compose -f compose.yaml -f deploy/compose.ci.yaml logs --no-color
+      - run:
+          name: Stop
+          when: always
+          command: docker compose -f compose.yaml -f deploy/compose.ci.yaml down -v
+
+workflows:
+  stack:
+    jobs:
+      - checks
+      - compose
