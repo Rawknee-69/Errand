@@ -142,7 +142,8 @@ Open judgement calls:
   performance change.
 - OAuth calls refresh the token on every call; correctness is covered, the extra
   refresh traffic is not measured.
-- Responses above the 10 MB egress ceiling are refused rather than truncated.
+- Responses above the 10 MB egress ceiling are refused rather than truncated;
+  recorded as deviation 6 in `docs/DEVIATIONS.md`.
 
 ## Unverified
 
