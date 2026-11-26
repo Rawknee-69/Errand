@@ -1,3 +1,5 @@
+export { escapeHtml } from "./html.ts";
+
 export type Health = {
   status: "ok";
 };

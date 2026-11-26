@@ -6,7 +6,8 @@ export type ConnectorAuth =
   | { type: "none" }
   | { type: "bearer"; token: string }
   | { type: "header"; headerName: string; value: string }
-  | { type: "basic"; username: string; password: string };
+  | { type: "basic"; username: string; password: string }
+  | { type: "oauth"; accessToken: string };
 
 export const headerNameSchema = z
   .string()
@@ -64,6 +65,8 @@ export function authHeaders(auth: ConnectorAuth): Record<string, string> {
       return {};
     case "bearer":
       return { authorization: `Bearer ${auth.token}` };
+    case "oauth":
+      return { authorization: `Bearer ${auth.accessToken}` };
     case "header":
       return { [auth.headerName]: auth.value };
     case "basic":
@@ -83,6 +86,8 @@ export function serialiseCredential(auth: ConnectorAuth): string | undefined {
       return JSON.stringify({ headerName: auth.headerName, value: auth.value });
     case "basic":
       return JSON.stringify({ username: auth.username, password: auth.password });
+    case "oauth":
+      return undefined;
   }
 }
 

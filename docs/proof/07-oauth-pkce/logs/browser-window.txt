@@ -1,0 +1,44 @@
+Browser window — in-app Chromium, desktop viewport
+Gateway http://127.0.0.1:8788, mock authorization server http://127.0.0.1:4002
+Session: ticket/07-oauth-pkce
+
+Step 1 — open the authorization URL returned by
+POST /api/connectors/oauth/start
+  URL:   http://127.0.0.1:4002/oauth/authorize?response_type=code&client_id=client_5842a3a0-4ac2-4d5f-9375-0d05308f94a8&code_challenge=Y6dmz83TxQVAGZW_sufEf7tsZiCySO155_c5tmm3iQ8&code_challenge_method=S256&redirect_uri=http%3A%2F%2F127.0.0.1%3A8788%2Fapi%2Foauth%2Fcallback&state=P28H4I82epqW8aXxPCJIYhVVPVAbJvHiTRL3jrvSXXU&scope=calendar.read&resource=http%3A%2F%2F127.0.0.1%3A4002%2Foauth%2Fmcp
+  Title: "Authorize Errand"
+  Page:  "Authorize Errand / Errand is asking to read your calendar. / Scope: calendar.read"
+  Control: button "Approve"
+  Screenshot: screens/01-consent.jpg
+  Console: no messages, no errors
+  Note: the page shows no token, secret or client secret.
+
+Step 2 — click "Approve"
+  302 to http://127.0.0.1:8788/api/oauth/callback?code=nZJUcPPUD_jf-NGa4RfEtb6m6YGb1-mD&state=P28H4I82epqW8aXxPCJIYhVVPVAbJvHiTRL3jrvSXXU&iss=http%3A%2F%2F127.0.0.1%3A4002
+  Title: "Errand — connected"
+  Page:  "Connected / Browser consent is authorized and its tools are catalogued."
+  Control: link "Open the catalog"
+  Screenshot: screens/02-connected.jpg
+  Console: no messages, no errors
+  Network: POST http://127.0.0.1:4002/oauth/authorize
+           GET  http://127.0.0.1:8788/api/oauth/callback?code=…&state=…&iss=…
+
+Step 3 — click "Open the catalog"
+  URL: http://127.0.0.1:8788/api/catalog
+  Page: the live catalog JSON, including the OAuth connector
+        "Browser consent", authType "oauth", authStatus "active"
+  Screenshot: screens/03-catalog.jpg
+  Console: no messages, no errors
+  Full response: logs/catalog.json
+
+Negative state replay is covered by the API transcript, not the browser:
+re-submitting the same callback URL gives 400 {"error":"oauth_state"} and the
+connector stays active (logs/oauth-transcript.txt, "callback first use / replay").
+
+The connector name is HTML-escaped on the confirmation page; a unit test
+authorizes a connector named with markup and asserts the tag is rendered as
+text, not parsed (tests/connectors/oauth.test.ts).
+
+Not driven: phone viewport 390x844. This ticket adds no control-panel route;
+the only pages are the mock authorization server's consent form and the
+gateway's callback confirmation, both single-column pages. The control panel
+is ticket #16.

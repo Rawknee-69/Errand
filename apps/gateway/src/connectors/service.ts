@@ -1,20 +1,15 @@
 import { randomUUID } from "node:crypto";
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import type { Db } from "../db/client.ts";
 import { appendJournalEvent } from "../db/journal.ts";
-import { scopedGet, scopedList } from "../db/scoped-reads.ts";
+import { scopedList } from "../db/scoped-reads.ts";
 import { connectors, credentials, type ConnectorAuthType } from "../db/schema.ts";
 import type { CredentialStore } from "../vault/credentials.ts";
 import type { Vault } from "../vault/vault.ts";
 import { assertFetchableUrl } from "../egress/guard.ts";
 import { parseCredential, serialiseCredential, type ConnectorAuth } from "./auth.ts";
-import {
-  getCatalogTool,
-  ingestTools,
-  pinToolDefinition,
-  type DiscoveredTool,
-  type IngestSummary,
-} from "./catalog.ts";
+import { getCatalogTool, pinToolDefinition, type DiscoveredTool, type IngestSummary } from "./catalog.ts";
+import { applyDiscovery } from "./discovery.ts";
 import { ConnectorError } from "./errors.ts";
 import { assertConnectorQuota } from "./quota.ts";
 import {
@@ -24,24 +19,17 @@ import {
   type McpConnection,
   type McpTransportKind,
 } from "./mcp.ts";
+import { connectorRow, connectorView, type ConnectorBaseDeps, type ConnectorView } from "./records.ts";
+import { refreshOAuthConnection } from "./oauth/service.ts";
 
-export type ConnectorServiceDeps = {
-  db: Db;
-  userId: string;
+export type { ConnectorView } from "./records.ts";
+
+export type ConnectorServiceDeps = ConnectorBaseDeps & {
   vault: Vault;
   store: CredentialStore;
   discoverOptions: DiscoverOptions;
+  redirectUri: string;
   maxConnectors?: number;
-};
-
-export type ConnectorView = {
-  id: string;
-  name: string;
-  url: string;
-  transport: string;
-  authType: ConnectorAuthType;
-  createdAt: string;
-  updatedAt: string;
 };
 
 export type AuthHint = "bearer" | "basic" | "header";
@@ -60,18 +48,6 @@ export type ConnectResult = {
   tools: DiscoveredTool[];
   summary: IngestSummary;
 };
-
-export function connectorView(row: typeof connectors.$inferSelect): ConnectorView {
-  return {
-    id: row.id,
-    name: row.name,
-    url: row.url,
-    transport: row.transport,
-    authType: row.authType,
-    createdAt: row.createdAt,
-    updatedAt: row.updatedAt,
-  };
-}
 
 export function listConnectors(db: Db, userId: string): ConnectorView[] {
   return scopedList(db, connectors, connectors.userId, userId).map(connectorView);
@@ -129,42 +105,15 @@ async function discoverWithStoredAuth(
   authType: ConnectorAuthType,
   url: string,
 ): Promise<McpConnection> {
-  if (authType === "none") return discoverMcpTools(url, { type: "none" }, deps.discoverOptions);
+  if (authType === "none") {
+    return discoverMcpTools(url, { type: "none" }, deps.discoverOptions);
+  }
+  if (authType === "oauth") {
+    return refreshOAuthConnection(deps, connectorId);
+  }
   return deps.vault.withCredential(connectorId, (secret) =>
     discoverMcpTools(url, parseCredential(authType, secret), deps.discoverOptions),
   );
-}
-
-function applyDiscovery(
-  deps: ConnectorServiceDeps,
-  connectorId: string,
-  connectorName: string,
-  connection: McpConnection,
-  eventType: "catalog.ingested" | "catalog.refreshed",
-): IngestSummary {
-  deps.db
-    .update(connectors)
-    .set({ transport: connection.transport, updatedAt: new Date().toISOString() })
-    .where(and(eq(connectors.userId, deps.userId), eq(connectors.id, connectorId)))
-    .run();
-  const summary = ingestTools(deps.db, {
-    userId: deps.userId,
-    connectorId,
-    connectorName,
-    tools: connection.tools,
-  });
-  appendJournalEvent(deps.db, {
-    userId: deps.userId,
-    eventType,
-    payload: { connectorId, ...summary },
-  });
-  return summary;
-}
-
-function connectorRow(deps: ConnectorServiceDeps, connectorId: string) {
-  const row = scopedGet(deps.db, connectors, connectors.userId, deps.userId, connectors.id, connectorId);
-  if (row === undefined) throw new ConnectorError("not_found", `Connector ${connectorId} not found`);
-  return row;
 }
 
 export async function connectConnector(

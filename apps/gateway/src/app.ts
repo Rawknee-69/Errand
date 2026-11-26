@@ -1,4 +1,4 @@
-import type { GatewayHealth } from "@errand/shared";
+import { escapeHtml, type GatewayHealth } from "@errand/shared";
 import type { AuthInfo } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import { Hono } from "hono";
@@ -24,17 +24,20 @@ import {
   type ConnectorServiceDeps,
 } from "./connectors/service.ts";
 import { agentKeyView, issueAgentKey, revokeAgentKey, verifyAgentKey } from "./vault/agent-keys.ts";
+import { completeOAuthFlow, startOAuthFlow } from "./connectors/oauth/service.ts";
 import { CredentialStore } from "./vault/credentials.ts";
 import { VaultKeyring } from "./vault/keyring.ts";
 import { Vault } from "./vault/vault.ts";
 
 export const DEFAULT_OWNER_ID = "owner";
+export const DEFAULT_OAUTH_REDIRECT_URI = "http://127.0.0.1:8787/api/oauth/callback";
 
 export type GatewayAppOptions = {
   userId?: string;
   keyring?: VaultKeyring;
   discoverOptions?: DiscoverOptions;
   maxConnectors?: number;
+  oauthRedirectUri?: string;
 };
 
 const probeSchema = z.object({ url: z.string().min(1) });
@@ -43,6 +46,16 @@ const agentKeyCreateSchema = z.object({ name: z.string().trim().min(1).max(64) }
 function bearerToken(header: string | undefined): string | undefined {
   return header?.match(/^Bearer\s+(\S+)$/i)?.[1];
 }
+
+const oauthStartSchema = z.object({
+  name: z.string().min(1).max(120),
+  url: z.string().min(1),
+});
+const oauthCallbackSchema = z.object({
+  state: z.string().min(1),
+  code: z.string().min(1),
+  iss: z.string().optional(),
+});
 
 export type CatalogToolView = {
   id: string;
@@ -92,6 +105,17 @@ export function catalogToolView(row: CatalogTool): CatalogToolView {
   };
 }
 
+function oauthCallbackPage(connectorName: string): string {
+  return `<!doctype html>
+<meta charset="utf-8">
+<title>Errand — connected</title>
+<body style="font-family: system-ui, sans-serif; max-width: 32rem; margin: 4rem auto">
+  <h1>Connected</h1>
+  <p><strong>${escapeHtml(connectorName)}</strong> is authorized and its tools are catalogued.</p>
+  <p><a href="/api/catalog">Open the catalog</a></p>
+</body>`;
+}
+
 export function createGatewayApp(
   db: Db = createMigratedDatabase(":memory:"),
   options: GatewayAppOptions = {},
@@ -104,6 +128,7 @@ export function createGatewayApp(
   const discoverOptions = options.discoverOptions ?? {};
   const keyring = options.keyring;
   const agentHandler = createAgentHandler(db);
+  const oauthRedirectUri = options.oauthRedirectUri ?? DEFAULT_OAUTH_REDIRECT_URI;
 
   function serviceDeps(): ConnectorServiceDeps {
     if (keyring === undefined) {
@@ -115,6 +140,7 @@ export function createGatewayApp(
       vault: new Vault(db, keyring, userId),
       store: new CredentialStore(db, keyring, userId),
       discoverOptions,
+      redirectUri: oauthRedirectUri,
       ...(options.maxConnectors === undefined ? {} : { maxConnectors: options.maxConnectors }),
     };
   }
@@ -213,6 +239,27 @@ export function createGatewayApp(
     return c.json(connectorDetail(result));
   });
 
+  app.post("/api/connectors/oauth/start", async (c) => {
+    const body = oauthStartSchema.parse(await c.req.json());
+    const result = await startOAuthFlow(serviceDeps(), body);
+    return c.json(result, 201);
+  });
+
+  app.get("/api/oauth/callback", async (c) => {
+    const query = oauthCallbackSchema.parse(
+      Object.fromEntries(new URL(c.req.url).searchParams.entries()),
+    );
+    const result = await completeOAuthFlow(serviceDeps(), {
+      state: query.state,
+      code: query.code,
+      ...(query.iss === undefined ? {} : { iss: query.iss }),
+    });
+    if (c.req.header("accept")?.includes("text/html") === true) {
+      return c.html(oauthCallbackPage(result.connector.name));
+    }
+    return c.json(connectorDetail(result));
+  });
+
   app.get("/api/catalog", (c) =>
     c.json({
       tools: listCatalog(db, userId).map(catalogToolView),
@@ -257,10 +304,15 @@ export function createGatewayApp(
       );
     }
     if (error instanceof ConnectorError) {
-      return c.json(
-        { error: error.code, message: error.message },
-        error.code === "not_found" ? 404 : 400,
-      );
+      const status =
+        error.code === "not_found"
+          ? 404
+          : error.code === "reauth"
+            ? 409
+            : error.code === "oauth_failed"
+              ? 502
+              : 400;
+      return c.json({ error: error.code, message: error.message }, status);
     }
     console.error(error);
     return c.json({ error: "internal", message: "Unexpected gateway error" }, 500);

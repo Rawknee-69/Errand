@@ -1,6 +1,7 @@
 import type { MockServicesHealth } from "@errand/shared";
 import { createMcpHandler, McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
+import { createMockAuthorizationServer } from "./oauth.ts";
 
 export const DEFAULT_PORT = 4001;
 
@@ -277,6 +278,8 @@ export function startMockServices(options: MockServicesOptions = {}) {
   const calendarSecureHandler = createMcpHandler(() => calendarServer(listEventsDescription));
   const payHandler = createMcpHandler(() => payServer());
   const dineOut = legacySseSessions();
+  const oauth = createMockAuthorizationServer();
+  const oauthResourceHandler = createMcpHandler(() => calendarServer());
 
   return Bun.serve({
     port: options.port ?? DEFAULT_PORT,
@@ -287,6 +290,10 @@ export function startMockServices(options: MockServicesOptions = {}) {
         const health: MockServicesHealth = { service: "mock-services", status: "ok" };
         return Response.json(health);
       }
+      const oauthResponse = await oauth.fetch(request, (authorized) =>
+        oauthResourceHandler.fetch(authorized),
+      );
+      if (oauthResponse !== undefined) return oauthResponse;
       if (pathname === "/mock/calendar/change" && request.method === "POST") {
         const body = z.object({ description: z.string() }).safeParse(await request.json());
         if (!body.success) return Response.json({ error: "invalid_body" }, { status: 400 });
