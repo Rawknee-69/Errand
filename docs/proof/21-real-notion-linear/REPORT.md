@@ -1,8 +1,8 @@
-# #21 session report - paused
+# #21 session report
 
 Ticket: **P9 - Real Notion and Linear through the paste-a-URL flow**
-Branch: `ticket/21-real-notion-linear` (from `integration` at `b987a8e`)
-State: open. Not merged, not closed.
+Branch: `ticket/21-real-notion-linear`, cut from `integration` at `b987a8e` and
+rebased onto `1cc9662` (includes #10, #11, #17, #43).
 
 ## What this branch changes
 
@@ -26,24 +26,15 @@ No dependency or version changes.
 
 ```powershell
 bun install
-bun test apps/gateway/tests/connectors/api.test.ts
 bun run typecheck
 bun test
 bun run apps/gateway/src/index.ts
 bun run --cwd apps/web dev -- --host 127.0.0.1
 bun run --cwd apps/mock-services dev
+bun run apps/gateway/tmp-slip-run.ts        # proof driver, not committed
 ```
 
 ## Test output
-
-```text
-bun test v1.4.4 (38afee6c8)
-
- 12 pass
- 0 fail
- 59 expect() calls
-Ran 12 tests across 1 file. [463.00ms]
-```
 
 ```text
 bun run typecheck
@@ -55,59 +46,56 @@ bun run typecheck
 ```
 
 ```text
-bun test
- 251 pass
+bun test v1.4.4 (38afee6c8)
+
+ 344 pass
  0 fail
- 678 expect() calls
-Ran 251 tests across 33 files. [1433.00ms]
+ 1071 expect() calls
+Ran 344 tests across 42 files. [7.91s]
 ```
 
 ## Proven
 
 - Notion's official endpoint (`https://mcp.notion.com/mcp`) and Linear's
   (`https://mcp.linear.app/mcp`) both answer 401 with `resource_metadata`; the
-  gateway probe now names that `oauth` and the Connect screen offers sign-in
-  (`docs/proof/21-real-notion-linear/logs/real-oauth-start.txt`).
+  gateway probe names that `oauth` and the Connect screen offers sign-in
+  (`logs/real-oauth-start.txt`).
 - RFC 9728 discovery, dynamic client registration, PKCE and the authorization
-  URL complete in the running gateway for both real services
-  (`logs/real-oauth-start.txt`, with `client_id`, `code_challenge`,
-  `redirect_uri`, `state`, `resource`).
+  URL complete in the running gateway for both real services.
 - Notion consent completed for workspace `rawknee .69's`, the code exchange
   succeeded, and 77 tools were ingested and pinned
-  (`screens/07-notion-consent.png`, `screens/08-notion-connected.png`,
-  `logs/catalog-notion-active.txt`). Classes: 38 read, 19 write, 2 send, 18
-  delete; every `definition_hash` equals `observed_hash`; delete and send are
-  not requestable.
-- A real agent key requested a read-only slip for `notion__notion_search`
-  (`pending`, `learner`) and `errand_call` returned `not_forwarded` /
-  `awaiting_approval` (`logs/agent-read-only-request.txt`).
-- Linear consent completed after the owner signed in: the code exchange
-  succeeded and 70 tools were ingested and pinned
-  (`screens/09-linear-connected.png`, `logs/catalog-both-active.txt`). Classes:
-  38 read, 6 write, 1 send, 25 delete; every `definition_hash` equals
-  `observed_hash`; Linear 70/70 and Notion 77/77 pinned.
-- The full paste-a-URL OAuth path, consent, callback and catalog ingestion works
-  against the local MCP authorization server:
-  `screens/04-mock-oauth-consent.png`, `screens/05-mock-connected.png`,
-  `logs/catalog-after-mock-oauth.txt`. Every tool is classified
-  (`read`/`write`/`delete`) and pinned (`definition_hash` equals
-  `observed_hash`), and `delete_event` is not requestable.
+  (`screens/07-notion-consent.png`, `screens/08-notion-connected.png`).
+  Classes: 38 read, 19 write, 2 send, 18 delete; every `definition_hash`
+  equals `observed_hash`; delete and send are not requestable.
+- Linear consent completed after the owner signed in: 70 tools ingested and
+  pinned (`screens/09-linear-connected.png`). Classes: 38 read, 6 write,
+  1 send, 25 delete; Linear 70/70 and Notion 77/77 pinned
+  (`logs/catalog-both-active.txt`).
+- Both connectors re-list their whole catalog through the stored tokens with
+  no drift (`logs/connector-refresh.txt`).
+- **A read-only slip ran end to end against Notion.** A real agent key
+  requested `notion__notion_search`; the owner approved it through
+  `POST /api/slips/:id/approve`; `errand_status` issued a capability; and
+  `errand_call` returned `state: "forwarded"`, `class: "read"`, a real Notion
+  search response (`isError: false`) in 5165 ms, with 1 of 2 calls remaining
+  (`logs/read-only-slip-end-to-end.txt`).
+- The full paste-a-URL OAuth path, consent, callback and catalog ingestion also
+  works against the local MCP authorization server
+  (`screens/04-mock-oauth-consent.png`, `screens/05-mock-connected.png`).
 
-## Unverified / blocked
+## Unverified
 
-1. **Read-only slip end to end.** The branch has no approval, capability or
-   forwarding pipeline; `apps/gateway/src/agent/call.ts` acknowledges calls as
-   `awaiting_approval` / `policy_pipeline_not_installed`. Tickets #10 and #11
-   are open. The slip request works against Notion, but the call does not run.
-2. The ticket's DEVIATIONS rule no longer applies: both workspaces are
-   available, connected and catalogued, and nothing was simulated.
+- The approval was driven through the API, because the approval-card screen is
+  #18 and still open. The agent half used a real MCP client and agent key.
+- Screenshots `05`, `08` and `09` predate #43's callback redirect; repaired
+  callbacks are covered by #43's own proof.
 
 ## Side finding
 
 Abandoned or expired OAuth attempts leave a connector row `pending` forever.
-Filed as #42 with the evidence; not fixed here because it is outside #21.
+Filed as #42 with the evidence; not fixed here because it is outside #21 and
+does not affect this ticket's acceptance.
 
 ## Next
 
-Finish the slip criterion after #10/#11: request a read-only slip against the
-now-connected Notion or Linear and capture the forwarded call and result.
+Merge this branch, close #21. #42 remains open and unassigned.
