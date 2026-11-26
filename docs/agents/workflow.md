@@ -128,6 +128,11 @@ disagreement is about a rule, not taste.
    rather than comment out.
 9. **Tests assert behaviour, not internals.** A test that breaks when a private
    function is renamed is wrong.
+10. **No `any`, no `@ts-ignore`, no `as unknown as`.** `any` means the shape is
+    unknown where the code claims otherwise, which is a bug in waiting.
+    `unknown` is correct at an untrusted boundary, then narrowed by a schema
+    before use. `bun run typecheck` enforces this and fails the build. See
+    `docs/adr/0001-ban-any.md`.
 
 ## Notifications
 
