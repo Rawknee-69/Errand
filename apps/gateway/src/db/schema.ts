@@ -172,6 +172,8 @@ export const slips = sqliteTable(
     approvedAt: text("approved_at"),
     burnedAt: text("burned_at"),
     burnedReason: text("burned_reason"),
+    // Set once when the run ends (cap reached or expired) and its trust effect is applied.
+    settledAt: text("settled_at"),
   },
   (t) => [index("slips_user_id_idx").on(t.userId)],
 );

@@ -23,6 +23,7 @@ import { createOutboxService, type OutboxService } from "../outbox/service.ts";
 import type { CallDecision } from "../policy/pipeline.ts";
 import { recordReceipt } from "../receipts/receipts.ts";
 import { verifyChange, type UpstreamRead } from "../receipts/verifier.ts";
+import { settleSlip } from "../policy/trust.ts";
 import { VaultError } from "../vault/common.ts";
 import type { VaultKeyring } from "../vault/keyring.ts";
 
@@ -232,6 +233,10 @@ async function receiptForChange(context: ReceiptContext): Promise<ReceiptView | 
   });
 }
 
+function settleIfFinished(db: Db, userId: string, decision: AdmittedCall): void {
+  if (decision.callsRemaining === 0) settleSlip(db, userId, decision.slipId);
+}
+
 // The only path that touches an upstream tool. Held calls are re-admitted and
 // then come here, so the outbox never forwards from its own dispatch branch.
 export function createUpstreamForwarder(options: ForwarderOptions): Forwarder {
@@ -291,6 +296,7 @@ export function createUpstreamForwarder(options: ForwarderOptions): Forwarder {
         message: `The upstream call to ${decision.tool} failed`,
       };
       recordFailure(options.db, userId, decision, args, failed, durationMs);
+      settleIfFinished(options.db, userId, decision);
       return { state: "failed", ...failed, durationMs };
     }
 
@@ -322,6 +328,7 @@ export function createUpstreamForwarder(options: ForwarderOptions): Forwarder {
         });
       }
     }
+    settleIfFinished(options.db, userId, decision);
     return {
       state: "forwarded",
       result,

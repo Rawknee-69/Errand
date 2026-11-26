@@ -2,8 +2,9 @@ import { randomUUID } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import type { ReceiptView, ToolClass, VerificationOutcome } from "@errand/shared";
 import type { Db } from "../db/client.ts";
-import { appendJournalEvent } from "../db/journal.ts";
+import { appendJournalEvent, appendJournalEventIn } from "../db/journal.ts";
 import { receipts, undoActions } from "../db/schema.ts";
+import { demoteTrust } from "../policy/trust.ts";
 import {
   getCall,
   getConnector,
@@ -97,49 +98,53 @@ export function recordReceipt(input: RecordReceiptInput): ReceiptView {
   const irreversible = isIrreversible(input.toolClass, input.inverse);
   const summary = withUndoNote(input.summary, irreversible, input.inverse);
 
-  input.db
-    .insert(receipts)
-    .values({
-      id,
-      userId: input.userId,
-      slipId: input.slipId,
-      callId: input.callId,
-      errandType: input.errandType,
-      verification: input.verification,
-      toolClass: input.toolClass,
-      irreversible,
-      summary,
-      createdAt,
-    })
-    .run();
-
-  if (input.inverse !== undefined) {
-    input.db
-      .insert(undoActions)
+  input.db.transaction((tx) => {
+    tx.insert(receipts)
       .values({
-        id: undoId,
+        id,
         userId: input.userId,
-        receiptId: id,
+        slipId: input.slipId,
         callId: input.callId,
-        inverse: JSON.stringify(input.inverse),
+        errandType: input.errandType,
+        verification: input.verification,
+        toolClass: input.toolClass,
+        irreversible,
+        summary,
         createdAt,
       })
       .run();
-  }
 
-  appendJournalEvent(input.db, {
-    userId: input.userId,
-    eventType: "receipt.created",
-    payload: {
-      receipt_id: id,
-      slip_id: input.slipId,
-      call_id: input.callId,
-      tool_class: input.toolClass,
-      verification: input.verification,
-      irreversible,
-      undo_available: input.inverse !== undefined,
-      summary,
-    },
+    if (input.inverse !== undefined) {
+      tx.insert(undoActions)
+        .values({
+          id: undoId,
+          userId: input.userId,
+          receiptId: id,
+          callId: input.callId,
+          inverse: JSON.stringify(input.inverse),
+          createdAt,
+        })
+        .run();
+    }
+
+    appendJournalEventIn(tx, {
+      userId: input.userId,
+      eventType: "receipt.created",
+      payload: {
+        receipt_id: id,
+        slip_id: input.slipId,
+        call_id: input.callId,
+        tool_class: input.toolClass,
+        verification: input.verification,
+        irreversible,
+        undo_available: input.inverse !== undefined,
+        summary,
+      },
+    });
+
+    if (input.verification === "mismatched") {
+      demoteTrust(tx, input.userId, input.errandType, "mismatch");
+    }
   });
 
   const saved = getReceipt(input.db, input.userId, id);
@@ -293,27 +298,30 @@ export async function applyUndo(
   }
 
   const matched = verification.verification === "matched";
-  deps.db
-    .update(undoActions)
-    .set({
-      startedAt: null,
-      appliedAt: matched ? new Date().toISOString() : null,
-      verification: verification.verification,
-      summary: verification.summary,
-    })
-    .where(and(eq(undoActions.userId, userId), eq(undoActions.id, undo.id)))
-    .run();
+  deps.db.transaction((tx) => {
+    tx.update(undoActions)
+      .set({
+        startedAt: null,
+        appliedAt: matched ? new Date().toISOString() : null,
+        verification: verification.verification,
+        summary: verification.summary,
+      })
+      .where(and(eq(undoActions.userId, userId), eq(undoActions.id, undo.id)))
+      .run();
 
-  appendJournalEvent(deps.db, {
-    userId,
-    eventType: matched ? "undo.applied" : "undo.mismatched",
-    payload: {
-      receipt_id: receipt.id,
-      slip_id: receipt.slipId,
-      tool: parsed.data.tool,
-      verification: verification.verification,
-      summary: verification.summary,
-    },
+    appendJournalEventIn(tx, {
+      userId,
+      eventType: matched ? "undo.applied" : "undo.mismatched",
+      payload: {
+        receipt_id: receipt.id,
+        slip_id: receipt.slipId,
+        tool: parsed.data.tool,
+        verification: verification.verification,
+        summary: verification.summary,
+      },
+    });
+
+    demoteTrust(tx, userId, receipt.errandType, "undo");
   });
 
   const updated = getReceiptView(deps.db, userId, receipt.id);

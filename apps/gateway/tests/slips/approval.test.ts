@@ -46,9 +46,12 @@ describe("approving a slip", () => {
     expect(verifySlipSignature(row, SLIP_KEY)).toBe(true);
     expect(result.trims).toEqual([]);
 
-    const event = listJournalEvents(db, "user-a").at(-1);
+    const event = listJournalEvents(db, "user-a")
+      .filter((entry) => entry.eventType === "slip.approved")
+      .at(-1);
+    if (event === undefined) throw new Error("the approval was not journaled");
     expect(event).toMatchObject({ eventType: "slip.approved" });
-    expect(event?.payload).toContain(slipId);
+    expect(event.payload).toContain(slipId);
   });
 
   test("a human trim lowers caps and reports what changed and why", () => {
@@ -144,7 +147,11 @@ describe("denying a slip", () => {
     expect(detail.slip.state).toBe("denied");
     expect(detail.card.state).toBe("denied");
     expect(getSlip(db, "user-a", slipId)?.capabilityHash).toBeNull();
-    expect(listJournalEvents(db, "user-a").at(-1)).toMatchObject({ eventType: "slip.denied" });
+    const denied = listJournalEvents(db, "user-a")
+      .filter((entry) => entry.eventType === "slip.denied")
+      .at(-1);
+    if (denied === undefined) throw new Error("the denial was not journaled");
+    expect(denied).toMatchObject({ eventType: "slip.denied" });
   });
 
   test("an approved slip cannot be denied afterwards", () => {

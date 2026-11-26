@@ -178,8 +178,11 @@ function trustFor(errandType: string) {
 function expectDenied(response: CallResponse, reason: string, userId = "user-a"): void {
   expect(response.result.isError).toBe(true);
   expect(denial(response.body).error).toBe(reason);
-  const last = listJournalEvents(db, userId).at(-1);
-  expect(last?.eventType).toBe(reason === "out_of_scope" ? "call.scope_violation" : "call.denied");
+  const expected = reason === "out_of_scope" ? "call.scope_violation" : "call.denied";
+  const last = listJournalEvents(db, userId)
+    .filter((event) => event.eventType === expected)
+    .at(-1);
+  if (last === undefined) throw new Error(`no ${expected} event was journaled`);
   const payload = z
     .object({ reason: z.string(), slip_id: z.string(), tool: z.string() })
     .parse(JSON.parse(last?.payload ?? "{}"));
@@ -274,8 +277,10 @@ describe("errand_call policy pipeline", () => {
         .object({ callsUsed: z.number(), spendUsedCents: z.number() })
         .parse((await callTool(client, "errand_status", { slip_id: slipId })).body);
       expect(status).toMatchObject({ callsUsed: 1, spendUsedCents: 0 });
-      const last = listJournalEvents(db, "user-a").at(-1);
-      expect(last?.eventType).toBe("call.allowed");
+      const last = listJournalEvents(db, "user-a")
+        .filter((event) => event.eventType === "call.allowed")
+        .at(-1);
+      if (last === undefined) throw new Error("the allowed call was not journaled");
       const payload = z
         .object({ reason: z.string(), slip_id: z.string() })
         .parse(JSON.parse(last?.payload ?? "{}"));
@@ -366,7 +371,9 @@ describe("errand_call policy pipeline", () => {
         });
         expect(burnedRow?.burnedAt).not.toBeNull();
 
-        const burnedEvent = listJournalEvents(db, "user-a").at(-1);
+        const burnedEvent = listJournalEvents(db, "user-a")
+          .filter((event) => event.eventType === "slip.burned")
+          .at(-1);
         expect(burnedEvent?.eventType).toBe("slip.burned");
         expect(
           z
@@ -391,6 +398,14 @@ describe("errand_call policy pipeline", () => {
           cleanRuns: 0,
           caps: "{}",
         });
+        const demoted = listJournalEvents(db, "user-a")
+          .filter((event) => event.eventType === "trust.demoted")
+          .at(-1);
+        expect(
+          z
+            .object({ errand_type: z.string(), reason: z.string(), from_tier: z.string() })
+            .parse(JSON.parse(demoted?.payload ?? "{}")),
+        ).toMatchObject({ errand_type: seeded.errandType, reason: "decoy", from_tier: "license" });
 
         expectDenied(await call(client, slipId, capability, READ.name), "burned");
 
@@ -433,9 +448,11 @@ describe("errand_call policy pipeline", () => {
         await call(client, slipId, capability, "calendar__delete_event"),
         "out_of_scope",
       );
-      const last = listJournalEvents(db, "user-a").at(-1);
-      expect(last?.eventType).toBe("call.scope_violation");
-      expect(last?.payload).toContain(slipId);
+      const last = listJournalEvents(db, "user-a")
+        .filter((event) => event.eventType === "call.scope_violation")
+        .at(-1);
+      if (last === undefined) throw new Error("the scope violation was not journaled");
+      expect(last.payload).toContain(slipId);
       expect(getSlip(db, "user-a", slipId)).toMatchObject({
         state: "approved",
         scopeViolations: 1,
@@ -450,7 +467,7 @@ describe("errand_call policy pipeline", () => {
     }
   });
 
-  test("a second scope violation burns the slip and demotes the errand type", async () => {
+  test("a scope violation demotes the errand type, and a second burns the slip", async () => {
     const { slipId, capability } = seedSlip();
     const seeded = getSlip(db, "user-a", slipId);
     if (seeded === undefined) throw new Error("seeded slip vanished");
@@ -461,7 +478,7 @@ describe("errand_call policy pipeline", () => {
         await call(client, slipId, capability, "calendar__delete_event"),
         "out_of_scope",
       );
-      expect(trustFor(seeded.errandType)?.tier).toBe("license");
+      expect(trustFor(seeded.errandType)).toMatchObject({ tier: "learner", cleanRuns: 0 });
 
       const second = await call(client, slipId, capability, "calendar__delete_event");
       expect(second.result.isError).toBe(true);
@@ -470,7 +487,9 @@ describe("errand_call policy pipeline", () => {
         slip_state: "burned",
         burned_reason: "second_scope_violation",
       });
-      const events = listJournalEvents(db, "user-a").slice(-2);
+      const events = listJournalEvents(db, "user-a")
+        .filter((event) => ["call.scope_violation", "slip.burned"].includes(event.eventType))
+        .slice(-2);
       expect(events.map((event) => event.eventType)).toEqual([
         "call.scope_violation",
         "slip.burned",
@@ -638,9 +657,10 @@ describe("errand_call policy pipeline", () => {
         .parse((await callTool(client, "errand_status", { slip_id: slipId })).body);
       expect(status).toMatchObject({ callsUsed: 3 });
 
-      const events = listJournalEvents(db, "user-a").filter(
-        (event) => z.object({ slip_id: z.string() }).parse(JSON.parse(event.payload)).slip_id === slipId,
-      );
+      const events = listJournalEvents(db, "user-a").filter((event) => {
+        const parsed = z.object({ slip_id: z.string() }).safeParse(JSON.parse(event.payload));
+        return parsed.success && parsed.data.slip_id === slipId;
+      });
       expect(events.filter((event) => event.eventType === "call.allowed")).toHaveLength(3);
       const denialReasons = events
         .filter((event) => event.eventType === "call.denied")

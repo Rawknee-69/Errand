@@ -88,6 +88,8 @@ function agentServer(
             limits === undefined
               ? { goal: input.goal, tools: input.tools }
               : { goal: input.goal, tools: input.tools, limits },
+            new Date(),
+            hmacKey,
           ),
         );
       } catch (error) {

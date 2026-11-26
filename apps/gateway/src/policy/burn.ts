@@ -1,7 +1,8 @@
 import { and, eq } from "drizzle-orm";
 import type { Db } from "../db/client.ts";
 import { appendJournalEventIn } from "../db/journal.ts";
-import { slips, trust } from "../db/schema.ts";
+import { slips } from "../db/schema.ts";
+import { demoteTrust } from "./trust.ts";
 
 type BurnReason = "decoy" | "second_scope_violation";
 
@@ -56,6 +57,7 @@ export function recordViolation(db: Db, input: ViolationInput): ViolationOutcome
         .set({ scopeViolations, updatedAt: at })
         .where(slipFilter)
         .run();
+      demoteTrust(tx, input.userId, row.errandType, "scope_violation");
       return { burned, burnedAt: null };
     }
 
@@ -85,10 +87,7 @@ export function recordViolation(db: Db, input: ViolationInput): ViolationOutcome
       .where(slipFilter)
       .run();
 
-    tx.update(trust)
-      .set({ tier: "learner", cleanRuns: 0, caps: "{}", updatedAt: burnEvent.createdAt })
-      .where(and(eq(trust.userId, input.userId), eq(trust.errandType, row.errandType)))
-      .run();
+    demoteTrust(tx, input.userId, row.errandType, burned);
 
     return { burned, burnedAt: burnEvent.createdAt };
   });

@@ -197,6 +197,32 @@ export type OutboxListResponse = z.infer<typeof outboxListResponseSchema>;
 export const outboxItemResponseSchema = z.object({ item: outboxItemSchema });
 export type OutboxItemResponse = z.infer<typeof outboxItemResponseSchema>;
 
+// Five consecutive clean runs earn a license offer; trust is lost faster than it is gained.
+export const CLEAN_RUNS_FOR_LICENSE = 5;
+
+export const trustCapsSchema = z.object({
+  callCap: z.number().int().positive(),
+  spendCapCents: z.number().int().nonnegative(),
+  minutes: z.number().int().positive(),
+});
+export type TrustCaps = z.infer<typeof trustCapsSchema>;
+
+export const trustViewSchema = z.object({
+  errandType: z.string(),
+  tier: tierSchema,
+  cleanRuns: z.number().int().nonnegative(),
+  licenseOffered: z.boolean(),
+  caps: trustCapsSchema.nullable(),
+  updatedAt: z.string(),
+});
+export type TrustView = z.infer<typeof trustViewSchema>;
+
+export const trustListResponseSchema = z.object({ trust: z.array(trustViewSchema) });
+export type TrustListResponse = z.infer<typeof trustListResponseSchema>;
+
+export const licenseAcceptResponseSchema = z.object({ trust: trustViewSchema });
+export type LicenseAcceptResponse = z.infer<typeof licenseAcceptResponseSchema>;
+
 export const feedPayloadSchema = z.record(z.string(), z.unknown());
 
 export const feedEventSchema = z.object({
