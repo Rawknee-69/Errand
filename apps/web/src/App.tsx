@@ -8,6 +8,7 @@ import { Shell } from "./screens/Shell.tsx";
 import { Connect } from "./screens/Connect.tsx";
 import { Catalog } from "./screens/Catalog.tsx";
 import { Connectors } from "./screens/Connectors.tsx";
+import { Slips } from "./screens/Slips.tsx";
 import { Placeholder } from "./screens/Placeholder.tsx";
 
 export function App() {
@@ -70,6 +71,8 @@ export function App() {
         <Catalog onOpenConnect={openConnect} />
       ) : screen === "connectors" ? (
         <Connectors onOpenConnect={openConnect} />
+      ) : screen === "slips" ? (
+        <Slips />
       ) : (
         placeholder !== undefined && <Placeholder {...placeholder} />
       )}

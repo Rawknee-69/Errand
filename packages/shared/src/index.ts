@@ -109,12 +109,33 @@ export const slipDetailSchema = z.object({
 });
 export type SlipDetail = z.infer<typeof slipDetailSchema>;
 
+export const slipListResponseSchema = z.object({ slips: z.array(slipSummarySchema) });
+export type SlipListResponse = z.infer<typeof slipListResponseSchema>;
+
 export const slipApprovedSchema = z.object({
   slip: slipSummarySchema,
   card: approvalCardSchema,
   trims: z.array(capTrimSchema),
 });
 export type SlipApproved = z.infer<typeof slipApprovedSchema>;
+
+export const feedPayloadSchema = z.record(z.string(), z.unknown());
+
+export const feedEventSchema = z.object({
+  seq: z.number().int().positive(),
+  eventType: z.string(),
+  createdAt: z.string(),
+  payload: feedPayloadSchema,
+});
+export type FeedEvent = z.infer<typeof feedEventSchema>;
+
+export const limitClampSchema = z.object({
+  field: z.enum(["calls", "spend_cents", "minutes"]),
+  requested: z.number().int(),
+  applied: z.number().int(),
+  reason: z.literal("server_maximum"),
+});
+export type LimitClamp = z.infer<typeof limitClampSchema>;
 
 // Danger order shared by the gateway's policy and the control panel. `unknown`
 // ranks below every runnable class because it blocks the tool outright.

@@ -1,0 +1,8 @@
+SSE OPEN 2026-11-26T09:25:10.000Z http://127.0.0.1:5183/api/events
+FAILED GET http://127.0.0.1:5183/api/events — net::ERR_ABORTED
+SSE OPEN 2026-11-26T09:25:54.915Z http://127.0.0.1:5183/api/events
+FAILED GET http://127.0.0.1:5183/api/events — net::ERR_ABORTED
+SSE OPEN 2026-11-26T09:25:55.325Z http://127.0.0.1:5183/api/events
+500 GET http://127.0.0.1:5183/api/slips
+FAILED GET http://127.0.0.1:5183/api/events — net::ERR_ABORTED
+SSE OPEN 2026-11-26T09:25:55.579Z http://127.0.0.1:5183/api/events

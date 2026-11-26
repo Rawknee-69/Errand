@@ -35,6 +35,9 @@ export const webOriginSchema = z
   }, { message: "must be an absolute http(s) origin without a path" })
   .transform((value) => parseHttpUrl(value)?.origin ?? value);
 
+// SSE feeds are long-lived; Bun's 10-second default would cut an idle one.
+export const GATEWAY_IDLE_TIMEOUT_SECONDS = 120;
+
 const booleanish = (fallback: boolean) =>
   z
     .union([z.boolean(), z.enum(["true", "false", "1", "0"])])

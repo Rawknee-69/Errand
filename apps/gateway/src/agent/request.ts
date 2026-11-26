@@ -95,6 +95,7 @@ export function requestErrand(
     payload: {
       slip_id: id,
       errand_type: errandType,
+      goal,
       tools: tools.map((tool) => tool.name),
       call_cap: limits.callCap,
       spend_cap_cents: limits.spendCapCents,

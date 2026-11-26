@@ -70,6 +70,7 @@ export function Login({ demoMode, onSession }: Props) {
         )}
 
         <form onSubmit={submit} className="stack">
+          <input type="text" name="username" autoComplete="username" value="owner" readOnly hidden />
           {mode === "demo" ? (
             <label className="field">
               <span>Your name</span>
