@@ -12,6 +12,9 @@ export type ConnectorAuthType = "none" | "bearer" | "header" | "basic" | "oauth"
 // Verifier outcomes per change; `unverified` never implies success (GLOSSARY.md).
 export type VerificationOutcome = "matched" | "mismatched" | "unverified";
 
+// Catalog lifecycle: new at discovery, changed or removed blocks new slips until re-approved.
+export type ToolState = "new" | "active" | "changed" | "removed";
+
 export const users = sqliteTable("users", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),
@@ -93,17 +96,31 @@ export const tools = sqliteTable(
     userId: text("user_id").notNull().references(() => users.id),
     connectorId: text("connector_id").notNull().references(() => connectors.id),
     name: text("name").notNull(),
+    // What the agent sees: `<connector>__<tool>`, sanitised and unique per user.
+    agentName: text("agent_name").notNull().default(""),
+    // Pinned definition: exactly what the human saw and approved.
     description: text("description").notNull().default(""),
     inputSchema: text("input_schema").notNull().default("{}"),
+    annotations: text("annotations").notNull().default("{}"),
     class: text("class").notNull().default("unknown").$type<ToolClass>(),
+    // The hash the human saw and approved; observedHash follows the upstream definition.
     definitionHash: text("definition_hash").notNull(),
+    observedDescription: text("observed_description").notNull().default(""),
+    observedInputSchema: text("observed_input_schema").notNull().default("{}"),
+    observedAnnotations: text("observed_annotations").notNull().default("{}"),
+    observedClass: text("observed_class").notNull().default("unknown").$type<ToolClass>(),
+    observedHash: text("observed_hash").notNull().default(""),
+    state: text("state").notNull().default("new").$type<ToolState>(),
     requestable: integer("requestable", { mode: "boolean" }).notNull().default(false),
+    changedAt: text("changed_at"),
+    removedAt: text("removed_at"),
     createdAt: text("created_at").notNull(),
     updatedAt: text("updated_at").notNull(),
   },
   (t) => [
     index("tools_user_id_idx").on(t.userId),
     uniqueIndex("tools_connector_id_name_idx").on(t.connectorId, t.name),
+    uniqueIndex("tools_user_id_agent_name_idx").on(t.userId, t.agentName),
   ],
 );
 
