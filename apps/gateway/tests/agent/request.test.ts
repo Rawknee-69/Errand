@@ -86,6 +86,19 @@ describe("requestErrand", () => {
     expect(listJournalEvents(db, "user-a").map((event) => event.eventType)).toEqual([
       "slip.requested",
     ]);
+    const requested = listJournalEvents(db, "user-a")[0];
+    if (requested === undefined) throw new Error("the request was not journaled");
+    expect(JSON.parse(requested.payload)).toMatchObject({
+      goal: "Book a dinner",
+      clamped: [
+        {
+          field: "calls",
+          requested: 5_000,
+          applied: AGENT_LIMITS.calls,
+          reason: "server_maximum",
+        },
+      ],
+    });
   });
 
   test("the same tools in a different order are the same errand type", () => {

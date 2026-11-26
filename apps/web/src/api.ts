@@ -9,6 +9,9 @@ import {
   oauthStartResponseSchema,
   probeResultSchema,
   sessionViewSchema,
+  slipApprovedSchema,
+  slipDetailSchema,
+  slipListResponseSchema,
   type AgentKeyCreated,
   type CatalogResponse,
   type CatalogToolResponse,
@@ -18,6 +21,10 @@ import {
   type OAuthStartResponse,
   type ProbeResult,
   type SessionView,
+  type SlipApprovalInput,
+  type SlipApproved,
+  type SlipDetail,
+  type SlipListResponse,
   type ToolClass,
 } from "@errand/shared";
 
@@ -31,6 +38,8 @@ export class ApiError extends Error {
     this.name = "ApiError";
   }
 }
+
+export const EVENTS_PATH = "/api/events";
 
 async function send<T>(
   schema: z.ZodType<T>,
@@ -108,6 +117,23 @@ export const api = {
   },
   issueAgentKey(name: string): Promise<AgentKeyCreated> {
     return send(agentKeyCreatedSchema, "/api/agent-keys", "POST", { name });
+  },
+  slips(): Promise<SlipListResponse> {
+    return send(slipListResponseSchema, "/api/slips", "GET");
+  },
+  slip(id: string): Promise<SlipDetail> {
+    return send(slipDetailSchema, `/api/slips/${encodeURIComponent(id)}`, "GET");
+  },
+  approveSlip(id: string, input: SlipApprovalInput): Promise<SlipApproved> {
+    return send(slipApprovedSchema, `/api/slips/${encodeURIComponent(id)}/approve`, "POST", input);
+  },
+  denySlip(id: string, reason?: string): Promise<SlipDetail> {
+    return send(
+      slipDetailSchema,
+      `/api/slips/${encodeURIComponent(id)}/deny`,
+      "POST",
+      reason === undefined ? {} : { reason },
+    );
   },
 };
 

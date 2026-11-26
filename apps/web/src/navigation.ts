@@ -50,10 +50,6 @@ const entries: ScreenInfo[] = [
     path: "/slips",
     label: "Slips",
     title: "Slips",
-    placeholder: {
-      ticket: 18,
-      copy: "Approval cards in plain language, with caps you can tighten before you tap, and a feed of calls as they arrive.",
-    },
   },
   {
     screen: "receipts",

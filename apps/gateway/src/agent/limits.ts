@@ -1,3 +1,4 @@
+import type { LimitClamp } from "@errand/shared";
 import { DEFAULT_CALL_RATE_PER_MINUTE } from "../policy/rate.ts";
 
 // Hard ceilings a request can never exceed; the agent may ask for less and a
@@ -16,12 +17,7 @@ export type RequestedLimits = {
   minutes?: number;
 };
 
-export type ClampedLimit = {
-  field: "calls" | "spend_cents" | "minutes";
-  requested: number;
-  applied: number;
-  reason: "server_maximum";
-};
+export type ClampedLimit = LimitClamp;
 
 export type ResolvedLimits = {
   callCap: number;

@@ -13,6 +13,7 @@ import {
 import type { AuthInfo } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import { Hono, type Context } from "hono";
+import { streamSSE } from "hono/streaming";
 import gatewayPackage from "../package.json" with { type: "json" };
 import { AGENT_PATH, createAgentHandler } from "./agent/mcp.ts";
 import { createForwarder, type Forwarder } from "./agent/forward.ts";
@@ -49,6 +50,7 @@ import { completeOAuthFlow, startOAuthFlow, startOAuthReauth } from "./connector
 import { VaultKeyring } from "./vault/keyring.ts";
 import { approveSlip, denySlip, SlipError } from "./slips/approval.ts";
 import { getSlipDetail, listSlipSummaries } from "./slips/view.ts";
+import { streamFeed, type FeedStreamOptions } from "./feed/stream.ts";
 
 export { DEFAULT_OWNER_ID };
 export const DEFAULT_OAUTH_REDIRECT_URI = "http://127.0.0.1:8787/api/oauth/callback";
@@ -64,12 +66,18 @@ export type GatewayAppOptions = {
   callTimeoutMs?: number;
   connectorConcurrency?: number;
   resultCapBytes?: number;
+  feed?: FeedStreamOptions;
   auth: AuthOptions | "disabled";
 };
 
 const probeSchema = z.object({ url: z.string().min(1) });
 const agentKeyCreateSchema = z.object({ name: z.string().trim().min(1).max(64) });
 const slipDenySchema = z.object({ reason: z.string().max(500).optional() }).strict();
+const feedCursorSchema = z
+  .string()
+  .regex(/^\d+$/, "A feed cursor is a non-negative integer")
+  .transform(Number)
+  .pipe(z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER));
 
 async function optionalJson(c: Context<GatewayEnv>): Promise<unknown> {
   const text = await c.req.text();
@@ -295,6 +303,13 @@ export function createGatewayApp(
     const userId = userIdFor(c);
     const body = slipDenySchema.parse(await optionalJson(c));
     return c.json(slipDetailSchema.parse(denySlip(db, userId, c.req.param("id"), body.reason)));
+  });
+
+  app.get("/api/events", (c) => {
+    const userId = userIdFor(c);
+    const cursor = c.req.header("last-event-id") ?? c.req.query("since");
+    const since = cursor === undefined ? 0 : feedCursorSchema.parse(cursor);
+    return streamSSE(c, (stream) => streamFeed(db, userId, since, stream, options.feed));
   });
 
   app.post("/api/connectors/probe", async (c) => {

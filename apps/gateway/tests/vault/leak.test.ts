@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { createGatewayApp } from "../../src/app.ts";
 import { appendJournalEvent } from "../../src/db/journal.ts";
 import { calls, connectors, journal, receipts, slips, tools } from "../../src/db/schema.ts";
+import { openSse, readSseUntil } from "../support/sse.ts";
 import { SEEDED_SECRET, TS, vaultFixture } from "./support.ts";
 
 const SECRET = `${SEEDED_SECRET}-leak-proof`;
@@ -20,6 +21,16 @@ function captureConsole(): { lines: string[]; restore: () => void } {
       for (const method of methods) console[method] = original[method];
     },
   };
+}
+
+// An SSE route never completes; read one replay frame, then hang up.
+async function readSseSample(response: Response, timeoutMs = 500): Promise<string> {
+  const sse = openSse(response);
+  try {
+    return await readSseUntil(sse, (text) => text.includes("event: feed"), timeoutMs);
+  } finally {
+    await sse.cancel();
+  }
 }
 
 describe("vault leak boundary", () => {
@@ -72,10 +83,12 @@ describe("vault leak boundary", () => {
         payload: { tool: "notion__search", serviceId: "notion", status: 200 },
       });
 
-      const app = createGatewayApp(fixture.db, { auth: "disabled" });
+      const app = createGatewayApp(fixture.db, { auth: "disabled", userId: "user-a" });
       for (const route of app.routes.filter((candidate) => candidate.method === "GET")) {
         const response = await app.request(route.path);
-        artifacts[`response ${route.path}`] = `${response.status} ${await response.text()}`;
+        const streaming = (response.headers.get("content-type") ?? "").includes("text/event-stream");
+        const text = streaming ? await readSseSample(response) : await response.text();
+        artifacts[`response ${route.path}`] = `${response.status} ${text}`;
       }
 
       artifacts["journal payloads"] = JSON.stringify(fixture.db.select().from(journal).all());
