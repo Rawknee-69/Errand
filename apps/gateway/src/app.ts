@@ -1,11 +1,13 @@
 import type { GatewayHealth } from "@errand/shared";
+import type { AuthInfo } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import { Hono } from "hono";
 import gatewayPackage from "../package.json" with { type: "json" };
+import { AGENT_PATH, createAgentHandler } from "./agent/mcp.ts";
 import { createMigratedDatabase, type Db } from "./db/client.ts";
-import { verifyJournal } from "./db/journal.ts";
+import { appendJournalEvent, verifyJournal } from "./db/journal.ts";
 import { users, type ToolClass, type ToolState } from "./db/schema.ts";
-import { getUser } from "./db/scoped-reads.ts";
+import { getUser, listAgentKeys } from "./db/scoped-reads.ts";
 import { EgressRefusal } from "./egress/guard.ts";
 import { ConnectorLimitError } from "./connectors/quota.ts";
 import { listCatalog, type CatalogTool } from "./connectors/catalog.ts";
@@ -21,6 +23,7 @@ import {
   type ConnectResult,
   type ConnectorServiceDeps,
 } from "./connectors/service.ts";
+import { agentKeyView, issueAgentKey, revokeAgentKey, verifyAgentKey } from "./vault/agent-keys.ts";
 import { CredentialStore } from "./vault/credentials.ts";
 import { VaultKeyring } from "./vault/keyring.ts";
 import { Vault } from "./vault/vault.ts";
@@ -35,6 +38,11 @@ export type GatewayAppOptions = {
 };
 
 const probeSchema = z.object({ url: z.string().min(1) });
+const agentKeyCreateSchema = z.object({ name: z.string().trim().min(1).max(64) });
+
+function bearerToken(header: string | undefined): string | undefined {
+  return header?.match(/^Bearer\s+(\S+)$/i)?.[1];
+}
 
 export type CatalogToolView = {
   id: string;
@@ -95,6 +103,7 @@ export function createGatewayApp(
   }
   const discoverOptions = options.discoverOptions ?? {};
   const keyring = options.keyring;
+  const agentHandler = createAgentHandler(db);
 
   function serviceDeps(): ConnectorServiceDeps {
     if (keyring === undefined) {
@@ -131,6 +140,48 @@ export function createGatewayApp(
   });
 
   app.get("/api/journal/verify", (c) => c.json(verifyJournal(db)));
+
+  app.get("/api/agent-keys", (c) =>
+    c.json({ agentKeys: listAgentKeys(db, userId).map(agentKeyView) }),
+  );
+
+  app.post("/api/agent-keys", async (c) => {
+    const body = agentKeyCreateSchema.parse(await c.req.json());
+    const issued = issueAgentKey(db, userId, body.name);
+    appendJournalEvent(db, {
+      userId,
+      eventType: "agent_key.created",
+      payload: { agent_key_id: issued.record.id, name: issued.record.name },
+    });
+    return c.json({ key: issued.key, agentKey: agentKeyView(issued.record) }, 201);
+  });
+
+  app.post("/api/agent-keys/:id/revoke", (c) => {
+    const result = revokeAgentKey(db, userId, c.req.param("id"));
+    if (result === undefined) return c.json({ error: "not_found" }, 404);
+    if (result.changed) {
+      appendJournalEvent(db, {
+        userId,
+        eventType: "agent_key.revoked",
+        payload: { agent_key_id: result.record.id },
+      });
+    }
+    return c.json({ agentKey: agentKeyView(result.record) });
+  });
+
+  app.all(AGENT_PATH, async (c) => {
+    const presented = bearerToken(c.req.header("authorization"));
+    const record = presented === undefined ? undefined : verifyAgentKey(db, presented);
+    if (record === undefined) {
+      return c.json(
+        { error: "unauthorized", message: "A valid agent key is required" },
+        401,
+        { "www-authenticate": 'Bearer realm="errand"' },
+      );
+    }
+    const authInfo: AuthInfo = { token: record.id, clientId: record.userId, scopes: [] };
+    return agentHandler.fetch(c.req.raw, { authInfo });
+  });
 
   app.post("/api/connectors/probe", async (c) => {
     const body = probeSchema.parse(await c.req.json());

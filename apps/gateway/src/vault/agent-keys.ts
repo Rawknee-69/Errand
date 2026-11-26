@@ -1,10 +1,21 @@
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
-import { isNull } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import type { Db } from "../db/client.ts";
 import { agentKeys } from "../db/schema.ts";
 
 export type AgentKeyRecord = typeof agentKeys.$inferSelect;
 export type IssuedAgentKey = { key: string; record: AgentKeyRecord };
+
+export type AgentKeyView = Pick<AgentKeyRecord, "id" | "name" | "createdAt" | "revokedAt">;
+
+export function agentKeyView(record: AgentKeyRecord): AgentKeyView {
+  return {
+    id: record.id,
+    name: record.name,
+    createdAt: record.createdAt,
+    revokedAt: record.revokedAt,
+  };
+}
 
 const KEY_PREFIX = "errand_";
 const KEY_BYTES = 32;
@@ -42,4 +53,34 @@ export function verifyAgentKey(db: Db, presented: string): AgentKeyRecord | unde
     }
   }
   return matched;
+}
+
+export type RevokeResult = {
+  record: AgentKeyRecord;
+  changed: boolean;
+};
+
+export function revokeAgentKey(
+  db: Db,
+  userId: string,
+  id: string,
+  now = new Date().toISOString(),
+): RevokeResult | undefined {
+  const row = db
+    .select()
+    .from(agentKeys)
+    .where(and(eq(agentKeys.userId, userId), eq(agentKeys.id, id)))
+    .all()[0];
+  if (row === undefined) return undefined;
+  if (row.revokedAt !== null) return { record: row, changed: false };
+  db.update(agentKeys)
+    .set({ revokedAt: now })
+    .where(and(eq(agentKeys.userId, userId), eq(agentKeys.id, id), isNull(agentKeys.revokedAt)))
+    .run();
+  const record = db
+    .select()
+    .from(agentKeys)
+    .where(and(eq(agentKeys.userId, userId), eq(agentKeys.id, id)))
+    .all()[0];
+  return record === undefined ? undefined : { record, changed: true };
 }
