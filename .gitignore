@@ -16,3 +16,6 @@ coverage/
 
 *.log
 .DS_Store
+
+# Demo stack state: secrets, database, logs and the issued agent key.
+.demo/

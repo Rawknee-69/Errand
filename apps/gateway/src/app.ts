@@ -1,4 +1,5 @@
 import {
+  boundarySchema,
   CONNECTORS_PATH,
   escapeHtml,
   outboxItemResponseSchema,
@@ -21,6 +22,7 @@ import { z } from "zod";
 import { Hono, type Context } from "hono";
 import { streamSSE } from "hono/streaming";
 import gatewayPackage from "../package.json" with { type: "json" };
+import { boundaryView } from "./agent/catalog.ts";
 import { AGENT_PATH, createAgentHandler } from "./agent/mcp.ts";
 import { createForwarder } from "./agent/forward.ts";
 import { registerAuth, requestUserId, type AuthOptions, type GatewayEnv } from "./auth/api.ts";
@@ -480,6 +482,11 @@ export function createGatewayApp(
       tools: listCatalog(db, userId).map(catalogToolView),
       connectors: listConnectors(db, userId),
     });
+  });
+
+  app.get("/api/boundary", (c) => {
+    const userId = userIdFor(c);
+    return c.json(boundarySchema.parse(boundaryView(db, userId)));
   });
 
   app.post("/api/catalog/:id/approve", (c) => {

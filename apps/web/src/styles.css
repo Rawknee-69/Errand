@@ -1203,6 +1203,142 @@ pre {
   color: var(--accent);
 }
 
+/* Demo */
+
+.demo-layers {
+  display: grid;
+  gap: 14px;
+}
+
+.layer-card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  padding: 20px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.layer-card.is-top {
+  border-color: rgba(232, 180, 90, 0.45);
+  background: linear-gradient(180deg, rgba(232, 180, 90, 0.06), transparent 45%), var(--surface);
+}
+
+.layer-list,
+.agent-tools,
+.hidden-list {
+  list-style: none;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.layer-list li,
+.hidden-list li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 9px 12px;
+  font-size: 12.5px;
+  border-bottom: 1px solid var(--line);
+}
+
+.layer-list li:last-child,
+.agent-tools li:last-child,
+.hidden-list li:last-child {
+  border-bottom: 0;
+}
+
+.layer-list li > span:first-child {
+  flex: 1;
+  min-width: 120px;
+  overflow-wrap: anywhere;
+}
+
+.agent-tools li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--line);
+  font-size: 12.5px;
+}
+
+.hidden-list .mono {
+  flex: 1;
+  min-width: 160px;
+  overflow-wrap: anywhere;
+}
+
+.hidden-reason {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.safety-grid {
+  display: grid;
+  gap: 14px;
+}
+
+.safety-card {
+  gap: 10px;
+}
+
+.safety-card h2 {
+  font-size: 17px;
+}
+
+.runbook {
+  list-style: none;
+  counter-reset: run;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.runbook li {
+  counter-increment: run;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  min-height: 48px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 14px;
+}
+
+.runbook li:last-child {
+  border-bottom: 0;
+}
+
+.runbook li::before {
+  content: counter(run);
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 1px solid var(--line-strong);
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.runbook li > span:first-of-type {
+  flex: 1;
+  min-width: 180px;
+}
+
 @media (max-width: 559px) {
   .tool-summary .mono {
     flex-basis: 100%;
@@ -1299,6 +1435,14 @@ pre {
 
   .panel {
     padding: 24px;
+  }
+
+  .demo-layers {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .safety-grid {
+    grid-template-columns: 1fr 1fr;
   }
 
   .button {

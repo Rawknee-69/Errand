@@ -3,6 +3,7 @@ import {
   agentKeyCreatedSchema,
   agentKeyListResponseSchema,
   agentKeyResponseSchema,
+  boundarySchema,
   catalogResponseSchema,
   catalogToolResponseSchema,
   connectorDetailSchema,
@@ -24,6 +25,7 @@ import {
   type AgentKeyCreated,
   type AgentKeyListResponse,
   type AgentKeyResponse,
+  type Boundary,
   type CatalogResponse,
   type CatalogToolResponse,
   type ConnectorAuthInput,
@@ -110,6 +112,12 @@ export const api = {
   },
   catalog(): Promise<CatalogResponse> {
     return send(catalogResponseSchema, "/api/catalog", "GET");
+  },
+  boundary(): Promise<Boundary> {
+    return send(boundarySchema, "/api/boundary", "GET");
+  },
+  journalVerify(): Promise<JournalVerify> {
+    return send(journalVerifySchema, "/api/journal/verify", "GET");
   },
   refreshConnector(id: string): Promise<ConnectorDetail> {
     return send(connectorDetailSchema, `/api/connectors/${id}/refresh`, "POST", {});
