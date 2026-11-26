@@ -17,6 +17,7 @@ export const connectorSchema = z.object({
   authType: z.string(),
   authStatus: z.enum(CONNECTOR_AUTH_STATUSES),
   lastAuthError: z.string().nullable(),
+  lastSuccessAt: z.string().nullable(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });
@@ -72,6 +73,11 @@ export const catalogResponseSchema = z.object({
 
 export const approveResponseSchema = z.object({
   tool: catalogToolSchema,
+});
+
+export const reauthResponseSchema = z.object({
+  connector: connectorSchema,
+  authorizationUrl: z.string(),
 });
 
 export const probeResponseSchema = z.object({

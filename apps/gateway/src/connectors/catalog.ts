@@ -1,11 +1,12 @@
 import { randomUUID } from "node:crypto";
 import { and, eq } from "drizzle-orm";
-import type { IngestSummary } from "@errand/shared";
+import { isBlockedToolState, isClassLoosening, type IngestSummary } from "@errand/shared";
 import type { Db } from "../db/client.ts";
-import { canonicalJson } from "../db/journal.ts";
+import { appendJournalEvent, canonicalJson } from "../db/journal.ts";
 import { scopedGet, scopedList } from "../db/scoped-reads.ts";
 import { tools, type ToolClass, type ToolState } from "../db/schema.ts";
 import { classifyTool, defaultRequestable, type ToolAnnotations } from "./classifier.ts";
+import { ConnectorError } from "./errors.ts";
 import { hashToolDefinition, sanitiseAgentName, sanitiseDescription } from "./sanitise.ts";
 
 export type DiscoveredTool = {
@@ -59,8 +60,14 @@ function uniqueAgentName(
 }
 
 function requestableFor(state: ToolState, toolClass: ToolClass): boolean {
-  if (state === "changed" || state === "removed") return false;
+  if (isBlockedToolState(state)) return false;
   return defaultRequestable(toolClass);
+}
+
+function requireCatalogTool(db: Db, userId: string, id: string): CatalogTool {
+  const row = getCatalogTool(db, userId, id);
+  if (row === undefined) throw new ConnectorError("not_found", `Tool ${id} not found`);
+  return row;
 }
 
 // Ingestion is where pinning happens: the hash the human first saw becomes
@@ -134,14 +141,21 @@ export function ingestTools(db: Db, options: IngestOptions): IngestSummary {
               : previous.agentName,
           ...(changed
             ? {}
-            : { description, inputSchema, annotations, class: toolClass }),
+            : {
+                description,
+                inputSchema,
+                annotations,
+                class: previous.classOverride ?? toolClass,
+              }),
           observedDescription: description,
           observedInputSchema: inputSchema,
           observedAnnotations: annotations,
           observedClass: toolClass,
           observedHash: hash,
           state,
-          requestable: requestableFor(state, changed ? previous.class : toolClass),
+          // Exposure is the human's choice and survives a changed or removed
+          // definition; the blocked state is what keeps it away from the agent.
+          requestable: previous.requestable,
           changedAt: changed ? (previous.changedAt ?? now) : null,
           removedAt: null,
           updatedAt: now,
@@ -156,7 +170,6 @@ export function ingestTools(db: Db, options: IngestOptions): IngestSummary {
       tx.update(tools)
         .set({
           state: "removed",
-          requestable: false,
           removedAt: now,
           updatedAt: now,
         })
@@ -176,21 +189,22 @@ export function pinToolDefinition(
   row: CatalogTool,
   now = new Date().toISOString(),
 ): CatalogTool {
+  const pinnedClass = row.classOverride ?? row.observedClass;
   db.update(tools)
     .set({
       description: row.observedDescription,
       inputSchema: row.observedInputSchema,
       annotations: row.observedAnnotations,
-      class: row.observedClass,
+      class: pinnedClass,
       definitionHash: row.observedHash,
       state: "active",
-      requestable: defaultRequestable(row.observedClass),
+      requestable: row.requestable,
       changedAt: null,
       updatedAt: now,
     })
     .where(and(eq(tools.userId, userId), eq(tools.id, row.id)))
     .run();
-  return getCatalogTool(db, userId, row.id)!;
+  return requireCatalogTool(db, userId, row.id);
 }
 
 export function approveTool(db: Db, userId: string, toolId: string, now = new Date().toISOString()): CatalogTool {
@@ -198,4 +212,98 @@ export function approveTool(db: Db, userId: string, toolId: string, now = new Da
   if (row === undefined) throw new Error(`Tool ${toolId} not found`);
   if (row.state === "removed") throw new Error(`Cannot approve a removed tool: ${row.name}`);
   return pinToolDefinition(db, userId, row, now);
+}
+
+export type ToolClassChange = {
+  tool: CatalogTool;
+  loosened: boolean;
+};
+
+// A human may tighten freely. Loosening needs an explicit confirmation, and
+// every class change is journaled with both the old and the new class.
+export function setToolClass(
+  db: Db,
+  userId: string,
+  toolId: string,
+  nextClass: ToolClass,
+  confirmed: boolean,
+  now = new Date().toISOString(),
+): ToolClassChange {
+  const row = getCatalogTool(db, userId, toolId);
+  if (row === undefined) throw new ConnectorError("not_found", `Tool ${toolId} not found`);
+  if (row.state === "removed") {
+    throw new ConnectorError("not_found", `Tool ${row.name} was removed`);
+  }
+  const loosened = isClassLoosening(row.class, nextClass);
+  if (loosened && !confirmed) {
+    throw new ConnectorError(
+      "confirmation_required",
+      `Changing ${row.name} from ${row.class} to ${nextClass} widens its access; confirm first`,
+    );
+  }
+  if (row.class === nextClass) return { tool: row, loosened };
+
+  const requestable = defaultRequestable(nextClass) ? row.requestable : false;
+  db.update(tools)
+    .set({
+      class: nextClass,
+      classOverride: nextClass,
+      requestable,
+      updatedAt: now,
+    })
+    .where(and(eq(tools.userId, userId), eq(tools.id, row.id)))
+    .run();
+  appendJournalEvent(db, {
+    userId,
+    eventType: "catalog.class_changed",
+    payload: {
+      toolId: row.id,
+      connectorId: row.connectorId,
+      name: row.name,
+      from: row.class,
+      to: nextClass,
+      loosened,
+      confirmed: loosened && confirmed,
+    },
+  });
+  return { tool: requireCatalogTool(db, userId, row.id), loosened };
+}
+
+export function setToolRequestable(
+  db: Db,
+  userId: string,
+  toolId: string,
+  requestable: boolean,
+  now = new Date().toISOString(),
+): CatalogTool {
+  const row = getCatalogTool(db, userId, toolId);
+  if (row === undefined) throw new ConnectorError("not_found", `Tool ${toolId} not found`);
+  if (row.state === "removed") {
+    throw new ConnectorError("not_found", `Tool ${row.name} was removed`);
+  }
+  if (row.requestable === requestable) return row;
+  if (requestable && isBlockedToolState(row.state)) {
+    throw new ConnectorError(
+      "blocked",
+      `${row.name} changed upstream; re-approve the definition before exposing it`,
+    );
+  }
+  if (requestable && row.class === "unknown") {
+    throw new ConnectorError("blocked", `${row.name} has no safe class; set one before exposing it`);
+  }
+  db.update(tools)
+    .set({ requestable, updatedAt: now })
+    .where(and(eq(tools.userId, userId), eq(tools.id, row.id)))
+    .run();
+  appendJournalEvent(db, {
+    userId,
+    eventType: "catalog.requestable_changed",
+    payload: {
+      toolId: row.id,
+      connectorId: row.connectorId,
+      name: row.name,
+      requestable,
+    },
+  });
+  return requireCatalogTool(db, userId, row.id);
 }

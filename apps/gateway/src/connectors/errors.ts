@@ -4,7 +4,9 @@ export type ConnectorErrorCode =
   | "oauth_state"
   | "oauth_issuer"
   | "oauth_failed"
-  | "reauth";
+  | "reauth"
+  | "confirmation_required"
+  | "blocked";
 
 export class ConnectorError extends Error {
   constructor(

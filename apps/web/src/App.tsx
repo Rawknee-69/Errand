@@ -6,6 +6,8 @@ import { useScreen } from "./useScreen.ts";
 import { Login } from "./screens/Login.tsx";
 import { Shell } from "./screens/Shell.tsx";
 import { Connect } from "./screens/Connect.tsx";
+import { Catalog } from "./screens/Catalog.tsx";
+import { Connectors } from "./screens/Connectors.tsx";
 import { Placeholder } from "./screens/Placeholder.tsx";
 
 export function App() {
@@ -58,11 +60,16 @@ export function App() {
   }
 
   const placeholder = placeholderFor(screen);
+  const openConnect = () => navigate("connect");
 
   return (
     <Shell user={session.user} screen={screen} onNavigate={navigate} onSignOut={signOut}>
       {screen === "connect" ? (
         <Connect onOpenCatalog={() => navigate("catalog")} />
+      ) : screen === "catalog" ? (
+        <Catalog onOpenConnect={openConnect} />
+      ) : screen === "connectors" ? (
+        <Connectors onOpenConnect={openConnect} />
       ) : (
         placeholder !== undefined && <Placeholder {...placeholder} />
       )}

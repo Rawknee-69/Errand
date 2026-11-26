@@ -112,8 +112,33 @@ export const slipApprovedSchema = z.object({
 });
 export type SlipApproved = z.infer<typeof slipApprovedSchema>;
 
+// Danger order shared by the gateway's policy and the control panel. `unknown`
+// ranks below every runnable class because it blocks the tool outright.
+export const toolClassRank: Record<ToolClass, number> = {
+  unknown: 0,
+  read: 1,
+  write: 2,
+  send: 3,
+  delete: 4,
+  spend: 5,
+};
+
+export function isClassLoosening(from: ToolClass, to: ToolClass): boolean {
+  return toolClassRank[to] > toolClassRank[from];
+}
+
 export const toolStateSchema = z.enum(["new", "active", "changed", "removed"]);
 export type ToolState = z.infer<typeof toolStateSchema>;
+
+export function isBlockedToolState(state: ToolState): boolean {
+  return state === "changed" || state === "removed";
+}
+
+// Exposure is the human's requestable choice, but a blocked definition never
+// reaches the agent even if that choice was on.
+export function isToolExposed(tool: { requestable: boolean; state: ToolState }): boolean {
+  return tool.requestable && !isBlockedToolState(tool.state);
+}
 
 export const connectorAuthTypeSchema = z.enum(["none", "bearer", "header", "basic", "oauth"]);
 export type ConnectorAuthType = z.infer<typeof connectorAuthTypeSchema>;
@@ -183,6 +208,7 @@ export const connectorViewSchema = z.object({
   authType: connectorAuthTypeSchema,
   authStatus: connectorAuthStatusSchema,
   lastAuthError: z.string().nullable(),
+  lastSuccessAt: z.string().nullable(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });
@@ -228,6 +254,30 @@ export const connectorDetailSchema = z.object({
   tools: z.array(catalogToolViewSchema),
 });
 export type ConnectorDetail = z.infer<typeof connectorDetailSchema>;
+
+export const catalogResponseSchema = z.object({
+  tools: z.array(catalogToolViewSchema),
+  connectors: z.array(connectorViewSchema),
+});
+export type CatalogResponse = z.infer<typeof catalogResponseSchema>;
+
+export const catalogToolResponseSchema = z.object({ tool: catalogToolViewSchema });
+export type CatalogToolResponse = z.infer<typeof catalogToolResponseSchema>;
+
+export const toolClassUpdateSchema = z.object({
+  class: toolClassSchema,
+  confirm: z.boolean().default(false),
+});
+
+export const toolRequestableUpdateSchema = z.object({
+  requestable: z.boolean(),
+});
+
+export const connectorReauthResponseSchema = z.object({
+  connector: connectorViewSchema,
+  authorizationUrl: z.string(),
+});
+export type ConnectorReauthResponse = z.infer<typeof connectorReauthResponseSchema>;
 
 export const headerNameSchema = z
   .string()

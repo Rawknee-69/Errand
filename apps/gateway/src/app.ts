@@ -3,6 +3,8 @@ import {
   slipApprovalInputSchema,
   slipApprovedSchema,
   slipDetailSchema,
+  toolClassUpdateSchema,
+  toolRequestableUpdateSchema,
   type CatalogToolView,
   type ConnectorDetail,
   type GatewayHealth,
@@ -20,10 +22,15 @@ import { users } from "./db/schema.ts";
 import { getUser, listAgentKeys } from "./db/scoped-reads.ts";
 import { EgressRefusal } from "./egress/guard.ts";
 import { ConnectorLimitError } from "./connectors/quota.ts";
-import { listCatalog, type CatalogTool } from "./connectors/catalog.ts";
+import {
+  listCatalog,
+  setToolClass,
+  setToolRequestable,
+  type CatalogTool,
+} from "./connectors/catalog.ts";
 import { McpConnectError, type DiscoverOptions } from "./connectors/mcp.ts";
 import { connectorAuthInputSchema, toConnectorAuth } from "./connectors/auth.ts";
-import { ConnectorError } from "./connectors/errors.ts";
+import { ConnectorError, type ConnectorErrorCode } from "./connectors/errors.ts";
 import {
   approveCatalogTool,
   connectConnector,
@@ -34,7 +41,7 @@ import {
   type ConnectorServiceDeps,
 } from "./connectors/service.ts";
 import { agentKeyView, issueAgentKey, revokeAgentKey, verifyAgentKey } from "./vault/agent-keys.ts";
-import { completeOAuthFlow, startOAuthFlow } from "./connectors/oauth/service.ts";
+import { completeOAuthFlow, startOAuthFlow, startOAuthReauth } from "./connectors/oauth/service.ts";
 import { CredentialStore } from "./vault/credentials.ts";
 import { VaultKeyring } from "./vault/keyring.ts";
 import { Vault } from "./vault/vault.ts";
@@ -81,6 +88,17 @@ const oauthCallbackSchema = z.object({
   code: z.string().min(1),
   iss: z.string().optional(),
 });
+
+const CONNECTOR_ERROR_STATUS = {
+  not_found: 404,
+  credential: 400,
+  oauth_state: 400,
+  oauth_issuer: 400,
+  oauth_failed: 502,
+  reauth: 409,
+  confirmation_required: 409,
+  blocked: 409,
+} as const satisfies Record<ConnectorErrorCode, number>;
 
 export function catalogToolView(row: CatalogTool): CatalogToolView {
   return {
@@ -285,6 +303,12 @@ export function createGatewayApp(
     return c.json(connectorDetail(result, userId));
   });
 
+  app.post("/api/connectors/:id/reauth", async (c) => {
+    const userId = userIdFor(c);
+    const result = await startOAuthReauth(serviceDeps(userId), c.req.param("id"));
+    return c.json(result, 201);
+  });
+
   app.post("/api/connectors/oauth/start", async (c) => {
     const body = oauthStartSchema.parse(await c.req.json());
     const userId = userIdFor(c);
@@ -319,6 +343,20 @@ export function createGatewayApp(
   app.post("/api/catalog/:id/approve", (c) => {
     const userId = userIdFor(c);
     const tool = approveCatalogTool(db, userId, c.req.param("id"));
+    return c.json({ tool: catalogToolView(tool) });
+  });
+
+  app.post("/api/catalog/:id/class", async (c) => {
+    const userId = userIdFor(c);
+    const body = toolClassUpdateSchema.parse(await c.req.json());
+    const { tool } = setToolClass(db, userId, c.req.param("id"), body.class, body.confirm);
+    return c.json({ tool: catalogToolView(tool) });
+  });
+
+  app.post("/api/catalog/:id/requestable", async (c) => {
+    const userId = userIdFor(c);
+    const body = toolRequestableUpdateSchema.parse(await c.req.json());
+    const tool = setToolRequestable(db, userId, c.req.param("id"), body.requestable);
     return c.json({ tool: catalogToolView(tool) });
   });
 
@@ -366,15 +404,10 @@ export function createGatewayApp(
       );
     }
     if (error instanceof ConnectorError) {
-      const status =
-        error.code === "not_found"
-          ? 404
-          : error.code === "reauth"
-            ? 409
-            : error.code === "oauth_failed"
-              ? 502
-              : 400;
-      return c.json({ error: error.code, message: error.message }, status);
+      return c.json(
+        { error: error.code, message: error.message },
+        CONNECTOR_ERROR_STATUS[error.code],
+      );
     }
     console.error(error);
     return c.json({ error: "internal", message: "Unexpected gateway error" }, 500);

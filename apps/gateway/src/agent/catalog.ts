@@ -1,3 +1,4 @@
+import { isToolExposed } from "@errand/shared";
 import type { Db } from "../db/client.ts";
 import type { ToolClass } from "../db/schema.ts";
 import { listCatalog, type CatalogTool } from "../connectors/catalog.ts";
@@ -15,11 +16,7 @@ export type AgentCatalogTool = {
 };
 
 export function isRequestableTool(tool: CatalogTool): boolean {
-  return (
-    tool.requestable &&
-    !isDecoyToolName(tool.name) &&
-    !isDecoyToolName(tool.agentName)
-  );
+  return isToolExposed(tool) && !isDecoyToolName(tool.name) && !isDecoyToolName(tool.agentName);
 }
 
 export function agentCatalog(db: Db, userId: string): AgentCatalogTool[] {

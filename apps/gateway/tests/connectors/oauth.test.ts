@@ -12,6 +12,7 @@ import {
   errorResponseSchema,
   oauthStartResponseSchema,
   readJson,
+  reauthResponseSchema,
 } from "./support.ts";
 
 const TS = "2026-01-01T00:00:00.000Z";
@@ -301,6 +302,40 @@ describe("OAuth 2.1 + PKCE via the SDK", () => {
     expect(
       db.select().from(journal).all().filter((event) => event.eventType === "connector.needs_reauth"),
     ).toHaveLength(1);
+  });
+
+  test("re-authorizes the same connector after a revoked refresh token", async () => {
+    const { started, response } = await authorizeFlow();
+    expect(response.status).toBe(200);
+    const connectorId = started.connector.id;
+    const connectorCount = db.select().from(connectors).all().length;
+    const lastSuccess = db.select().from(connectors).all()[0]?.lastSuccessAt ?? null;
+    expect(lastSuccess).not.toBeNull();
+    await control("/mock/oauth/revoke", { refreshTokens: true });
+
+    const failed = await post(`/api/connectors/${connectorId}/refresh`, {});
+    expect(failed.status).toBe(409);
+    expect(db.select().from(connectors).all()[0]?.authStatus).toBe("needs_reauth");
+
+    const restarted = await post(`/api/connectors/${connectorId}/reauth`, {});
+    expect(restarted.status).toBe(201);
+    const restartedBody = await readJson(restarted, reauthResponseSchema);
+    expect(restartedBody.connector.id).toBe(connectorId);
+    expect(restartedBody.connector.authStatus).toBe("pending");
+    expect(restartedBody.connector.lastSuccessAt).toBe(lastSuccess);
+
+    const callback = await approve(restartedBody.authorizationUrl);
+    const completed = await app.request(callbackPath(callback));
+    expect(completed.status).toBe(200);
+    const completedBody = await readJson(completed, connectResponseSchema);
+    expect(completedBody.connector.id).toBe(connectorId);
+    expect(completedBody.connector.authStatus).toBe("active");
+    expect(completedBody.connector.lastSuccessAt).not.toBeNull();
+    expect(completedBody.summary.total).toBe(3);
+    expect(db.select().from(connectors).all()).toHaveLength(connectorCount);
+    expect(
+      db.select().from(journal).all().some((event) => event.eventType === "connector.oauth_restarted"),
+    ).toBe(true);
   });
 
   test("a repeated 401 after a refresh marks needs_reauth and emits one event", async () => {

@@ -1,15 +1,22 @@
 import { z } from "zod";
 import {
   agentKeyCreatedSchema,
+  catalogResponseSchema,
+  catalogToolResponseSchema,
   connectorDetailSchema,
+  connectorReauthResponseSchema,
   errorResponseSchema,
   probeResultSchema,
   sessionViewSchema,
   type AgentKeyCreated,
+  type CatalogResponse,
+  type CatalogToolResponse,
   type ConnectorAuthInput,
   type ConnectorDetail,
+  type ConnectorReauthResponse,
   type ProbeResult,
   type SessionView,
+  type ToolClass,
 } from "@errand/shared";
 
 export class ApiError extends Error {
@@ -70,6 +77,29 @@ export const api = {
   },
   connect(input: ConnectorAuthInput): Promise<ConnectorDetail> {
     return send(connectorDetailSchema, "/api/connectors", "POST", input);
+  },
+  catalog(): Promise<CatalogResponse> {
+    return send(catalogResponseSchema, "/api/catalog", "GET");
+  },
+  refreshConnector(id: string): Promise<ConnectorDetail> {
+    return send(connectorDetailSchema, `/api/connectors/${id}/refresh`, "POST", {});
+  },
+  reauthConnector(id: string): Promise<ConnectorReauthResponse> {
+    return send(connectorReauthResponseSchema, `/api/connectors/${id}/reauth`, "POST", {});
+  },
+  approveTool(id: string): Promise<CatalogToolResponse> {
+    return send(catalogToolResponseSchema, `/api/catalog/${id}/approve`, "POST", {});
+  },
+  setToolClass(id: string, toolClass: ToolClass, confirm: boolean): Promise<CatalogToolResponse> {
+    return send(catalogToolResponseSchema, `/api/catalog/${id}/class`, "POST", {
+      class: toolClass,
+      confirm,
+    });
+  },
+  setToolRequestable(id: string, requestable: boolean): Promise<CatalogToolResponse> {
+    return send(catalogToolResponseSchema, `/api/catalog/${id}/requestable`, "POST", {
+      requestable,
+    });
   },
   issueAgentKey(name: string): Promise<AgentKeyCreated> {
     return send(agentKeyCreatedSchema, "/api/agent-keys", "POST", { name });

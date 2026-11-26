@@ -21,6 +21,7 @@ export function connectorView(row: typeof connectors.$inferSelect): ConnectorVie
     authType: row.authType,
     authStatus: row.authStatus,
     lastAuthError: row.lastAuthError,
+    lastSuccessAt: row.lastSuccessAt,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
