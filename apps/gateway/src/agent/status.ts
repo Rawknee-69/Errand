@@ -26,6 +26,8 @@ export type ErrandStatusResult = {
   expiresAt: string;
   timeLeftSeconds: number;
   createdAt: string;
+  burnedAt: string | null;
+  burnedReason: string | null;
   capability: string | null;
 };
 
@@ -61,6 +63,8 @@ export function errandStatus(
     expiresAt: slip.expiresAt,
     timeLeftSeconds: allowance.timeLeftSeconds,
     createdAt: slip.createdAt,
+    burnedAt: slip.burnedAt,
+    burnedReason: slip.burnedReason,
     capability,
   };
 }

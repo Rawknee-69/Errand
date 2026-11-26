@@ -9,9 +9,10 @@ import { z } from "zod";
 import { createGatewayApp } from "../../src/app.ts";
 import { createMigratedDatabase, type Db } from "../../src/db/client.ts";
 import { listJournalEvents } from "../../src/db/journal.ts";
-import { connectors, slips, tools, users } from "../../src/db/schema.ts";
-import { getSlip } from "../../src/db/scoped-reads.ts";
+import { connectors, slips, tools, trust, users } from "../../src/db/schema.ts";
+import { getSlip, getTrust } from "../../src/db/scoped-reads.ts";
 import { errandTypeFor } from "../../src/policy/errand-type.ts";
+import { DECOY_NAMES } from "../../src/policy/decoys.ts";
 import { SPEND_AMOUNT_ARGUMENT } from "../../src/policy/spend.ts";
 import { hashCapability, issueCapability, issueValidCapability } from "../../src/policy/capability.ts";
 import { signSlip } from "../../src/policy/slip-signing.ts";
@@ -135,13 +136,44 @@ async function call(
   });
 }
 
-function denial(body: unknown): { error: string; message: string; tool?: string | undefined } {
+function denial(body: unknown): {
+  error: string;
+  message: string;
+  tool?: string | undefined;
+  slip_state?: string | undefined;
+  burned_reason?: string | null | undefined;
+} {
   return z
-    .object({ error: z.string(), message: z.string(), tool: z.string().optional() })
+    .object({
+      error: z.string(),
+      message: z.string(),
+      tool: z.string().optional(),
+      slip_state: z.string().optional(),
+      burned_reason: z.string().nullable().optional(),
+    })
     .parse(body);
 }
 
 type CallResponse = { result: { isError?: boolean | undefined }; body: unknown };
+
+function seedLicenseTrust(errandType: string): void {
+  db.delete(trust).where(eq(trust.userId, "user-a")).run();
+  db.insert(trust)
+    .values({
+      userId: "user-a",
+      errandType,
+      tier: "license",
+      cleanRuns: 4,
+      caps: "{}",
+      createdAt: TS,
+      updatedAt: TS,
+    })
+    .run();
+}
+
+function trustFor(errandType: string) {
+  return getTrust(db, "user-a", errandType);
+}
 
 function expectDenied(response: CallResponse, reason: string, userId = "user-a"): void {
   expect(response.result.isError).toBe(true);
@@ -308,14 +340,86 @@ describe("errand_call policy pipeline", () => {
     }
   });
 
-  test("a decoy is refused by name", async () => {
+  test("every decoy burns the slip, revokes its capability, demotes the type and journals the reason", async () => {
+    for (const decoy of DECOY_NAMES) {
+      const { slipId, capability } = seedSlip();
+      const seeded = getSlip(db, "user-a", slipId);
+      if (seeded === undefined) throw new Error("seeded slip vanished");
+      seedLicenseTrust(seeded.errandType);
+
+      const client = await connect(key);
+      try {
+        const response = await call(client, slipId, capability, `calendar__${decoy}`);
+        expect(response.result.isError).toBe(true);
+        expect(denial(response.body)).toMatchObject({
+          error: "decoy",
+          tool: `calendar__${decoy}`,
+          slip_state: "burned",
+          burned_reason: "decoy",
+        });
+
+        const burnedRow = getSlip(db, "user-a", slipId);
+        expect(burnedRow).toMatchObject({
+          state: "burned",
+          burnedReason: "decoy",
+          capabilityHash: null,
+        });
+        expect(burnedRow?.burnedAt).not.toBeNull();
+
+        const burnedEvent = listJournalEvents(db, "user-a").at(-1);
+        expect(burnedEvent?.eventType).toBe("slip.burned");
+        expect(
+          z
+            .object({
+              slip_id: z.string(),
+              errand_type: z.string(),
+              reason: z.string(),
+              tool: z.string(),
+              capability_revoked: z.boolean(),
+            })
+            .parse(JSON.parse(burnedEvent?.payload ?? "{}")),
+        ).toMatchObject({
+          slip_id: slipId,
+          errand_type: seeded.errandType,
+          reason: "decoy",
+          tool: `calendar__${decoy}`,
+          capability_revoked: true,
+        });
+
+        expect(trustFor(seeded.errandType)).toMatchObject({
+          tier: "learner",
+          cleanRuns: 0,
+          caps: "{}",
+        });
+
+        expectDenied(await call(client, slipId, capability, READ.name), "burned");
+
+        const status = z
+          .object({
+            state: z.string(),
+            burnedReason: z.string().nullable(),
+            capability: z.string().nullable(),
+          })
+          .parse((await callTool(client, "errand_status", { slip_id: slipId })).body);
+        expect(status).toEqual({ state: "burned", burnedReason: "decoy", capability: null });
+      } finally {
+        await client.close();
+      }
+    }
+  });
+
+  test("a burned slip returns a structured burned error with its reason", async () => {
     const { slipId, capability } = seedSlip();
     const client = await connect(key);
     try {
-      expectDenied(
-        await call(client, slipId, capability, "calendar__export_all_contacts"),
-        "decoy",
-      );
+      await call(client, slipId, capability, "calendar__delete_all_data");
+      const refused = await call(client, slipId, capability, READ.name);
+      expect(refused.result.isError).toBe(true);
+      expect(denial(refused.body)).toMatchObject({
+        error: "burned",
+        slip_state: "burned",
+        burned_reason: "decoy",
+      });
     } finally {
       await client.close();
     }
@@ -332,10 +436,69 @@ describe("errand_call policy pipeline", () => {
       const last = listJournalEvents(db, "user-a").at(-1);
       expect(last?.eventType).toBe("call.scope_violation");
       expect(last?.payload).toContain(slipId);
+      expect(getSlip(db, "user-a", slipId)).toMatchObject({
+        state: "approved",
+        scopeViolations: 1,
+        burnedReason: null,
+      });
       const status = z
         .object({ callsUsed: z.number() })
         .parse((await callTool(client, "errand_status", { slip_id: slipId })).body);
       expect(status).toMatchObject({ callsUsed: 0 });
+    } finally {
+      await client.close();
+    }
+  });
+
+  test("a second scope violation burns the slip and demotes the errand type", async () => {
+    const { slipId, capability } = seedSlip();
+    const seeded = getSlip(db, "user-a", slipId);
+    if (seeded === undefined) throw new Error("seeded slip vanished");
+    seedLicenseTrust(seeded.errandType);
+    const client = await connect(key);
+    try {
+      expectDenied(
+        await call(client, slipId, capability, "calendar__delete_event"),
+        "out_of_scope",
+      );
+      expect(trustFor(seeded.errandType)?.tier).toBe("license");
+
+      const second = await call(client, slipId, capability, "calendar__delete_event");
+      expect(second.result.isError).toBe(true);
+      expect(denial(second.body)).toMatchObject({
+        error: "out_of_scope",
+        slip_state: "burned",
+        burned_reason: "second_scope_violation",
+      });
+      const events = listJournalEvents(db, "user-a").slice(-2);
+      expect(events.map((event) => event.eventType)).toEqual([
+        "call.scope_violation",
+        "slip.burned",
+      ]);
+      expect(
+        z
+          .object({ reason: z.string(), errand_type: z.string() })
+          .parse(JSON.parse(events[1]?.payload ?? "{}")),
+      ).toMatchObject({ reason: "second_scope_violation", errand_type: seeded.errandType });
+
+      expect(getSlip(db, "user-a", slipId)).toMatchObject({
+        state: "burned",
+        burnedReason: "second_scope_violation",
+        scopeViolations: 2,
+        capabilityHash: null,
+      });
+      expect(trustFor(seeded.errandType)).toMatchObject({
+        tier: "learner",
+        cleanRuns: 0,
+        caps: "{}",
+      });
+
+      const after = await call(client, slipId, capability, READ.name);
+      expect(denial(after.body)).toMatchObject({
+        error: "burned",
+        slip_state: "burned",
+        burned_reason: "second_scope_violation",
+      });
     } finally {
       await client.close();
     }

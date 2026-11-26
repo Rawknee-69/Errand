@@ -54,7 +54,12 @@ export type CallDecision =
       callsRemaining: number;
       spendRemainingCents: number;
     }
-  | { outcome: "denied"; reason: CallDenialReason; message: string };
+  | {
+      outcome: "denied";
+      reason: CallDenialReason;
+      message: string;
+      burned?: { reason: string | null; at: string | null };
+    };
 
 export type CallOptions = {
   now?: Date;
@@ -90,7 +95,16 @@ export function admitCall(
   }
 
   const capability = checkCapability(slip, input.capability, options.hmacKey, now);
-  if (!capability.ok) return deny(capability.reason, capabilityMessage(capability.reason, slip.id));
+  if (!capability.ok) {
+    return {
+      outcome: "denied",
+      reason: capability.reason,
+      message: capabilityMessage(capability.reason, slip.id),
+      ...(capability.reason === "burned"
+        ? { burned: { reason: slip.burnedReason, at: slip.burnedAt } }
+        : {}),
+    };
+  }
 
   if (!verifySlipSignature(slip, options.hmacKey)) {
     return deny("signature_invalid", `Slip ${slip.id} does not match its signature`);

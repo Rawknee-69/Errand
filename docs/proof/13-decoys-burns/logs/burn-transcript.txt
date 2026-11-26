@@ -1,0 +1,92 @@
+
+== log in as the owner
+{"authenticated":true}
+
+== create the agent key and connect the Calendar mock
+agent key 2afdbebf-f8bd-48dd-aaa9-81a67a314393; one URL http://127.0.0.1:8843/mcp
+calendar connector 5fee4e6b-a93f-4afb-acbf-d32f2ff02457
+
+== stream the live feed from the start of the journal
+
+== each decoy is inert, burns its slip, revokes its capability and demotes the type
+
+calendar__export_all_contacts -> {"isError":true,"error":"decoy","tool":"calendar__export_all_contacts","slip_state":"burned","burned_reason":"decoy"}
+{
+  "slip": {
+    "state": "burned",
+    "burnedReason": "decoy",
+    "burnedAt": "2026-11-26T11:04:29.510Z",
+    "capabilityRevoked": true
+  },
+  "trust": {
+    "tier": "learner",
+    "cleanRuns": 0
+  }
+}
+afterwards -> {"error":"burned","tool":"calendar__list_events","slip_state":"burned","burned_reason":"decoy"}
+status -> {"state":"burned","capability":null,"burnedReason":"decoy"}
+
+calendar__transfer_all_funds -> {"isError":true,"error":"decoy","tool":"calendar__transfer_all_funds","slip_state":"burned","burned_reason":"decoy"}
+{
+  "slip": {
+    "state": "burned",
+    "burnedReason": "decoy",
+    "burnedAt": "2026-11-26T11:04:29.548Z",
+    "capabilityRevoked": true
+  },
+  "trust": {
+    "tier": "learner",
+    "cleanRuns": 0
+  }
+}
+afterwards -> {"error":"burned","tool":"calendar__list_events","slip_state":"burned","burned_reason":"decoy"}
+status -> {"state":"burned","capability":null,"burnedReason":"decoy"}
+
+calendar__delete_all_data -> {"isError":true,"error":"decoy","tool":"calendar__delete_all_data","slip_state":"burned","burned_reason":"decoy"}
+{
+  "slip": {
+    "state": "burned",
+    "burnedReason": "decoy",
+    "burnedAt": "2026-11-26T11:04:29.596Z",
+    "capabilityRevoked": true
+  },
+  "trust": {
+    "tier": "learner",
+    "cleanRuns": 0
+  }
+}
+afterwards -> {"error":"burned","tool":"calendar__list_events","slip_state":"burned","burned_reason":"decoy"}
+status -> {"state":"burned","capability":null,"burnedReason":"decoy"}
+
+== the first scope violation is denied and journaled; the second burns
+first out-of-scope -> {"error":"out_of_scope","tool":"calendar__delete_event"}
+{"state":"approved","scopeViolations":1,"capabilityStillLive":true}
+second out-of-scope -> {"error":"out_of_scope","tool":"calendar__delete_event","slip_state":"burned","burned_reason":"second_scope_violation"}
+{
+  "slip": {
+    "state": "burned",
+    "burnedReason": "second_scope_violation",
+    "scopeViolations": 2,
+    "capabilityRevoked": true
+  },
+  "trust": {
+    "tier": "learner",
+    "cleanRuns": 0
+  }
+}
+after the second violation -> {"error":"burned","tool":"calendar__list_events","slip_state":"burned","burned_reason":"second_scope_violation"}
+
+== the live feed carries every burn and scope frame
+7 slip.burned {"capability_revoked":true,"errand_type":"8e162757bdc0d4dd2608fb18ac0fd115c1b26cc80451a779482dfcff88fcf290","reason":"decoy","scope_violations":0,"slip_id":"0c6164ca-1e75-425d-b022-6764f4ec23a2","tool":"calendar__export_all_contacts"}
+12 slip.burned {"capability_revoked":true,"errand_type":"8e162757bdc0d4dd2608fb18ac0fd115c1b26cc80451a779482dfcff88fcf290","reason":"decoy","scope_violations":0,"slip_id":"703ee9ff-02ab-4a75-94fe-760d19fc3426","tool":"calendar__transfer_all_funds"}
+17 slip.burned {"capability_revoked":true,"errand_type":"8e162757bdc0d4dd2608fb18ac0fd115c1b26cc80451a779482dfcff88fcf290","reason":"decoy","scope_violations":0,"slip_id":"55961ac7-4a0c-4661-8a3d-35f9c91733b6","tool":"calendar__delete_all_data"}
+23 slip.burned {"capability_revoked":true,"errand_type":"8e162757bdc0d4dd2608fb18ac0fd115c1b26cc80451a779482dfcff88fcf290","reason":"second_scope_violation","scope_violations":2,"slip_id":"d6ce8b28-47e8-4eda-903a-38a8aca635bb","tool":"calendar__delete_event"}
+
+== the journal records each reason and still verifies
+7 slip.burned {"capability_revoked":true,"errand_type":"8e162757bdc0d4dd2608fb18ac0fd115c1b26cc80451a779482dfcff88fcf290","reason":"decoy","scope_violations":0,"slip_id":"0c6164ca-1e75-425d-b022-6764f4ec23a2","tool":"calendar__export_all_contacts"}
+12 slip.burned {"capability_revoked":true,"errand_type":"8e162757bdc0d4dd2608fb18ac0fd115c1b26cc80451a779482dfcff88fcf290","reason":"decoy","scope_violations":0,"slip_id":"703ee9ff-02ab-4a75-94fe-760d19fc3426","tool":"calendar__transfer_all_funds"}
+17 slip.burned {"capability_revoked":true,"errand_type":"8e162757bdc0d4dd2608fb18ac0fd115c1b26cc80451a779482dfcff88fcf290","reason":"decoy","scope_violations":0,"slip_id":"55961ac7-4a0c-4661-8a3d-35f9c91733b6","tool":"calendar__delete_all_data"}
+23 slip.burned {"capability_revoked":true,"errand_type":"8e162757bdc0d4dd2608fb18ac0fd115c1b26cc80451a779482dfcff88fcf290","reason":"second_scope_violation","scope_violations":2,"slip_id":"d6ce8b28-47e8-4eda-903a-38a8aca635bb","tool":"calendar__delete_event"}
+{"ok":true,"checked":24}
+
+VERDICT: pass

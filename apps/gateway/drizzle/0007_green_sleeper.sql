@@ -1,0 +1,1 @@
+ALTER TABLE `slips` ADD `scope_violations` integer DEFAULT 0 NOT NULL;
