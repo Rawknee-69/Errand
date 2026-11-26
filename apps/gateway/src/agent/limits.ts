@@ -1,15 +1,6 @@
-import type { LimitClamp } from "@errand/shared";
-import { DEFAULT_CALL_RATE_PER_MINUTE } from "../policy/rate.ts";
+import { AGENT_LIMITS, type LimitClamp } from "@errand/shared";
 
-// Hard ceilings a request can never exceed; the agent may ask for less and a
-// human may trim further before approving.
-export const AGENT_LIMITS = {
-  tools: 20,
-  calls: 50,
-  callsPerMinute: DEFAULT_CALL_RATE_PER_MINUTE,
-  spendCents: 20_000,
-  minutes: 30,
-} as const;
+export { AGENT_LIMITS };
 
 export type RequestedLimits = {
   calls?: number;

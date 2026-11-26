@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import type { SessionView } from "@errand/shared";
 import { api } from "./api.ts";
-import { placeholderFor } from "./navigation.ts";
 import { useScreen } from "./useScreen.ts";
 import { Login } from "./screens/Login.tsx";
 import { Shell } from "./screens/Shell.tsx";
@@ -9,7 +8,10 @@ import { Connect } from "./screens/Connect.tsx";
 import { Catalog } from "./screens/Catalog.tsx";
 import { Connectors } from "./screens/Connectors.tsx";
 import { Slips } from "./screens/Slips.tsx";
-import { Placeholder } from "./screens/Placeholder.tsx";
+import { Receipts } from "./screens/Receipts.tsx";
+import { Trust } from "./screens/Trust.tsx";
+import { Journal } from "./screens/Journal.tsx";
+import { Keys } from "./screens/Keys.tsx";
 
 export function App() {
   const [session, setSession] = useState<SessionView | null>(null);
@@ -60,7 +62,6 @@ export function App() {
     setSession({ authenticated: false, demoMode: session?.demoMode ?? false, user: null });
   }
 
-  const placeholder = placeholderFor(screen);
   const openConnect = () => navigate("connect");
 
   return (
@@ -73,8 +74,14 @@ export function App() {
         <Connectors onOpenConnect={openConnect} />
       ) : screen === "slips" ? (
         <Slips />
+      ) : screen === "receipts" ? (
+        <Receipts />
+      ) : screen === "trust" ? (
+        <Trust />
+      ) : screen === "journal" ? (
+        <Journal />
       ) : (
-        placeholder !== undefined && <Placeholder {...placeholder} />
+        <Keys />
       )}
     </Shell>
   );

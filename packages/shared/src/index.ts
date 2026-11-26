@@ -197,6 +197,16 @@ export type OutboxListResponse = z.infer<typeof outboxListResponseSchema>;
 export const outboxItemResponseSchema = z.object({ item: outboxItemSchema });
 export type OutboxItemResponse = z.infer<typeof outboxItemResponseSchema>;
 
+// Hard ceilings the gateway clamps agent requests to and the trust screen offers
+// as maxima, so the form can never promise more than the agent may run.
+export const AGENT_LIMITS = {
+  tools: 20,
+  calls: 50,
+  callsPerMinute: 20,
+  spendCents: 20_000,
+  minutes: 30,
+} as const;
+
 // Five consecutive clean runs earn a license offer; trust is lost faster than it is gained.
 export const CLEAN_RUNS_FOR_LICENSE = 5;
 
@@ -316,6 +326,24 @@ export const agentKeyCreatedSchema = z.object({
   mcpUrl: z.string(),
 });
 export type AgentKeyCreated = z.infer<typeof agentKeyCreatedSchema>;
+
+export const agentKeyListResponseSchema = z.object({ agentKeys: z.array(agentKeyViewSchema) });
+export type AgentKeyListResponse = z.infer<typeof agentKeyListResponseSchema>;
+
+export const agentKeyResponseSchema = z.object({ agentKey: agentKeyViewSchema });
+export type AgentKeyResponse = z.infer<typeof agentKeyResponseSchema>;
+
+// The journal check is a discriminated verdict: a clean chain has no broken
+// sequence, a broken one always names the first.
+export const journalVerifyResponseSchema = z.discriminatedUnion("ok", [
+  z.object({ ok: z.literal(true), checked: z.number().int().nonnegative() }),
+  z.object({
+    ok: z.literal(false),
+    checked: z.number().int().nonnegative(),
+    firstBrokenSeq: z.number().int().positive(),
+  }),
+]);
+export type JournalVerifyResponse = z.infer<typeof journalVerifyResponseSchema>;
 
 export const authHintSchema = z.enum(["bearer", "basic", "header", "oauth"]);
 export type AuthHint = z.infer<typeof authHintSchema>;

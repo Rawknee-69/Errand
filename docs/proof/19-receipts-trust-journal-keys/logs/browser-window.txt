@@ -1,0 +1,6 @@
+desktop viewport 1440x900
+phone viewport 390x844
+[desktop] requestfailed: GET http://127.0.0.1:5301/api/events net::ERR_ABORTED
+[desktop] requestfailed: GET http://127.0.0.1:5301/api/events net::ERR_ABORTED
+[phone] requestfailed: GET http://127.0.0.1:5301/api/events net::ERR_ABORTED
+[phone] requestfailed: GET http://127.0.0.1:5301/api/events net::ERR_ABORTED

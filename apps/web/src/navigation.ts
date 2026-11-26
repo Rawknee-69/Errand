@@ -16,14 +16,8 @@ export type NavItem = {
   title: string;
 };
 
-type PlaceholderCopy = {
-  ticket: number;
-  copy: string;
-};
-
 type ScreenInfo = NavItem & {
   path: string;
-  placeholder?: PlaceholderCopy;
 };
 
 const entries: ScreenInfo[] = [
@@ -56,40 +50,24 @@ const entries: ScreenInfo[] = [
     path: "/receipts",
     label: "Receipts",
     title: "Receipts",
-    placeholder: {
-      ticket: 19,
-      copy: "What was verified, what could not be, and undo only where a real inverse exists.",
-    },
   },
   {
     screen: "trust",
     path: "/trust",
     label: "Trust",
     title: "Trust",
-    placeholder: {
-      ticket: 19,
-      copy: "Each errand type's tier, its clean-run count, and the caps you set for a license.",
-    },
   },
   {
     screen: "journal",
     path: "/journal",
     label: "Journal",
     title: "Journal",
-    placeholder: {
-      ticket: 19,
-      copy: "Run the hash-chain check and see the first broken sequence, or a clean verdict.",
-    },
   },
   {
     screen: "keys",
     path: "/keys",
     label: "Keys",
     title: "Agent keys",
-    placeholder: {
-      ticket: 19,
-      copy: "Create and revoke the keys your agents use. A key is shown once, then only its hash remains.",
-    },
   },
 ];
 
@@ -99,12 +77,6 @@ export const nav: NavItem[] = entries.map(({ screen, label, title }) => ({
   title,
 }));
 
-export type PlaceholderInfo = {
-  title: string;
-  ticket: number;
-  copy: string;
-};
-
 function entryFor(screen: Screen): ScreenInfo {
   const entry = entries.find((candidate) => candidate.screen === screen);
   if (entry === undefined) throw new Error(`No route for screen ${screen}`);
@@ -113,12 +85,6 @@ function entryFor(screen: Screen): ScreenInfo {
 
 export function pathFor(screen: Screen): string {
   return entryFor(screen).path;
-}
-
-export function placeholderFor(screen: Screen): PlaceholderInfo | undefined {
-  const entry = entryFor(screen);
-  if (entry.placeholder === undefined) return undefined;
-  return { title: entry.title, ...entry.placeholder };
 }
 
 export function screenFromPath(pathname: string): Screen {
