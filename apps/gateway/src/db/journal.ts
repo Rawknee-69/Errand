@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
-import { desc, eq } from "drizzle-orm";
+import { desc } from "drizzle-orm";
 import type { Db } from "./client.ts";
-import { scopedGet } from "./scope.ts";
+import { scopedGet, scopedList } from "./scoped-reads.ts";
 import { journal } from "./schema.ts";
 
 // Append-only, hash-chained journal (GLOSSARY.md). The first event's
@@ -20,8 +20,7 @@ export type JournalVerifyResult =
   | { ok: true; checked: number }
   | { ok: false; checked: number; firstBrokenSeq: number };
 
-// Canonical JSON: object keys sorted recursively, arrays keep order.
-// The byte-exact form that is hashed and stored (slip canonicalisation reuses this contract).
+// Canonical JSON: object keys sorted recursively, arrays keep order; byte-exact hashed form.
 export function canonicalJson(value: unknown): string {
   return JSON.stringify(sortValue(value));
 }
@@ -117,7 +116,7 @@ export function verifyJournal(db: Db): JournalVerifyResult {
 
 // Per-user read, scoped by user id at the query layer.
 export function listJournalEvents(db: Db, userId: string): JournalEvent[] {
-  return db.select().from(journal).where(eq(journal.userId, userId)).orderBy(journal.id).all();
+  return scopedList(db, journal, journal.userId, userId, journal.id);
 }
 
 export function getJournalEvent(db: Db, userId: string, seq: number): JournalEvent | undefined {

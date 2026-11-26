@@ -197,10 +197,7 @@ export const trust = sqliteTable(
   (t) => [primaryKey({ columns: [t.userId, t.errandType] })],
 );
 
-// Append-only, hash-chained log of every decision and event (GLOSSARY.md).
-// prev_hash of the first event is 64 zeros; seq is contiguous from 1.
-// `id` is insertion order and never changes; `seq` is the chain number.
-// Ordering uses `id`, not `seq`, so verify can't be tricked by tampering seq.
+// Append-only, hash-chained log (GLOSSARY.md); ordered by immutable `id`, chained by `seq`.
 export const journal = sqliteTable(
   "journal",
   {

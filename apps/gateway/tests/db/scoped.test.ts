@@ -36,7 +36,7 @@ import {
   listTools,
   listTrust,
   listUndoActions,
-} from "../../src/db/scoped.ts";
+} from "../../src/db/scoped-reads.ts";
 
 const TS = "2026-01-01T00:00:00.000Z";
 

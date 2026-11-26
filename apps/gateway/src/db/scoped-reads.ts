@@ -1,6 +1,6 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
+import type { SQLiteColumn, SQLiteTable } from "drizzle-orm/sqlite-core";
 import type { Db } from "./client.ts";
-import { scopedGet, scopedList } from "./scope.ts";
 import {
   agentKeys,
   calls,
@@ -15,8 +15,34 @@ import {
   users,
 } from "./schema.ts";
 
-// Every per-user read is scoped by user id at the query layer.
+// One home for per-user scoping: every read filters `user_id = ?` at the query layer.
 // `users` itself is keyed by its own id and is not per-user data.
+
+export function scopedList<TTable extends SQLiteTable>(
+  db: Db,
+  table: TTable,
+  userColumn: SQLiteColumn,
+  userId: string,
+  orderByColumn?: SQLiteColumn,
+) {
+  const query = db.select().from(table).where(eq(userColumn, userId));
+  return (orderByColumn ? query.orderBy(orderByColumn) : query).all();
+}
+
+export function scopedGet<TTable extends SQLiteTable>(
+  db: Db,
+  table: TTable,
+  userColumn: SQLiteColumn,
+  userId: string,
+  idColumn: SQLiteColumn,
+  id: string | number,
+) {
+  return db
+    .select()
+    .from(table)
+    .where(and(eq(userColumn, userId), eq(idColumn, id)))
+    .all()[0];
+}
 
 export function getUser(db: Db, id: string) {
   return db.select().from(users).where(eq(users.id, id)).all()[0];
