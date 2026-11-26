@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
+import type { AuthHint, McpTransportKind, ProbeResult } from "@errand/shared";
 import type { Db } from "../db/client.ts";
 import { appendJournalEvent } from "../db/journal.ts";
 import { scopedList } from "../db/scoped-reads.ts";
@@ -17,7 +18,6 @@ import {
   McpConnectError,
   type DiscoverOptions,
   type McpConnection,
-  type McpTransportKind,
 } from "./mcp.ts";
 import { connectorRow, connectorView, type ConnectorBaseDeps, type ConnectorView } from "./records.ts";
 import { refreshOAuthConnection } from "./oauth/service.ts";
@@ -32,15 +32,7 @@ export type ConnectorServiceDeps = ConnectorBaseDeps & {
   maxConnectors?: number;
 };
 
-export type AuthHint = "bearer" | "basic" | "header";
-
-export type ProbeResult = {
-  reachable: boolean;
-  transport: McpTransportKind | null;
-  requiresAuth: boolean;
-  authHint: AuthHint | null;
-  toolCount: number;
-};
+export type { AuthHint, ProbeResult };
 
 export type ConnectResult = {
   connector: ConnectorView;

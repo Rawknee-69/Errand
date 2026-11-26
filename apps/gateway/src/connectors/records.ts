@@ -1,24 +1,15 @@
 import { and, eq } from "drizzle-orm";
+import type { ConnectorView } from "@errand/shared";
 import type { Db } from "../db/client.ts";
-import { connectors, type ConnectorAuthStatus, type ConnectorAuthType } from "../db/schema.ts";
+import { connectors, type ConnectorAuthStatus } from "../db/schema.ts";
 import { scopedGet } from "../db/scoped-reads.ts";
 import { ConnectorError } from "./errors.ts";
+
+export type { ConnectorView };
 
 export type ConnectorBaseDeps = {
   db: Db;
   userId: string;
-};
-
-export type ConnectorView = {
-  id: string;
-  name: string;
-  url: string;
-  transport: string;
-  authType: ConnectorAuthType;
-  authStatus: ConnectorAuthStatus;
-  lastAuthError: string | null;
-  createdAt: string;
-  updatedAt: string;
 };
 
 export function connectorView(row: typeof connectors.$inferSelect): ConnectorView {

@@ -136,6 +136,7 @@ beforeEach(async () => {
     keyring,
     discoverOptions: { allowLocalhostDev: true, timeoutMs: 5_000 },
     oauthRedirectUri: REDIRECT_URI,
+    auth: "disabled",
   });
 });
 
@@ -243,6 +244,7 @@ describe("OAuth 2.1 + PKCE via the SDK", () => {
       keyring,
       discoverOptions: { allowLocalhostDev: true, timeoutMs: 5_000 },
       oauthRedirectUri: "http://127.0.0.1:8787/api/oauth/other",
+      auth: "disabled",
     });
 
     const response = await otherApp.request(callbackPath(callback));

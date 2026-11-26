@@ -55,6 +55,7 @@ beforeEach(async () => {
     userId: "user-a",
     keyring: new VaultKeyring(KEK),
     discoverOptions: { allowLocalhostDev: true, timeoutMs: 5_000 },
+    auth: "disabled",
   });
   await changeMockCalendar(DEFAULT_DESCRIPTION);
 });

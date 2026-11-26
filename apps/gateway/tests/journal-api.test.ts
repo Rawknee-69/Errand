@@ -6,7 +6,7 @@ import { users } from "../src/db/schema.ts";
 
 describe("GET /api/journal/verify", () => {
   test("reports a clean result on an empty journal", async () => {
-    const app = createGatewayApp(createMigratedDatabase(":memory:"));
+    const app = createGatewayApp(createMigratedDatabase(":memory:"), { auth: "disabled" });
 
     const response = await app.request("/api/journal/verify");
 
@@ -19,7 +19,7 @@ describe("GET /api/journal/verify", () => {
     db.insert(users).values({ id: "u", name: "U", createdAt: "2026-01-01T00:00:00.000Z" }).run();
     appendJournalEvent(db, { userId: "u", eventType: "a", payload: {} });
     appendJournalEvent(db, { userId: "u", eventType: "b", payload: {} });
-    const app = createGatewayApp(db);
+    const app = createGatewayApp(db, { auth: "disabled" });
 
     expect(await (await app.request("/api/journal/verify")).json()).toEqual({ ok: true, checked: 2 });
 

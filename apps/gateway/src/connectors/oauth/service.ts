@@ -26,8 +26,8 @@ import {
   McpConnectError,
   type DiscoverOptions,
   type McpConnection,
-  type McpTransportKind,
 } from "../mcp.ts";
+import type { McpTransportKind } from "@errand/shared";
 import type { DiscoveredTool, IngestSummary } from "../catalog.ts";
 import type { CredentialStore } from "../../vault/credentials.ts";
 import type { Vault } from "../../vault/vault.ts";

@@ -19,7 +19,7 @@ Runtime on the same machine: `bun 1.4.4`, `node v26.13.1`.
 | `typescript` | root (dev) | 7.0.2 | `latest` | `latest => 7.0.2` |
 | `@types/bun` | root (dev) | 1.4.5 | `latest` | `latest => 1.4.5` |
 | `hono` | gateway | 4.13.22 | `latest` | `latest => 4.13.22` |
-| `zod` | gateway, mock-services | 4.6.7 | `latest` | `latest => 4.6.7` |
+| `zod` | gateway, mock-services, web, shared | 4.6.7 | `latest` | `latest => 4.6.7` |
 | `@modelcontextprotocol/client` | gateway | 2.4.0 | `latest` | `latest => 2.4.0` |
 | `@modelcontextprotocol/server` | gateway, mock-services | 2.4.0 | `latest` | `latest => 2.4.0` |
 | `react` | web | 19.3.1 | `latest` | `latest => 19.3.1` |
@@ -28,10 +28,11 @@ Runtime on the same machine: `bun 1.4.4`, `node v26.13.1`.
 | `@vitejs/plugin-react` | web (dev) | 6.3.0 | `latest` | `latest => 6.3.0` |
 | `@types/react` | web (dev) | 19.3.3 | `latest` | `latest => 19.3.3` |
 | `@types/react-dom` | web (dev) | 19.3.0 | `latest` | `latest => 19.3.0` |
-| `@errand/shared` | gateway | 0.1.0 | n/a | Local workspace (`workspace:*`), no registry version |
+| `@errand/shared` | gateway, web | 0.1.0 | n/a | Local workspace (`workspace:*`), no registry version |
 | `@errand/mock-services` | gateway (dev) | 0.1.0 | n/a | Local workspace (`workspace:*`), test-only upstream servers |
 | `drizzle-orm` | gateway | 0.45.4 | `latest` | `latest => 0.45.4` |
 | `drizzle-kit` | gateway (dev) | 0.31.11 | `latest` | `latest => 0.31.11` |
+| `jose` | gateway | 6.2.18 | `latest` | `latest => 6.2.18` |
 
 Captured output of the checks above, one line per package:
 
@@ -50,6 +51,7 @@ vite => latest 8.3.8
 @types/react-dom => latest 19.3.0
 drizzle-orm => latest 0.45.4
 drizzle-kit => latest 0.31.11
+jose => latest 6.2.18
 ```
 
 ## Verified but not installed yet
@@ -61,7 +63,6 @@ entry here is a bug.
 | Package | Dist-tag `latest` | Evidence |
 |---|---|---|
 | `@modelcontextprotocol/hono` | 2.0.2 | `latest => 2.0.2` |
-| `jose` | 6.2.18 | `latest => 6.2.18` |
 | `ajv` | 8.20.0 | `latest => 8.20.0` |
 
 `drizzle-orm` is still pre-1.0: its `latest` is 0.45.4 and the 1.0 line is RC

@@ -9,7 +9,7 @@ let app: ReturnType<typeof createGatewayApp>;
 
 beforeEach(() => {
   db = userDb();
-  app = createGatewayApp(db, { userId: "user-a" });
+  app = createGatewayApp(db, { userId: "user-a", auth: "disabled" });
 });
 
 async function create(name = "laptop"): Promise<Response> {

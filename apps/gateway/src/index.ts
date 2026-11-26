@@ -19,6 +19,13 @@ const app = createGatewayApp(db, {
   },
   maxConnectors: config.MAX_CONNECTORS_PER_USER,
   oauthRedirectUri: config.OAUTH_REDIRECT_URI ?? DEFAULT_OAUTH_REDIRECT_URI,
+  auth: {
+    passphrase: config.OWNER_PASSPHRASE,
+    sessionSecret: config.JWT_SECRET,
+    demoMode: config.DEMO_MODE,
+    sessionTtlSeconds: config.SESSION_TTL_HOURS * 60 * 60,
+    sessionCookieSecure: config.SESSION_COOKIE_SECURE,
+  },
 });
 const server = Bun.serve({ port: config.PORT, fetch: app.fetch });
 
