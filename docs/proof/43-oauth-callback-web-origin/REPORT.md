@@ -123,6 +123,10 @@ Spec:
 - The Connect screen still has no OAuth entry point; the flow was started via
   `POST /api/connectors/oauth/start` from the control-panel origin, as #21
   does. A UI entry point is not part of this ticket.
+- `apps/gateway/src/index.ts` builds the app options at startup and has no
+  importable seam to unit-test the `WEB_ORIGIN` spread. The two real gateway
+  boots in the proof are its evidence; a future regression there would only be
+  caught by a boot test.
 
 ## Unverified
 
