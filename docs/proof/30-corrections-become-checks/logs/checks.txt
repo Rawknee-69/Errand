@@ -1,0 +1,42 @@
+﻿## Seeded violations (each removed after capture)
+
+### any
+bun : 
+At line:1 char:397
++ ... le -Append -Encoding utf8 $log; bun run scripts/check.ts 2>&1 | Out-F ...
++                                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+Γ£ù no-any: 1 violation(s)
+  apps/gateway/src/__probe.ts:1:14  `any` ΓÇö use the real type or narrow `unknown`
+
+1 violation(s). Fix the cause, not the check.
+### unreferenced note and commented-out code
+bun : 
+At line:1 char:679
++ ... le -Append -Encoding utf8 $log; bun run scripts/check.ts 2>&1 | Out-F ...
++                                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+Γ£ù comments: 2 violation(s)
+  apps/gateway/src/__probe.ts:1:1  note without an issue reference ΓÇö fix it or cite the ticket
+  apps/gateway/src/__probe.ts:2:1  commented-out code ΓÇö delete it; git remembers
+
+2 violation(s). Fix the cause, not the check.
+### clean
+Γ£ô 2 checks passed: comments, no-any
+
+### installed check (simulated missing node_modules)
+bun : 
+At line:1 char:28
++ ... P\empty-tree"; bun run D:\errand-checks\scripts\check.ts 2>&1 | Out-F ...
++                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+Γ£ù installed: 1 violation(s)
+  package.json:1:1  dependencies not installed in this worktree ΓÇö run `bun install`
+
+1 violation(s). Fix the cause, not the check.

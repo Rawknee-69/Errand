@@ -24,9 +24,10 @@ JavaScript AST for a custom rule.
 2. `@ts-ignore` and `as unknown as` are banned for the same reason.
 3. `unknown` is the correct type at an untrusted boundary, and must be
    narrowed by a schema or type guard before use.
-4. `bun run typecheck` runs a repository check (`scripts/check-types.ts`) after
+4. `bun run typecheck` runs the repository checks (`scripts/check.ts`) after
    the workspace typechecks, so a violation fails the build rather than
-   surviving review.
+   surviving review. **Amended 2026-11-26:** the `any` check now lives at
+   `scripts/checks/no-any.ts` inside the discovered suite; see ADR-0002.
 5. The compiler runs with `strict`, `noUncheckedIndexedAccess`,
    `exactOptionalPropertyTypes`, `noImplicitOverride`, `noImplicitReturns`,
    `noUnusedLocals`, `noUnusedParameters`, `allowUnreachableCode: false` and

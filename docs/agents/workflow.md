@@ -133,6 +133,11 @@ someone thought of.
   phase before starting it.
 - Reviews are not optional because a demo is close. A skipped review is
   recorded as a deviation with a reason.
+- **A finding closes by becoming a check.** If the same class of mistake could
+  recur — a wrong assumption, a forgotten guard, a stale note — add
+  `scripts/checks/<name>.ts` naming the correction in its header, and make it
+  fail the build. A code-review comment that only exists in review is a
+  reminder, not a fix.
 
 ## Coding standards
 
@@ -149,7 +154,9 @@ disagreement is about a rule, not taste.
 4. **Comments are for what code cannot say** — a security invariant, a
    protocol quirk, a non-obvious ordering constraint. One or two lines. No
    restating the next line, no banner blocks, no commented-out code, no `TODO`
-   without an issue number.
+   without an issue number. A fix is never a comment: "for now", "quick fix"
+   and "temporary" notes outlive the fix and become the next change's
+   foundation. If the code needs that note, change the code.
 5. **Prefer a type to a comment.** If a comment explains a shape, write the
    type instead.
 6. **Names come from `GLOSSARY.md`.** `slip`, not "permission object";
@@ -166,6 +173,12 @@ disagreement is about a rule, not taste.
     `unknown` is correct at an untrusted boundary, then narrowed by a schema
     before use. `bun run typecheck` enforces this and fails the build. See
     `docs/adr/0001-ban-any.md`.
+11. **Every correction becomes a check.** A mistake found once is closed by a
+    check in `scripts/checks/` (discovered by `scripts/check.ts`), by a type
+    that makes it uncompilable, or by a restructure — in that order. Never by a
+    new paragraph in AGENTS.md or the spec: those give direction, the checks
+    enforce. Deleting a check is an ADR, not a judgement call. See
+    `docs/adr/0002-corrections-become-checks.md`.
 
 ## Notifications
 
