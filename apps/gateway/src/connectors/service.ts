@@ -75,9 +75,10 @@ function connectorHost(url: string): string {
 // RFC 9728; a bare Bearer challenge is a static token.
 function authHint(challenge: string | undefined): AuthHint | null {
   if (challenge === undefined) return null;
-  if (/(?:^|[,\s])resource_metadata\s*=/i.test(challenge)) return "oauth";
   const scheme = challenge.split(/\s+/)[0]?.toLowerCase();
-  if (scheme === "bearer") return "bearer";
+  if (scheme === "bearer") {
+    return /(?:^|[,\s])resource_metadata\s*=/i.test(challenge) ? "oauth" : "bearer";
+  }
   if (scheme === "basic") return "basic";
   if (scheme !== undefined && scheme !== "") return "header";
   return null;

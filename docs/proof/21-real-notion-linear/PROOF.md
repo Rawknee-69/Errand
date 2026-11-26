@@ -1,4 +1,4 @@
-# Proof — #21 Real Notion and Linear through the paste-a-URL flow
+# Proof - #21 Real Notion and Linear through the paste-a-URL flow
 
 > Status: **paused for human sign-in and for the slip pipeline (#10, #11).**
 > This is not a final proof. It records what was driven, what was observed, and
@@ -18,7 +18,7 @@
 ## What was driven
 
 1. Pasted `https://mcp.notion.com/mcp` into Connect. The probe reported
-   `Protected — it asks for oauth. 0 tools` and offered **Sign in (OAuth)**
+   `Protected - it asks for oauth. 0 tools` and offered **Sign in (OAuth)**
    selected by default: `screens/01-notion-oauth-choice.png`.
 2. Pressed **Sign in and connect**. Errand performed RFC 9728 discovery,
    dynamic client registration and a PKCE authorization request, then the
@@ -58,12 +58,12 @@
 | # | Severity | What happened | Artifact | Status |
 |---|---|---|---|---|
 | 1 | blocker | Neither real workspace is signed in in the browser, so consent cannot be granted without the human | `screens/06-notion-login.png` | blocked on human |
-| 2 | blocker | A read-only slip cannot run end to end without the P4/P5 pipeline (#10, #11) | — | blocked on tickets |
-| 3 | low | After the OAuth callback the browser lands on a plain gateway page with a link to the JSON catalog; there is no route back into the web app | `screens/05-mock-connected.png` | open |
+| 2 | blocker | A read-only slip cannot run end to end without the P4/P5 pipeline (#10, #11) | - | blocked on tickets |
+| 3 | low | After the OAuth callback the browser lands on a plain gateway page with a link to the JSON catalog; there is no route back into the web app | `screens/05-mock-connected.png` | filed as #43 |
 | 4 | medium | Abandoned or expired OAuth attempts leave a permanently `pending` connector row; no UI or API deletes it | `logs/catalog-after-mock-oauth.txt` (four pending rows from three starts) | filed as #42 |
 
 ## Verdict
 
-Verdict: fail — not because a step misbehaved, but because two required steps
+Verdict: fail - not because a step misbehaved, but because two required steps
 have not been driven. Re-run from consent after the human signs in, and after
 #10/#11 merge, then replace this verdict.

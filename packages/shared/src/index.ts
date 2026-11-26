@@ -218,12 +218,11 @@ export const connectorViewSchema = z.object({
 });
 export type ConnectorView = z.infer<typeof connectorViewSchema>;
 
-export const oauthStartSchema = z.object({
+export const oauthStartResponseSchema = z.object({
   connector: connectorViewSchema,
   authorizationUrl: z.url(),
-  attemptId: z.string(),
 });
-export type OAuthStart = z.infer<typeof oauthStartSchema>;
+export type OAuthStartResponse = z.infer<typeof oauthStartResponseSchema>;
 
 export const ingestSummarySchema = z.object({
   new: z.number().int().nonnegative(),

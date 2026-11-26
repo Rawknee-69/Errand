@@ -6,7 +6,7 @@ import {
   connectorDetailSchema,
   connectorReauthResponseSchema,
   errorResponseSchema,
-  oauthStartSchema,
+  oauthStartResponseSchema,
   probeResultSchema,
   sessionViewSchema,
   type AgentKeyCreated,
@@ -15,7 +15,7 @@ import {
   type ConnectorAuthInput,
   type ConnectorDetail,
   type ConnectorReauthResponse,
-  type OAuthStart,
+  type OAuthStartResponse,
   type ProbeResult,
   type SessionView,
   type ToolClass,
@@ -103,8 +103,8 @@ export const api = {
       requestable,
     });
   },
-  startOAuth(name: string, url: string): Promise<OAuthStart> {
-    return send(oauthStartSchema, "/api/connectors/oauth/start", "POST", { name, url });
+  startOAuth(name: string, url: string): Promise<OAuthStartResponse> {
+    return send(oauthStartResponseSchema, "/api/connectors/oauth/start", "POST", { name, url });
   },
   issueAgentKey(name: string): Promise<AgentKeyCreated> {
     return send(agentKeyCreatedSchema, "/api/agent-keys", "POST", { name });

@@ -85,7 +85,7 @@ function bearerToken(header: string | undefined): string | undefined {
   return header?.match(/^Bearer\s+(\S+)$/i)?.[1];
 }
 
-const oauthStartSchema = z.object({
+const oauthStartRequestSchema = z.object({
   name: z.string().min(1).max(120),
   url: z.string().min(1),
 });
@@ -331,7 +331,7 @@ export function createGatewayApp(
   });
 
   app.post("/api/connectors/oauth/start", async (c) => {
-    const body = oauthStartSchema.parse(await c.req.json());
+    const body = oauthStartRequestSchema.parse(await c.req.json());
     const userId = userIdFor(c);
     const result = await startOAuthFlow(serviceDeps(userId), body);
     return c.json(result, 201);

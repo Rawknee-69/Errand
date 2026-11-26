@@ -25,6 +25,26 @@ const AUTH_LABELS: Array<{ type: SelectableAuth; label: string }> = [
   { type: "basic", label: "Basic" },
 ];
 
+function AuthChip(props: {
+  type: ConnectorAuthType;
+  label: string;
+  checked: boolean;
+  onSelect: (type: ConnectorAuthType) => void;
+}) {
+  return (
+    <label className={props.checked ? "chip is-selected" : "chip"}>
+      <input
+        type="radio"
+        name="authType"
+        value={props.type}
+        checked={props.checked}
+        onChange={() => props.onSelect(props.type)}
+      />
+      {props.label}
+    </label>
+  );
+}
+
 function hostOf(url: string): string {
   try {
     return new URL(url).host;
@@ -227,31 +247,21 @@ export function Connect({ onOpenCatalog }: Props) {
             <legend>How should Errand authenticate?</legend>
             <div className="chips">
               {probe.authHint === "oauth" && (
-                <label className={authType === "oauth" ? "chip is-selected" : "chip"}>
-                  <input
-                    type="radio"
-                    name="authType"
-                    value="oauth"
-                    checked={authType === "oauth"}
-                    onChange={() => setAuthType("oauth")}
-                  />
-                  Sign in (OAuth)
-                </label>
+                <AuthChip
+                  type="oauth"
+                  label="Sign in (OAuth)"
+                  checked={authType === "oauth"}
+                  onSelect={setAuthType}
+                />
               )}
               {AUTH_LABELS.map((option) => (
-                <label
+                <AuthChip
                   key={option.type}
-                  className={authType === option.type ? "chip is-selected" : "chip"}
-                >
-                  <input
-                    type="radio"
-                    name="authType"
-                    value={option.type}
-                    checked={authType === option.type}
-                    onChange={() => setAuthType(option.type)}
-                  />
-                  {option.label}
-                </label>
+                  type={option.type}
+                  label={option.label}
+                  checked={authType === option.type}
+                  onSelect={setAuthType}
+                />
               ))}
             </div>
             {probe.authHint !== null && (
@@ -259,7 +269,7 @@ export function Connect({ onOpenCatalog }: Props) {
             )}
             {authType === "oauth" && (
               <p className="hint">
-                You will be sent to {hostOf(url)} to sign in. Errand stores the token; your agent
+                You will be sent to the service to sign in. Errand stores the token; your agent
                 never sees it.
               </p>
             )}
