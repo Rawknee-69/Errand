@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { DEFAULT_CALL_TIMEOUT_MS, DEFAULT_CONNECTOR_CONCURRENCY } from "./connectors/call.ts";
 import { DEFAULT_MAX_CONNECTORS_PER_USER } from "./connectors/quota.ts";
 import { DEFAULT_MAX_RESPONSE_BYTES, DEFAULT_TIMEOUT_MS } from "./egress/guard.ts";
 
@@ -54,6 +55,8 @@ const configSchema = z.object({
   SESSION_TTL_HOURS: z.coerce.number().int().positive().default(12),
   EGRESS_TIMEOUT_MS: z.coerce.number().int().positive().default(DEFAULT_TIMEOUT_MS),
   EGRESS_MAX_RESPONSE_BYTES: z.coerce.number().int().positive().default(DEFAULT_MAX_RESPONSE_BYTES),
+  CALL_TIMEOUT_MS: z.coerce.number().int().positive().default(DEFAULT_CALL_TIMEOUT_MS),
+  CONNECTOR_CONCURRENCY: z.coerce.number().int().positive().default(DEFAULT_CONNECTOR_CONCURRENCY),
   MAX_CONNECTORS_PER_USER: z.coerce.number().int().positive().default(DEFAULT_MAX_CONNECTORS_PER_USER),
   // Must match the public callback URL registered with each authorization server.
   OAUTH_REDIRECT_URI: httpUrlSchema.optional(),

@@ -1,0 +1,12 @@
+bun : $ bun run --filter '*' typecheck && bun run scripts/check.ts
+At line:1 char:1
++ bun run typecheck 2>&1 | Tee-Object -FilePath D:\errand\docs\proof\11 ...
++ ~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: ($ bun run --fil...cripts/check.ts:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+@errand/shared typecheck: Exited with code 0
+@errand/mock-services typecheck: Exited with code 0
+@errand/web typecheck: Exited with code 0
+@errand/gateway typecheck: Exited with code 0
+Γ£ô 4 checks passed: comments, installed, no-any, oauth-verifier

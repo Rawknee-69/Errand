@@ -42,6 +42,46 @@ export function authHeaders(auth: ConnectorAuth): Record<string, string> {
   }
 }
 
+// The values an upstream could echo back; redaction uses them before a result
+// reaches the agent, the journal or the calls table.
+export function authSecrets(auth: ConnectorAuth): string[] {
+  switch (auth.type) {
+    case "none":
+      return [];
+    case "bearer":
+      return [auth.token];
+    case "oauth":
+      return [auth.accessToken];
+    case "header":
+      return [auth.value];
+    case "basic":
+      return [auth.username, auth.password];
+  }
+}
+
+export function redactText(text: string, secrets: string[]): string {
+  let redacted = text;
+  for (const secret of secrets) {
+    if (secret !== "") redacted = redacted.split(secret).join("[redacted]");
+  }
+  return redacted;
+}
+
+function redactValue(value: unknown, secrets: string[]): unknown {
+  if (typeof value === "string") return redactText(value, secrets);
+  if (Array.isArray(value)) return value.map((item) => redactValue(item, secrets));
+  if (value !== null && typeof value === "object") {
+    const redacted: Record<string, unknown> = {};
+    for (const [key, item] of Object.entries(value)) redacted[key] = redactValue(item, secrets);
+    return redacted;
+  }
+  return value;
+}
+
+export function redactAuthSecrets(value: unknown, auth: ConnectorAuth): unknown {
+  return redactValue(value, authSecrets(auth));
+}
+
 export function serialiseCredential(auth: ConnectorAuth): string | undefined {
   switch (auth.type) {
     case "none":

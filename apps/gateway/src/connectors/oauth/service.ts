@@ -17,6 +17,7 @@ import { applyDiscovery } from "../discovery.ts";
 import {
   connectorRow,
   connectorView,
+  markConnectorNeedsReauth,
   setConnectorAuthStatus,
   type ConnectorBaseDeps,
   type ConnectorView,
@@ -90,7 +91,7 @@ function providerFor(
       if (options.attemptId !== undefined) store.saveAttemptSecret(options.attemptId, secret);
     },
     onAuthorizationUrl: options.onAuthorizationUrl ?? (() => undefined),
-    onCredentialsInvalidated: (scope) => markNeedsReauth(deps, connectorId, `invalidated_${scope}`),
+    onCredentialsInvalidated: (scope) => markConnectorNeedsReauth(deps, connectorId, `invalidated_${scope}`),
   });
 }
 
@@ -127,21 +128,6 @@ function asConnectorError(
     return new ConnectorError("oauth_issuer", "The authorization server's issuer did not match");
   }
   return new ConnectorError(fallback, `Authorization failed: ${reason}`);
-}
-
-// Emits once per transition into needs_reauth; a second failure while already
-// needing a sign-in updates the reason without spamming the journal.
-function markNeedsReauth(deps: OAuthServiceDeps, connectorId: string, reason: string): void {
-  const row = connectorRow(deps, connectorId);
-  const wasNeedsReauth = row.authStatus === "needs_reauth";
-  setConnectorAuthStatus(deps, connectorId, "needs_reauth", reason);
-  if (!wasNeedsReauth) {
-    appendJournalEvent(deps.db, {
-      userId: deps.userId,
-      eventType: "connector.needs_reauth",
-      payload: { connectorId, reason },
-    });
-  }
 }
 
 function deleteAttempt(store: OAuthStore, deps: OAuthServiceDeps, attemptId: string): void {
@@ -359,7 +345,7 @@ export async function startOAuthReauth(
     });
   } catch (error) {
     deleteAttempt(store, deps, attemptId);
-    markNeedsReauth(deps, connectorId, failureReason(error));
+    markConnectorNeedsReauth(deps, connectorId, failureReason(error));
     throw asConnectorError(error, failureReason(error), "reauth");
   }
 }
@@ -410,7 +396,7 @@ export async function completeOAuthFlow(
     input.iss !== issuerMetadata.issuer;
   if ((issuerRequired && input.iss === undefined) || issuerMismatch) {
     deleteAttempt(store, deps, attempt.id);
-    markNeedsReauth(deps, row.id, "issuer_mismatch");
+    markConnectorNeedsReauth(deps, row.id, "issuer_mismatch");
     throw new ConnectorError(
       "oauth_issuer",
       "The callback issuer did not match the authorization server",
@@ -427,14 +413,14 @@ export async function completeOAuthFlow(
   } catch (error) {
     const reason = failureReason(error);
     deleteAttempt(store, deps, attempt.id);
-    markNeedsReauth(deps, row.id, reason);
+    markConnectorNeedsReauth(deps, row.id, reason);
     throw asConnectorError(error, reason, "reauth");
   }
   deleteAttempt(store, deps, attempt.id);
 
   const tokens = (await store.connectorState(row.id)).tokens;
   if (tokens === undefined) {
-    markNeedsReauth(deps, row.id, "no_tokens");
+    markConnectorNeedsReauth(deps, row.id, "no_tokens");
     throw new ConnectorError("reauth", "The authorization server issued no tokens");
   }
 
@@ -447,7 +433,7 @@ export async function completeOAuthFlow(
     );
   } catch (error) {
     if (error instanceof McpConnectError && error.code === "auth") {
-      markNeedsReauth(deps, row.id, "upstream_401");
+      markConnectorNeedsReauth(deps, row.id, "upstream_401");
     } else {
       setConnectorAuthStatus(deps, row.id, "active", failureReason(error));
       appendJournalEvent(deps.db, {
@@ -477,16 +463,16 @@ export async function completeOAuthFlow(
 
 // Runs inside the per-connector lock so a rotated refresh token cannot be
 // presented twice.
-export function refreshOAuthConnection(
+export function refreshOAuthAccessToken(
   deps: OAuthServiceDeps,
   connectorId: string,
-): Promise<McpConnection> {
+): Promise<string> {
   return withConnectorLock(connectorId, async () => {
     const row = connectorRow(deps, connectorId);
     const store = new OAuthStore(deps.vault, deps.store);
     const state = await store.connectorState(connectorId);
     if (state.tokens === undefined) {
-      markNeedsReauth(deps, connectorId, "no_tokens");
+      markConnectorNeedsReauth(deps, connectorId, "no_tokens");
       throw new ConnectorError("reauth", "This connector has no tokens; sign in again");
     }
 
@@ -496,7 +482,7 @@ export function refreshOAuthConnection(
       const reason = failureReason(error);
       const reauth = requiresReauth(error) || connectorRow(deps, connectorId).authStatus === "needs_reauth";
       if (reauth) {
-        markNeedsReauth(deps, connectorId, reason);
+        markConnectorNeedsReauth(deps, connectorId, reason);
       } else {
         setConnectorAuthStatus(deps, connectorId, "active", reason);
         appendJournalEvent(deps.db, {
@@ -511,29 +497,38 @@ export function refreshOAuthConnection(
     const refreshed = await store.connectorState(connectorId);
     const accessToken = refreshed.tokens?.access_token;
     if (accessToken === undefined) {
-      markNeedsReauth(deps, connectorId, "no_tokens");
+      markConnectorNeedsReauth(deps, connectorId, "no_tokens");
       throw new ConnectorError("reauth", "The refresh produced no access token");
     }
-
-    try {
-      const connection = await discoverMcpTools(
-        row.url,
-        { type: "oauth", accessToken },
-        deps.discoverOptions,
-      );
-      setConnectorAuthStatus(deps, connectorId, "active", null);
-      appendJournalEvent(deps.db, {
-        userId: deps.userId,
-        eventType: "connector.oauth_refreshed",
-        payload: { connectorId },
-      });
-      return connection;
-    } catch (error) {
-      if (error instanceof McpConnectError && error.code === "auth") {
-        markNeedsReauth(deps, connectorId, "upstream_401");
-        throw new ConnectorError("reauth", "The upstream still rejected the refreshed token");
-      }
-      throw error;
-    }
+    return accessToken;
   });
+}
+
+export async function refreshOAuthConnection(
+  deps: OAuthServiceDeps,
+  connectorId: string,
+): Promise<McpConnection> {
+  const row = connectorRow(deps, connectorId);
+  const accessToken = await refreshOAuthAccessToken(deps, connectorId);
+
+  try {
+    const connection = await discoverMcpTools(
+      row.url,
+      { type: "oauth", accessToken },
+      deps.discoverOptions,
+    );
+    setConnectorAuthStatus(deps, connectorId, "active", null);
+    appendJournalEvent(deps.db, {
+      userId: deps.userId,
+      eventType: "connector.oauth_refreshed",
+      payload: { connectorId },
+    });
+    return connection;
+  } catch (error) {
+    if (error instanceof McpConnectError && error.code === "auth") {
+      markConnectorNeedsReauth(deps, connectorId, "upstream_401");
+      throw new ConnectorError("reauth", "The upstream still rejected the refreshed token");
+    }
+    throw error;
+  }
 }

@@ -11,6 +11,7 @@ export const MOCK_AUTH = {
   payHeaderValue: "pay-demo-key",
   dineOutUser: "diner",
   dineOutPassword: "eats",
+  bigBearer: "big-demo-token",
 } as const;
 
 export const MOCK_PATHS = {
@@ -19,6 +20,7 @@ export const MOCK_PATHS = {
   dineOutSse: "/dine-out/sse",
   dineOutMessages: "/dine-out/messages",
   pay: "/pay/mcp",
+  big: "/big/mcp",
 } as const;
 
 const dineOutTools = [
@@ -92,8 +94,61 @@ function calendarServer(listEventsDescription = "List calendar events in a date 
   return server;
 }
 
-function payServer(): McpServer {
-  const server = new McpServer({ name: "pay", version: "1.0.0" });
+type BigTracker = { active: number; maxActive: number };
+
+function bigServer(tracker: BigTracker): McpServer {
+  const server = new McpServer({ name: "big", version: "1.0.0" });
+  server.registerTool(
+    "large_result",
+    {
+      description: "Return a payload of the requested size.",
+      inputSchema: z.object({
+        bytes: z
+          .number()
+          .int()
+          .positive()
+          .max(2 * 1024 * 1024)
+          .optional(),
+      }),
+      annotations: { readOnlyHint: true },
+    },
+    async ({ bytes }) => ({
+      content: [{ type: "text", text: "x".repeat(bytes ?? 300 * 1024) }],
+    }),
+  );
+  server.registerTool(
+    "slow_result",
+    {
+      description: "Answer after a delay, for timeout and concurrency checks.",
+      inputSchema: z.object({ ms: z.number().int().nonnegative().max(30_000).optional() }),
+      annotations: { readOnlyHint: true },
+    },
+    async ({ ms }) => {
+      tracker.active++;
+      tracker.maxActive = Math.max(tracker.maxActive, tracker.active);
+      try {
+        await new Promise((resolve) => setTimeout(resolve, ms ?? 100));
+        return { content: [{ type: "text", text: JSON.stringify({ ok: true }) }] };
+      } finally {
+        tracker.active--;
+      }
+    },
+  );
+  server.registerTool(
+    "echo_token",
+    {
+      description: "Echo the credential the caller presented.",
+      inputSchema: z.object({}),
+      annotations: { readOnlyHint: true },
+    },
+    async () => ({
+      content: [{ type: "text", text: JSON.stringify({ token: MOCK_AUTH.bigBearer }) }],
+    }),
+  );
+  return server;
+}
+
+function payServer(): McpServer {  const server = new McpServer({ name: "pay", version: "1.0.0" });
   server.registerTool(
     "get_balance",
     {
@@ -277,6 +332,8 @@ export function startMockServices(options: MockServicesOptions = {}) {
   const calendarHandler = createMcpHandler(() => calendarServer(listEventsDescription));
   const calendarSecureHandler = createMcpHandler(() => calendarServer(listEventsDescription));
   const payHandler = createMcpHandler(() => payServer());
+  const bigTracker: BigTracker = { active: 0, maxActive: 0 };
+  const bigHandler = createMcpHandler(() => bigServer(bigTracker));
   const dineOut = legacySseSessions();
   const oauth = createMockAuthorizationServer();
   const oauthResourceHandler = createMcpHandler(() => calendarServer());
@@ -315,6 +372,20 @@ export function startMockServices(options: MockServicesOptions = {}) {
           return unauthorized('ApiKey realm="pay"');
         }
         return payHandler.fetch(request);
+      }
+      if (pathname === MOCK_PATHS.big) {
+        if (request.headers.get("authorization") !== `Bearer ${MOCK_AUTH.bigBearer}`) {
+          return unauthorized('Bearer realm="big"');
+        }
+        return bigHandler.fetch(request);
+      }
+      if (pathname === "/mock/big/stats" && request.method === "GET") {
+        return Response.json(bigTracker);
+      }
+      if (pathname === "/mock/big/reset" && request.method === "POST") {
+        bigTracker.active = 0;
+        bigTracker.maxActive = 0;
+        return Response.json(bigTracker);
       }
       if (pathname === MOCK_PATHS.dineOutSse) {
         if (request.method !== "GET") {

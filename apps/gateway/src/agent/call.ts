@@ -24,6 +24,7 @@ export function submitCall(
         ? {
             slip_id: decision.slipId,
             tool: decision.tool,
+            connector_id: decision.connectorId,
             reason: "admitted",
             amount_cents: decision.amountCents,
             calls_remaining: decision.callsRemaining,

@@ -1,0 +1,162 @@
+
+== log in as the owner
+{"authenticated":true}
+
+== create the agent key and connect secure mock services through the paste-URL API
+agent key f9218d5d-41cc-49e0-86b1-191d92d46156; one URL http://127.0.0.1:8841/mcp
+calendar 2c020c2a-6794-4427-9c85-5dff9f9e961e, big 81bc67f1-0b52-4216-847b-f1d17cf12bd7, pay df4fccb6-5a05-472a-9c76-b2b493efa109
+
+== the top layer still lists exactly four tools
+tools: errand_call, errand_catalog, errand_status, request_errand
+
+== a read call forwards with the vault-held bearer credential
+{
+  "state": "forwarded",
+  "slipId": "6be73cc0-2a01-4481-ac56-11209f940081",
+  "tool": "calendar__list_events",
+  "class": "read",
+  "result": {
+    "content": [
+      {
+        "type": "text",
+        "text": "[{\"id\":\"evt-1\",\"title\":\"Dinner with Sam\",\"start\":\"2026-12-01T19:00:00Z\"}]"
+      }
+    ],
+    "isError": false,
+    "truncated": false,
+    "originalBytes": 140
+  },
+  "durationMs": 13,
+  "remaining": {
+    "calls": 49,
+    "spendCents": 20000
+  }
+}
+
+== a write call forwards immediately
+{
+  "state": "forwarded",
+  "slipId": "884bd8f9-e6ee-4ead-9adf-e8476790b48c",
+  "tool": "calendar__create_event",
+  "class": "write",
+  "result": {
+    "content": [
+      {
+        "type": "text",
+        "text": "{\"id\":\"evt-new\",\"title\":\"Dinner with Sam\",\"start\":\"2026-12-01T19:00:00Z\"}"
+      }
+    ],
+    "isError": false,
+    "truncated": false,
+    "originalBytes": 140
+  },
+  "durationMs": 7,
+  "remaining": {
+    "calls": 49,
+    "spendCents": 20000
+  }
+}
+
+== a delete call forwards only when the slip explicitly includes it
+{
+  "state": "forwarded",
+  "slipId": "ca18d9a3-cc14-4def-a9e3-82731ceec49f",
+  "tool": "calendar__delete_event",
+  "class": "delete",
+  "result": {
+    "content": [
+      {
+        "type": "text",
+        "text": "{\"deleted\":\"evt-1\"}"
+      }
+    ],
+    "isError": false,
+    "truncated": false,
+    "originalBytes": 78
+  },
+  "durationMs": 6,
+  "remaining": {
+    "calls": 49,
+    "spendCents": 20000
+  }
+}
+{
+  "isError": true,
+  "body": {
+    "error": "out_of_scope",
+    "message": "calendar__delete_event is not in slip 6be73cc0-2a01-4481-ac56-11209f940081",
+    "tool": "calendar__delete_event"
+  }
+}
+
+== a result over 256 KB is truncated and flagged
+{
+  "state": "forwarded",
+  "truncated": true,
+  "originalBytes": 307255,
+  "returnedBytes": 261993
+}
+
+== the upstream cannot echo the credential back to the agent
+{
+  "state": "forwarded",
+  "slipId": "8a201cc2-a4e4-4097-ba4d-f772349b579f",
+  "tool": "big__echo_token",
+  "class": "read",
+  "result": {
+    "content": [
+      {
+        "type": "text",
+        "text": "{\"token\":\"[redacted]\"}"
+      }
+    ],
+    "isError": false,
+    "truncated": false,
+    "originalBytes": 81
+  },
+  "durationMs": 7,
+  "remaining": {
+    "calls": 49,
+    "spendCents": 20000
+  }
+}
+
+== a per-call timeout fails the call, consumes its counter and is journaled
+{
+  "isError": true,
+  "body": {
+    "error": "upstream_timeout",
+    "message": "The upstream call to slow_result timed out after 500ms",
+    "slipId": "a3ba577f-a039-4bc0-96b0-3362aeabd726",
+    "tool": "big__slow_result"
+  }
+}
+{"callsUsed":1}
+{
+  "journal": "{\"call_id\":\"9c3f24bf-638f-412e-850e-acdd33e5c08d\",\"class\":\"read\",\"connector_id\":\"81bc67f1-0b52-4216-847b-f1d17cf12bd7\",\"duration_ms\":504,\"message\":\"The upstream call to slow_result timed out after 500ms\",\"reason\":\"upstream_timeout\",\"slip_id\":\"a3ba577f-a039-4bc0-96b0-3362aeabd726\",\"tool\":\"big__slow_result\"}",
+  "call": {
+    "result": null,
+    "error": "The upstream call to slow_result timed out after 500ms"
+  }
+}
+
+== per-connector concurrency holds at two
+max concurrent upstream calls: 2
+
+== the journal and calls table stay secret-free and the chain verifies
+calls rows: 12
+big__slow_result: result=105 chars error=null
+big__slow_result: result=105 chars error=null
+big__slow_result: result=105 chars error=null
+big__slow_result: result=105 chars error=null
+39 call.allowed {"amount_cents":0,"calls_remaining":5,"connector_id":"81bc67f1-0b52-4216-847b-f1d17cf12bd7","reason":"admitted","slip_id":"56bd178f-5491-4ddd-bc80-a48c2c4d9271","spend_remaining_cents":20000,"tool":"big__slow_result"}
+40 call.allowed {"amount_cents":0,"calls_remaining":4,"connector_id":"81bc67f1-0b52-4216-847b-f1d17cf12bd7","reason":"admitted","slip_id":"56bd178f-5491-4ddd-bc80-a48c2c4d9271","spend_remaining_cents":20000,"tool":"big__slow_result"}
+41 call.succeeded {"call_id":"4398a147-dfb8-4903-96ff-f8b2f6fdad66","class":"read","connector_id":"81bc67f1-0b52-4216-847b-f1d17cf12bd7","duration_ms":128,"result_bytes":105,"slip_id":"56bd178f-5491-4ddd-bc80-a48c2c4d9271","tool":"big__slow_result","truncated":false}
+42 call.succeeded {"call_id":"3691fe5a-e98e-44ed-9ce7-1aecae7dda96","class":"read","connector_id":"81bc67f1-0b52-4216-847b-f1d17cf12bd7","duration_ms":128,"result_bytes":105,"slip_id":"56bd178f-5491-4ddd-bc80-a48c2c4d9271","tool":"big__slow_result","truncated":false}
+43 call.succeeded {"call_id":"f71bee4e-8214-4897-9061-75cbf5d069cb","class":"read","connector_id":"81bc67f1-0b52-4216-847b-f1d17cf12bd7","duration_ms":238,"result_bytes":105,"slip_id":"56bd178f-5491-4ddd-bc80-a48c2c4d9271","tool":"big__slow_result","truncated":false}
+44 call.succeeded {"call_id":"df79eb19-b91d-498b-b00e-784c029aa3ee","class":"read","connector_id":"81bc67f1-0b52-4216-847b-f1d17cf12bd7","duration_ms":239,"result_bytes":105,"slip_id":"56bd178f-5491-4ddd-bc80-a48c2c4d9271","tool":"big__slow_result","truncated":false}
+45 call.succeeded {"call_id":"5c98fffc-0ad2-4ab0-a6e5-ac1b139ad9a6","class":"read","connector_id":"81bc67f1-0b52-4216-847b-f1d17cf12bd7","duration_ms":348,"result_bytes":105,"slip_id":"56bd178f-5491-4ddd-bc80-a48c2c4d9271","tool":"big__slow_result","truncated":false}
+46 call.succeeded {"call_id":"6b30fbc2-ed63-4336-a94b-3e101707b902","class":"read","connector_id":"81bc67f1-0b52-4216-847b-f1d17cf12bd7","duration_ms":349,"result_bytes":105,"slip_id":"56bd178f-5491-4ddd-bc80-a48c2c4d9271","tool":"big__slow_result","truncated":false}
+{"ok":true,"checked":46}
+
+VERDICT: pass

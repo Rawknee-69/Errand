@@ -15,6 +15,7 @@ import { z } from "zod";
 import { Hono, type Context } from "hono";
 import gatewayPackage from "../package.json" with { type: "json" };
 import { AGENT_PATH, createAgentHandler } from "./agent/mcp.ts";
+import { createForwarder, type Forwarder } from "./agent/forward.ts";
 import { registerAuth, requestUserId, type AuthOptions, type GatewayEnv } from "./auth/api.ts";
 import { DEFAULT_OWNER_ID } from "./auth/owner.ts";
 import { webOriginSchema } from "./config.ts";
@@ -61,6 +62,9 @@ export type GatewayAppOptions = {
   oauthRedirectUri?: string;
   webOrigin?: string;
   hmacKey?: string;
+  callTimeoutMs?: number;
+  connectorConcurrency?: number;
+  resultCapBytes?: number;
   auth: AuthOptions | "disabled";
 };
 
@@ -155,10 +159,24 @@ export function createGatewayApp(
   if (options.hmacKey !== undefined && Buffer.byteLength(options.hmacKey, "utf8") < 32) {
     throw new Error("Slip signing requires an HMAC key of at least 32 bytes");
   }
-  const agentHandler = createAgentHandler(db, options.hmacKey);
   const oauthRedirectUri = options.oauthRedirectUri ?? DEFAULT_OAUTH_REDIRECT_URI;
   const webOrigin =
     options.webOrigin === undefined ? undefined : webOriginSchema.parse(options.webOrigin);
+  const forwarder: Forwarder | undefined =
+    keyring === undefined
+      ? undefined
+      : createForwarder({
+          db,
+          keyring,
+          discoverOptions,
+          redirectUri: oauthRedirectUri,
+          ...(options.callTimeoutMs === undefined ? {} : { callTimeoutMs: options.callTimeoutMs }),
+          ...(options.connectorConcurrency === undefined
+            ? {}
+            : { connectorConcurrency: options.connectorConcurrency }),
+          ...(options.resultCapBytes === undefined ? {} : { resultCapBytes: options.resultCapBytes }),
+        });
+  const agentHandler = createAgentHandler(db, options.hmacKey, forwarder);
 
   if (options.auth !== "disabled") registerAuth(app, db, options.auth);
 
