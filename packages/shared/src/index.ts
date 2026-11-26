@@ -192,7 +192,7 @@ export const agentKeyCreatedSchema = z.object({
 });
 export type AgentKeyCreated = z.infer<typeof agentKeyCreatedSchema>;
 
-export const authHintSchema = z.enum(["bearer", "basic", "header"]);
+export const authHintSchema = z.enum(["bearer", "basic", "header", "oauth"]);
 export type AuthHint = z.infer<typeof authHintSchema>;
 
 export const probeResultSchema = z.object({
@@ -217,6 +217,13 @@ export const connectorViewSchema = z.object({
   updatedAt: z.string(),
 });
 export type ConnectorView = z.infer<typeof connectorViewSchema>;
+
+export const oauthStartSchema = z.object({
+  connector: connectorViewSchema,
+  authorizationUrl: z.url(),
+  attemptId: z.string(),
+});
+export type OAuthStart = z.infer<typeof oauthStartSchema>;
 
 export const ingestSummarySchema = z.object({
   new: z.number().int().nonnegative(),

@@ -84,7 +84,7 @@ export const probeResponseSchema = z.object({
   reachable: z.boolean(),
   transport: z.string().nullable(),
   requiresAuth: z.boolean(),
-  authHint: z.enum(["bearer", "basic", "header"]).nullable(),
+  authHint: z.enum(["bearer", "basic", "header", "oauth"]).nullable(),
   toolCount: z.number(),
 });
 

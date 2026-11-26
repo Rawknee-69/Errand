@@ -6,6 +6,7 @@ import {
   connectorDetailSchema,
   connectorReauthResponseSchema,
   errorResponseSchema,
+  oauthStartSchema,
   probeResultSchema,
   sessionViewSchema,
   type AgentKeyCreated,
@@ -14,6 +15,7 @@ import {
   type ConnectorAuthInput,
   type ConnectorDetail,
   type ConnectorReauthResponse,
+  type OAuthStart,
   type ProbeResult,
   type SessionView,
   type ToolClass,
@@ -100,6 +102,9 @@ export const api = {
     return send(catalogToolResponseSchema, `/api/catalog/${id}/requestable`, "POST", {
       requestable,
     });
+  },
+  startOAuth(name: string, url: string): Promise<OAuthStart> {
+    return send(oauthStartSchema, "/api/connectors/oauth/start", "POST", { name, url });
   },
   issueAgentKey(name: string): Promise<AgentKeyCreated> {
     return send(agentKeyCreatedSchema, "/api/agent-keys", "POST", { name });
