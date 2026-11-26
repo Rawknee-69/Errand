@@ -1,23 +1,21 @@
 import { index, integer, primaryKey, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
+import {
+  CONNECTOR_AUTH_STATUSES,
+  type ConnectorAuthStatus,
+  type ConnectorAuthType,
+  type McpTransportKind,
+  type ToolClass,
+  type ToolState,
+} from "@errand/shared";
 
-// Tool classes, increasing danger; `unknown` is a class but is never allowed to run (GLOSSARY.md).
-export type ToolClass = "read" | "write" | "send" | "delete" | "spend" | "unknown";
+export { CONNECTOR_AUTH_STATUSES };
+export type { ConnectorAuthStatus, ConnectorAuthType, ToolClass, ToolState };
 
 // Trust tiers (GLOSSARY.md): `learner` needs a human tap; `license` auto-approves within caps.
 export type Tier = "learner" | "license";
 
-// Vault auth schemes for a connector; stdio is excluded (spec).
-export type ConnectorAuthType = "none" | "bearer" | "header" | "basic" | "oauth";
-
-// OAuth connector lifecycle: pending until the first authorization completes.
-export const CONNECTOR_AUTH_STATUSES = ["active", "pending", "needs_reauth"] as const;
-export type ConnectorAuthStatus = (typeof CONNECTOR_AUTH_STATUSES)[number];
-
 // Verifier outcomes per change; `unverified` never implies success (GLOSSARY.md).
 export type VerificationOutcome = "matched" | "mismatched" | "unverified";
-
-// Catalog lifecycle: new at discovery, changed or removed blocks new slips until re-approved.
-export type ToolState = "new" | "active" | "changed" | "removed";
 
 // A slip's lifecycle: a request waits as pending until a human decides.
 export type SlipState = "pending" | "approved" | "denied" | "expired" | "burned";
@@ -49,7 +47,7 @@ export const connectors = sqliteTable(
     userId: text("user_id").notNull().references(() => users.id),
     name: text("name").notNull(),
     url: text("url").notNull(),
-    transport: text("transport").notNull(),
+    transport: text("transport").notNull().$type<McpTransportKind>(),
     authType: text("auth_type").notNull().$type<ConnectorAuthType>(),
     authStatus: text("auth_status").notNull().default("active").$type<ConnectorAuthStatus>(),
     // Short, secret-free reason for the last authorization failure.

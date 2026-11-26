@@ -1,12 +1,19 @@
-import { escapeHtml, type GatewayHealth } from "@errand/shared";
+import {
+  escapeHtml,
+  type CatalogToolView,
+  type ConnectorDetail,
+  type GatewayHealth,
+} from "@errand/shared";
 import type { AuthInfo } from "@modelcontextprotocol/server";
 import { z } from "zod";
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
 import gatewayPackage from "../package.json" with { type: "json" };
 import { AGENT_PATH, createAgentHandler } from "./agent/mcp.ts";
+import { registerAuth, requestUserId, type AuthOptions, type GatewayEnv } from "./auth/api.ts";
+import { DEFAULT_OWNER_ID } from "./auth/owner.ts";
 import { createMigratedDatabase, type Db } from "./db/client.ts";
 import { appendJournalEvent, verifyJournal } from "./db/journal.ts";
-import { users, type ToolClass, type ToolState } from "./db/schema.ts";
+import { users } from "./db/schema.ts";
 import { getUser, listAgentKeys } from "./db/scoped-reads.ts";
 import { EgressRefusal } from "./egress/guard.ts";
 import { ConnectorLimitError } from "./connectors/quota.ts";
@@ -29,7 +36,7 @@ import { CredentialStore } from "./vault/credentials.ts";
 import { VaultKeyring } from "./vault/keyring.ts";
 import { Vault } from "./vault/vault.ts";
 
-export const DEFAULT_OWNER_ID = "owner";
+export { DEFAULT_OWNER_ID };
 export const DEFAULT_OAUTH_REDIRECT_URI = "http://127.0.0.1:8787/api/oauth/callback";
 
 export type GatewayAppOptions = {
@@ -38,6 +45,7 @@ export type GatewayAppOptions = {
   discoverOptions?: DiscoverOptions;
   maxConnectors?: number;
   oauthRedirectUri?: string;
+  auth: AuthOptions | "disabled";
 };
 
 const probeSchema = z.object({ url: z.string().min(1) });
@@ -56,29 +64,6 @@ const oauthCallbackSchema = z.object({
   code: z.string().min(1),
   iss: z.string().optional(),
 });
-
-export type CatalogToolView = {
-  id: string;
-  connectorId: string;
-  name: string;
-  agentName: string;
-  description: string;
-  inputSchema: string;
-  annotations: string;
-  class: ToolClass;
-  definitionHash: string;
-  observedDescription: string;
-  observedInputSchema: string;
-  observedAnnotations: string;
-  observedClass: ToolClass;
-  observedHash: string;
-  state: ToolState;
-  requestable: boolean;
-  changedAt: string | null;
-  removedAt: string | null;
-  createdAt: string;
-  updatedAt: string;
-};
 
 export function catalogToolView(row: CatalogTool): CatalogToolView {
   return {
@@ -118,19 +103,27 @@ function oauthCallbackPage(connectorName: string): string {
 
 export function createGatewayApp(
   db: Db = createMigratedDatabase(":memory:"),
-  options: GatewayAppOptions = {},
-): Hono {
-  const app = new Hono();
-  const userId = options.userId ?? DEFAULT_OWNER_ID;
-  if (getUser(db, userId) === undefined) {
-    db.insert(users).values({ id: userId, name: userId, createdAt: new Date().toISOString() }).run();
+  options: GatewayAppOptions,
+): Hono<GatewayEnv> {
+  const app = new Hono<GatewayEnv>();
+  const defaultUserId = options.userId ?? DEFAULT_OWNER_ID;
+  if (getUser(db, defaultUserId) === undefined) {
+    db.insert(users)
+      .values({ id: defaultUserId, name: defaultUserId, createdAt: new Date().toISOString() })
+      .run();
   }
   const discoverOptions = options.discoverOptions ?? {};
   const keyring = options.keyring;
   const agentHandler = createAgentHandler(db);
   const oauthRedirectUri = options.oauthRedirectUri ?? DEFAULT_OAUTH_REDIRECT_URI;
 
-  function serviceDeps(): ConnectorServiceDeps {
+  if (options.auth !== "disabled") registerAuth(app, db, options.auth);
+
+  function userIdFor(c: Context<GatewayEnv>): string {
+    return requestUserId(c, defaultUserId);
+  }
+
+  function serviceDeps(userId: string): ConnectorServiceDeps {
     if (keyring === undefined) {
       throw new ConnectorError("credential", "The vault is not configured on this gateway");
     }
@@ -145,7 +138,7 @@ export function createGatewayApp(
     };
   }
 
-  function connectorDetail(result: ConnectResult) {
+  function connectorDetail(result: ConnectResult, userId: string): ConnectorDetail {
     return {
       connector: result.connector,
       transport: result.transport,
@@ -167,11 +160,13 @@ export function createGatewayApp(
 
   app.get("/api/journal/verify", (c) => c.json(verifyJournal(db)));
 
-  app.get("/api/agent-keys", (c) =>
-    c.json({ agentKeys: listAgentKeys(db, userId).map(agentKeyView) }),
-  );
+  app.get("/api/agent-keys", (c) => {
+    const userId = userIdFor(c);
+    return c.json({ agentKeys: listAgentKeys(db, userId).map(agentKeyView) });
+  });
 
   app.post("/api/agent-keys", async (c) => {
+    const userId = userIdFor(c);
     const body = agentKeyCreateSchema.parse(await c.req.json());
     const issued = issueAgentKey(db, userId, body.name);
     appendJournalEvent(db, {
@@ -190,6 +185,7 @@ export function createGatewayApp(
   });
 
   app.post("/api/agent-keys/:id/revoke", (c) => {
+    const userId = userIdFor(c);
     const result = revokeAgentKey(db, userId, c.req.param("id"));
     if (result === undefined) return c.json({ error: "not_found" }, 404);
     if (result.changed) {
@@ -222,26 +218,32 @@ export function createGatewayApp(
     return c.json(await probeUrl(discoverOptions, body.url));
   });
 
-  app.get("/api/connectors", (c) => c.json({ connectors: listConnectors(db, userId) }));
+  app.get("/api/connectors", (c) => {
+    const userId = userIdFor(c);
+    return c.json({ connectors: listConnectors(db, userId) });
+  });
 
   app.post("/api/connectors", async (c) => {
     const body = connectorAuthInputSchema.parse(await c.req.json());
-    const result = await connectConnector(serviceDeps(), {
+    const userId = userIdFor(c);
+    const result = await connectConnector(serviceDeps(userId), {
       name: body.name,
       url: body.url,
       auth: toConnectorAuth(body),
     });
-    return c.json(connectorDetail(result), 201);
+    return c.json(connectorDetail(result, userId), 201);
   });
 
   app.post("/api/connectors/:id/refresh", async (c) => {
-    const result = await refreshConnector(serviceDeps(), c.req.param("id"));
-    return c.json(connectorDetail(result));
+    const userId = userIdFor(c);
+    const result = await refreshConnector(serviceDeps(userId), c.req.param("id"));
+    return c.json(connectorDetail(result, userId));
   });
 
   app.post("/api/connectors/oauth/start", async (c) => {
     const body = oauthStartSchema.parse(await c.req.json());
-    const result = await startOAuthFlow(serviceDeps(), body);
+    const userId = userIdFor(c);
+    const result = await startOAuthFlow(serviceDeps(userId), body);
     return c.json(result, 201);
   });
 
@@ -249,7 +251,8 @@ export function createGatewayApp(
     const query = oauthCallbackSchema.parse(
       Object.fromEntries(new URL(c.req.url).searchParams.entries()),
     );
-    const result = await completeOAuthFlow(serviceDeps(), {
+    const userId = userIdFor(c);
+    const result = await completeOAuthFlow(serviceDeps(userId), {
       state: query.state,
       code: query.code,
       ...(query.iss === undefined ? {} : { iss: query.iss }),
@@ -257,22 +260,25 @@ export function createGatewayApp(
     if (c.req.header("accept")?.includes("text/html") === true) {
       return c.html(oauthCallbackPage(result.connector.name));
     }
-    return c.json(connectorDetail(result));
+    return c.json(connectorDetail(result, userId));
   });
 
-  app.get("/api/catalog", (c) =>
-    c.json({
+  app.get("/api/catalog", (c) => {
+    const userId = userIdFor(c);
+    return c.json({
       tools: listCatalog(db, userId).map(catalogToolView),
       connectors: listConnectors(db, userId),
-    }),
-  );
+    });
+  });
 
   app.post("/api/catalog/:id/approve", (c) => {
+    const userId = userIdFor(c);
     const tool = approveCatalogTool(db, userId, c.req.param("id"));
     return c.json({ tool: catalogToolView(tool) });
   });
 
   app.get("/api/connectors/:id", (c) => {
+    const userId = userIdFor(c);
     const connector = listConnectors(db, userId).find((row) => row.id === c.req.param("id"));
     if (connector === undefined) return c.json({ error: "not_found" }, 404);
     return c.json({ connector });

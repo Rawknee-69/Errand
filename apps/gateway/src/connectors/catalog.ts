@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { and, eq } from "drizzle-orm";
+import type { IngestSummary } from "@errand/shared";
 import type { Db } from "../db/client.ts";
 import { canonicalJson } from "../db/journal.ts";
 import { scopedGet, scopedList } from "../db/scoped-reads.ts";
@@ -23,13 +24,7 @@ export type IngestOptions = {
   now?: string;
 };
 
-export type IngestSummary = {
-  new: number;
-  changed: number;
-  removed: number;
-  unchanged: number;
-  total: number;
-};
+export type { IngestSummary };
 
 export type CatalogTool = typeof tools.$inferSelect;
 

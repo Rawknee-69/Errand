@@ -54,7 +54,7 @@ beforeAll(() => {
     name: "search_pages",
     agentName: "notion__search_pages",
   });
-  app = createGatewayApp(db, { userId: "user-a" });
+  app = createGatewayApp(db, { userId: "user-a", auth: "disabled" });
   server = Bun.serve({ port: 0, fetch: app.fetch });
 });
 

@@ -72,7 +72,7 @@ describe("vault leak boundary", () => {
         payload: { tool: "notion__search", serviceId: "notion", status: 200 },
       });
 
-      const app = createGatewayApp(fixture.db);
+      const app = createGatewayApp(fixture.db, { auth: "disabled" });
       for (const route of app.routes.filter((candidate) => candidate.method === "GET")) {
         const response = await app.request(route.path);
         artifacts[`response ${route.path}`] = `${response.status} ${await response.text()}`;

@@ -5,12 +5,11 @@ import {
   type Tool,
   type Transport,
 } from "@modelcontextprotocol/client";
+import type { McpTransportKind } from "@errand/shared";
 import { DEFAULT_TIMEOUT_MS, EgressRefusal, egressRequest, type EgressOptions } from "../egress/guard.ts";
 import { authHeaders, type ConnectorAuth } from "./auth.ts";
 import type { DiscoveredTool } from "./catalog.ts";
 import type { ToolAnnotations } from "./classifier.ts";
-
-export type McpTransportKind = "streamable-http" | "sse";
 
 export type McpConnection = {
   transport: McpTransportKind;

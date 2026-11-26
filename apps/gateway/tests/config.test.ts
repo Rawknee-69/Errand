@@ -7,6 +7,7 @@ const keys = {
   VAULT_KEY: "v".repeat(32),
   HMAC_KEY: "h".repeat(32),
   JWT_SECRET: "j".repeat(32),
+  OWNER_PASSPHRASE: "correct horse battery staple",
 };
 
 describe("loadConfig", () => {
@@ -45,6 +46,13 @@ describe("loadConfig", () => {
     expect(message).toContain("VAULT_KEY");
     expect(message).toContain("HMAC_KEY");
     expect(message).toContain("JWT_SECRET");
+    expect(message).toContain("OWNER_PASSPHRASE");
+  });
+
+  test("rejects a passphrase shorter than 12 characters", () => {
+    expect(() => loadConfig({ ...keys, OWNER_PASSPHRASE: "short" })).toThrow(
+      /OWNER_PASSPHRASE.*12 characters/,
+    );
   });
 
   test("reads a custom port", () => {
@@ -54,6 +62,9 @@ describe("loadConfig", () => {
   test("defaults the dev egress flag off and limits the fetch surface", () => {
     expect(loadConfig({ ...keys })).toMatchObject({
       ALLOW_LOCALHOST_DEV: false,
+      DEMO_MODE: false,
+      SESSION_COOKIE_SECURE: true,
+      SESSION_TTL_HOURS: 12,
       EGRESS_TIMEOUT_MS: DEFAULT_TIMEOUT_MS,
       EGRESS_MAX_RESPONSE_BYTES: DEFAULT_MAX_RESPONSE_BYTES,
       MAX_CONNECTORS_PER_USER: DEFAULT_MAX_CONNECTORS_PER_USER,

@@ -1,6 +1,9 @@
 import { z } from "zod";
+import { connectorAuthInputSchema, type ConnectorAuthInput } from "@errand/shared";
 import type { ConnectorAuthType } from "../db/schema.ts";
 import { ConnectorError } from "./errors.ts";
+
+export { connectorAuthInputSchema, type ConnectorAuthInput };
 
 export type ConnectorAuth =
   | { type: "none" }
@@ -8,43 +11,6 @@ export type ConnectorAuth =
   | { type: "header"; headerName: string; value: string }
   | { type: "basic"; username: string; password: string }
   | { type: "oauth"; accessToken: string };
-
-export const headerNameSchema = z
-  .string()
-  .regex(/^[A-Za-z0-9-]+$/, "Header names may only contain letters, digits and hyphens")
-  .refine(
-    (name) =>
-      !["host", "content-length", "connection", "transfer-encoding", "authorization"].includes(
-        name.toLowerCase(),
-      ),
-    { message: "That header is managed by the gateway" },
-  );
-
-const connectorBase = {
-  name: z.string().min(1).max(120),
-  url: z.string().min(1),
-};
-
-// One schema and one switch per auth variant; adding a provider happens here,
-// not in the route, the vault adapter and the MCP client separately.
-export const connectorAuthInputSchema = z.discriminatedUnion("authType", [
-  z.object({ ...connectorBase, authType: z.literal("none") }),
-  z.object({ ...connectorBase, authType: z.literal("bearer"), token: z.string().min(1) }),
-  z.object({
-    ...connectorBase,
-    authType: z.literal("header"),
-    headerName: headerNameSchema,
-    headerValue: z.string().min(1),
-  }),
-  z.object({
-    ...connectorBase,
-    authType: z.literal("basic"),
-    username: z.string().min(1),
-    password: z.string().min(1),
-  }),
-]);
-
-export type ConnectorAuthInput = z.infer<typeof connectorAuthInputSchema>;
 
 export function toConnectorAuth(input: ConnectorAuthInput): ConnectorAuth {
   switch (input.authType) {
