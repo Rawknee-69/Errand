@@ -1,10 +1,12 @@
 import { CONNECTORS_PATH } from "@errand/shared";
 
 export type Screen =
+  | "demo"
   | "connect"
   | "connectors"
   | "catalog"
   | "slips"
+  | "trace"
   | "receipts"
   | "trust"
   | "journal"
@@ -21,6 +23,12 @@ type ScreenInfo = NavItem & {
 };
 
 const entries: ScreenInfo[] = [
+  {
+    screen: "demo",
+    path: "/demo",
+    label: "Demo",
+    title: "Live demo",
+  },
   {
     screen: "connect",
     path: "/connect",
@@ -44,6 +52,12 @@ const entries: ScreenInfo[] = [
     path: "/slips",
     label: "Slips",
     title: "Slips",
+  },
+  {
+    screen: "trace",
+    path: "/trace",
+    label: "Trace",
+    title: "Transparency",
   },
   {
     screen: "receipts",

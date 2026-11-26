@@ -1,0 +1,4 @@
+Browser console, owner window, http://127.0.0.1:5173/slips after the human run:
+one informational message only (React DevTools suggestion). No warnings, no errors.
+
+%cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold

@@ -5,6 +5,7 @@ import {
 import { z } from "zod";
 import type { McpTransportKind } from "@errand/shared";
 import type { ConnectorAuthType } from "../db/schema.ts";
+import { appendJournalEvent } from "../db/journal.ts";
 import { EgressRefusal } from "../egress/guard.ts";
 import { authSecrets, parseCredential, type ConnectorAuth } from "./auth.ts";
 import { createMcpTransport, type DiscoverOptions } from "./mcp.ts";
@@ -71,6 +72,13 @@ async function withConnectorAuth<T>(
   fn: (auth: ConnectorAuth) => Promise<T>,
 ): Promise<T> {
   if (authType === "none") return fn({ type: "none" });
+  // Record the use, never the value: the secret still exists only inside the
+  // vault callback below.
+  appendJournalEvent(deps.db, {
+    userId: deps.userId,
+    eventType: "vault.credential_used",
+    payload: { connector_id: connectorId, auth_type: authType, purpose: "connector_call" },
+  });
   if (authType === "oauth") {
     const accessToken = await refreshOAuthAccessToken(deps, connectorId);
     return fn({ type: "oauth", accessToken });

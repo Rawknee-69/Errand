@@ -1,0 +1,31 @@
+== 1. What the agent can name
+   calendar__create_event  [write]  Calendar: create event
+   calendar__list_events  [read]  Calendar: list events
+   hard ceilings: 50 calls, $200.00, 30 min
+
+== 2. Ask for a tool the human never exposed
+   refused: unknown_tool — calendar__delete_event is not requestable
+   the tool was never in the catalog, so the agent cannot route around it
+
+== 3. Request one scoped job
+   slip 7997918d-76bd-4e7f-96f6-a6de06a9d615: pending, tier=learner, calls=4, spend=$0.00
+   tools on it: calendar__list_events
+
+== 4. Human approval
+   waiting for the tap in the Slips screen (approve or deny)…
+   state=approved, calls remaining=4
+   capability issued — it admits this slip and nothing else
+
+== 5. Run inside the slip
+   calendar__list_events: state=forwarded, class=read
+   result: {"content":[{"type":"text","text":"[{\"id\":\"evt-1\",\"title\":\"Dinner with Sam\",\"start\":\"2026-12-01T19:00:00Z\"}]"}],"isError":false,"truncated":false,"originalBytes":140}
+   remaining: 3 calls
+
+== 6. Step outside the slip
+   refused: out_of_scope — calendar__create_event is not in slip 7997918d-76bd-4e7f-96f6-a6de06a9d615
+   the signed slip is the boundary, not a prompt instruction
+
+== 7. The journal
+   chain intact, 19 events checked
+
+VERDICT: demo pass

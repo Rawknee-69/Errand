@@ -482,3 +482,93 @@ export const errorResponseSchema = z.object({
   message: z.string().optional(),
 });
 export type ErrorResponse = z.infer<typeof errorResponseSchema>;
+
+export const agentCatalogToolSchema = z.object({
+  name: z.string(),
+  label: z.string(),
+  description: z.string(),
+  class: toolClassSchema,
+  connector: z.string(),
+});
+export type AgentCatalogTool = z.infer<typeof agentCatalogToolSchema>;
+
+export const hiddenToolReasonSchema = z.enum([
+  "not_requestable",
+  "definition_changed",
+  "definition_removed",
+  "decoy",
+]);
+export type HiddenToolReason = z.infer<typeof hiddenToolReasonSchema>;
+
+export const hiddenToolSchema = z.object({
+  name: z.string(),
+  label: z.string(),
+  connector: z.string(),
+  class: toolClassSchema,
+  reason: hiddenToolReasonSchema,
+});
+export type HiddenTool = z.infer<typeof hiddenToolSchema>;
+
+export const boundaryConnectorSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  url: z.string(),
+  authStatus: connectorAuthStatusSchema,
+  discovered: z.number().int().nonnegative(),
+  visible: z.number().int().nonnegative(),
+});
+export type BoundaryConnector = z.infer<typeof boundaryConnectorSchema>;
+
+export const boundaryCountsSchema = z.object({
+  connectors: z.number().int().nonnegative(),
+  discovered: z.number().int().nonnegative(),
+  visible: z.number().int().nonnegative(),
+  hidden: z.number().int().nonnegative(),
+  decoys: z.number().int().nonnegative(),
+  blocked: z.number().int().nonnegative(),
+  notRequestable: z.number().int().nonnegative(),
+});
+export type BoundaryCounts = z.infer<typeof boundaryCountsSchema>;
+
+export const boundaryLimitsSchema = z.object({
+  tools: z.number().int().positive(),
+  calls: z.number().int().positive(),
+  callsPerMinute: z.number().int().positive(),
+  spendCents: z.number().int().nonnegative(),
+  minutes: z.number().int().positive(),
+});
+export type BoundaryLimits = z.infer<typeof boundaryLimitsSchema>;
+
+export const boundarySchema = z.object({
+  connectors: z.array(boundaryConnectorSchema),
+  visible: z.array(agentCatalogToolSchema),
+  hidden: z.array(hiddenToolSchema),
+  counts: boundaryCountsSchema,
+  limits: boundaryLimitsSchema,
+});
+export type Boundary = z.infer<typeof boundarySchema>;
+
+export const traceCallSchema = z.object({
+  id: z.string(),
+  slipId: z.string(),
+  connectorId: z.string(),
+  tool: z.string(),
+  arguments: z.string(),
+  result: z.string().nullable(),
+  error: z.string().nullable(),
+  createdAt: z.string(),
+});
+export type TraceCall = z.infer<typeof traceCallSchema>;
+
+export const traceEventSchema = z.object({
+  seq: z.number().int().positive(),
+  eventType: z.string(),
+  createdAt: z.string(),
+  payload: feedPayloadSchema,
+  connectorName: z.string().nullable(),
+  call: traceCallSchema.nullable(),
+});
+export type TraceEvent = z.infer<typeof traceEventSchema>;
+
+export const traceResponseSchema = z.object({ events: z.array(traceEventSchema) });
+export type TraceResponse = z.infer<typeof traceResponseSchema>;

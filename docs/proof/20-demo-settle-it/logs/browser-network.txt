@@ -1,0 +1,5 @@
+Browser network, owner window, http://127.0.0.1:5173/slips after the human run:
+83 requests captured, 0 with status >= 400, 0 transport failures.
+
+The spend tap was a POST to /api/outbox/<id>/confirm; the live feed then received
+the confirmation and the receipt arrived without a refresh.

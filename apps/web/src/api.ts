@@ -3,6 +3,7 @@ import {
   agentKeyCreatedSchema,
   agentKeyListResponseSchema,
   agentKeyResponseSchema,
+  boundarySchema,
   catalogResponseSchema,
   catalogToolResponseSchema,
   connectorDetailSchema,
@@ -19,11 +20,13 @@ import {
   slipApprovedSchema,
   slipDetailSchema,
   slipListResponseSchema,
+  traceResponseSchema,
   trustListResponseSchema,
   undoApplyResponseSchema,
   type AgentKeyCreated,
   type AgentKeyListResponse,
   type AgentKeyResponse,
+  type Boundary,
   type CatalogResponse,
   type CatalogToolResponse,
   type ConnectorAuthInput,
@@ -42,6 +45,7 @@ import {
   type SlipDetail,
   type SlipListResponse,
   type ToolClass,
+  type TraceResponse,
   type TrustCaps,
   type TrustListResponse,
   type UndoApplyResponse,
@@ -110,6 +114,12 @@ export const api = {
   },
   catalog(): Promise<CatalogResponse> {
     return send(catalogResponseSchema, "/api/catalog", "GET");
+  },
+  boundary(): Promise<Boundary> {
+    return send(boundarySchema, "/api/boundary", "GET");
+  },
+  trace(): Promise<TraceResponse> {
+    return send(traceResponseSchema, "/api/trace?limit=300", "GET");
   },
   refreshConnector(id: string): Promise<ConnectorDetail> {
     return send(connectorDetailSchema, `/api/connectors/${id}/refresh`, "POST", {});

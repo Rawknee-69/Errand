@@ -1,4 +1,5 @@
 import {
+  boundarySchema,
   CONNECTORS_PATH,
   escapeHtml,
   outboxItemResponseSchema,
@@ -21,6 +22,7 @@ import { z } from "zod";
 import { Hono, type Context } from "hono";
 import { streamSSE } from "hono/streaming";
 import gatewayPackage from "../package.json" with { type: "json" };
+import { boundaryView } from "./agent/catalog.ts";
 import { AGENT_PATH, createAgentHandler } from "./agent/mcp.ts";
 import { createForwarder } from "./agent/forward.ts";
 import { registerAuth, requestUserId, type AuthOptions, type GatewayEnv } from "./auth/api.ts";
@@ -58,6 +60,7 @@ import { approveSlip, denySlip, SlipError } from "./slips/approval.ts";
 import { getSlipDetail, listSlipSummaries } from "./slips/view.ts";
 import { applyUndo, getReceiptView, listReceiptViews } from "./receipts/receipts.ts";
 import { acceptLicense, listTrustViews, TrustError } from "./policy/trust.ts";
+import { traceView } from "./trace/view.ts";
 import { streamFeed, type FeedStreamOptions } from "./feed/stream.ts";
 import { OutboxError } from "./outbox/service.ts";
 
@@ -82,6 +85,7 @@ export type GatewayAppOptions = {
 };
 
 const probeSchema = z.object({ url: z.string().min(1) });
+const traceLimitSchema = z.coerce.number().int().min(1).max(500).default(300);
 const agentKeyCreateSchema = z.object({ name: z.string().trim().min(1).max(64) });
 const slipDenySchema = z.object({ reason: z.string().max(500).optional() }).strict();
 const feedCursorSchema = z
@@ -480,6 +484,17 @@ export function createGatewayApp(
       tools: listCatalog(db, userId).map(catalogToolView),
       connectors: listConnectors(db, userId),
     });
+  });
+
+  app.get("/api/boundary", (c) => {
+    const userId = userIdFor(c);
+    return c.json(boundarySchema.parse(boundaryView(db, userId)));
+  });
+
+  app.get("/api/trace", (c) => {
+    const userId = userIdFor(c);
+    const limit = traceLimitSchema.parse(c.req.query("limit"));
+    return c.json(traceView(db, userId, limit));
   });
 
   app.post("/api/catalog/:id/approve", (c) => {

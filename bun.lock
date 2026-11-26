@@ -5,9 +5,11 @@
     "": {
       "name": "errand",
       "devDependencies": {
+        "@modelcontextprotocol/client": "2.4.0",
         "@types/bun": "1.4.5",
         "playwright-core": "1.65.1",
         "typescript": "7.0.2",
+        "zod": "4.6.7",
       },
     },
     "apps/gateway": {
@@ -35,6 +37,9 @@
         "@errand/shared": "workspace:*",
         "@modelcontextprotocol/server": "2.4.0",
         "zod": "4.6.7",
+      },
+      "devDependencies": {
+        "@modelcontextprotocol/client": "2.4.0",
       },
     },
     "apps/web": {

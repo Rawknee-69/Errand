@@ -5,8 +5,10 @@ import type { Screen } from "./navigation.ts";
 import { useScreen } from "./useScreen.ts";
 import { Login } from "./screens/Login.tsx";
 import { Shell } from "./screens/Shell.tsx";
+import { Demo } from "./screens/Demo.tsx";
 import { Connect } from "./screens/Connect.tsx";
 import { Catalog } from "./screens/Catalog.tsx";
+import { Trace } from "./screens/Trace.tsx";
 import { Connectors } from "./screens/Connectors.tsx";
 import { Slips } from "./screens/Slips.tsx";
 import { Receipts } from "./screens/Receipts.tsx";
@@ -52,7 +54,7 @@ export function App() {
         demoMode={session?.demoMode ?? false}
         onSession={(view) => {
           setSession(view);
-          if (view.authenticated) navigate("connect");
+          if (view.authenticated) navigate("demo");
         }}
       />
     );
@@ -65,10 +67,12 @@ export function App() {
 
   const openConnect = () => navigate("connect");
   const screens: Record<Screen, ReactNode> = {
+    demo: <Demo user={session.user} onNavigate={navigate} />,
     connect: <Connect onOpenCatalog={() => navigate("catalog")} />,
     catalog: <Catalog onOpenConnect={openConnect} />,
     connectors: <Connectors onOpenConnect={openConnect} />,
     slips: <Slips />,
+    trace: <Trace />,
     receipts: <Receipts />,
     trust: <Trust />,
     journal: <Journal />,

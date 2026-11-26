@@ -1,12 +1,14 @@
 import { useState, type FormEvent } from "react";
 import type {
   AgentKeyCreated,
+  AuthHint,
   ConnectorAuthInput,
   ConnectorAuthType,
   ConnectorDetail,
   McpTransportKind,
   ProbeResult,
 } from "@errand/shared";
+import { rememberAgentKey } from "../agentKeyStore.ts";
 import { api, errorMessage } from "../api.ts";
 import { AgentKeyPanel } from "../components/AgentKeyPanel.tsx";
 
@@ -24,6 +26,19 @@ const AUTH_LABELS: Array<{ type: SelectableAuth; label: string }> = [
   { type: "header", label: "Custom header" },
   { type: "basic", label: "Basic" },
 ];
+
+const AUTH_HINT_LABEL: Record<AuthHint, string> = {
+  bearer: "a bearer token",
+  basic: "a username and password",
+  header: "a custom header",
+  oauth: "a browser sign-in (OAuth)",
+};
+
+const KNOWN_SERVERS = [
+  { name: "Notion", url: "https://mcp.notion.com/mcp" },
+  { name: "Linear", url: "https://mcp.linear.app/mcp" },
+  { name: "Mock calendar (offline)", url: "http://127.0.0.1:4001/calendar/mcp" },
+] as const;
 
 function AuthChip(props: {
   type: ConnectorAuthType;
@@ -137,7 +152,9 @@ export function Connect({ onOpenCatalog }: Props) {
     setBusy(true);
     setError(null);
     try {
-      setIssued(await api.issueAgentKey(`${result.connector.name} agent`.slice(0, 64)));
+      const next = await api.issueAgentKey(`${result.connector.name} agent`.slice(0, 64));
+      rememberAgentKey(next);
+      setIssued(next);
     } catch (caught) {
       setError(errorMessage(caught));
     } finally {
@@ -181,6 +198,26 @@ export function Connect({ onOpenCatalog }: Props) {
 
       {step === "url" && (
         <form className="panel stack" onSubmit={checkServer}>
+          <div className="chips" role="group" aria-label="Known MCP servers">
+            {KNOWN_SERVERS.map((server) => (
+              <button
+                key={server.name}
+                type="button"
+                className={url === server.url ? "chip is-selected" : "chip"}
+                onClick={() => {
+                  setUrl(server.url);
+                  setName(server.name);
+                  setError(null);
+                }}
+              >
+                {server.name}
+              </button>
+            ))}
+          </div>
+          <p className="hint">
+            Notion and Linear finish in a browser sign-in. The local calendar is the offline
+            fallback for a demo without network.
+          </p>
           <label className="field">
             <span>MCP server URL</span>
             <input
@@ -226,7 +263,7 @@ export function Connect({ onOpenCatalog }: Props) {
             <p className="probe-name">{serverName()}</p>
             <p className="hint">
               {probe.requiresAuth
-                ? `Protected — it asks for ${probe.authHint ?? "a credential"}.`
+                ? `Protected — it asks for ${probe.authHint === null ? "a credential" : AUTH_HINT_LABEL[probe.authHint]}.`
                 : "Open — no credential required."}{" "}
               {probe.transport !== null && `${transportLabel(probe.transport)} · `}
               {probe.toolCount} {probe.toolCount === 1 ? "tool" : "tools"}
@@ -265,7 +302,9 @@ export function Connect({ onOpenCatalog }: Props) {
               ))}
             </div>
             {probe.authHint !== null && (
-              <p className="hint">The server's challenge suggests {probe.authHint}.</p>
+              <p className="hint">
+                The server's challenge suggests {AUTH_HINT_LABEL[probe.authHint]}.
+              </p>
             )}
             {authType === "oauth" && (
               <p className="hint">

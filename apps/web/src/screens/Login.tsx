@@ -10,7 +10,7 @@ type Props = {
 export function Login({ demoMode, onSession }: Props) {
   const [mode, setMode] = useState<"owner" | "demo">("owner");
   const [passphrase, setPassphrase] = useState("");
-  const [name, setName] = useState("");
+  const [name, setName] = useState("Demo");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
