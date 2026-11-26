@@ -54,5 +54,25 @@ point where the code pretends to know it.
   or a type guard before any property is read.
 - No type assertions to bypass a mismatch. Fix the type at its source; if a
   library's types are wrong, isolate the correction in one adapter.
-- `bun run typecheck` includes the check, so a violation fails the build.
-  See `docs/adr/0001-ban-any.md`.
+- `bun run typecheck` runs `scripts/check.ts`, which discovers every check in
+  `scripts/checks/`. A violation fails the build. See `docs/adr/0001-ban-any.md`.
+
+### Corrections become checks
+
+A correction is a check, never a new paragraph. Adding a line to this file does
+not prevent the mistake recurring, and a future agent can quote it back.
+
+When review finds a mistake:
+
+1. **Can a machine detect it?** Add `scripts/checks/<name>.ts` exporting `name`
+   and `run()`. The runner discovers it; do not edit the runner. The check's
+   header names the correction that created it.
+2. **Can the type system express it?** Make it a type, a branded type or a
+   schema, so the mistake stops compiling.
+3. **Neither?** Restructure the code until the mistake is impossible. Prose is
+   for direction, not enforcement.
+
+Comments are not a place to store fixes. A note saying "quick fix" or "for now"
+is a bug that outlives its author, and the next change gets built on top of it.
+Write the fix in code; if a comment is needed to explain a decision, the code
+is not yet clear enough.
