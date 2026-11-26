@@ -54,7 +54,7 @@ bun test v1.4.4 (38afee6c8)
 Ran 344 tests across 42 files. [7.91s]
 ```
 
-## Proven
+## Proof
 
 - Notion's official endpoint (`https://mcp.notion.com/mcp`) and Linear's
   (`https://mcp.linear.app/mcp`) both answer 401 with `resource_metadata`; the
