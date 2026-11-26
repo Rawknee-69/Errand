@@ -16,9 +16,11 @@
     "demo:start": "bun scripts/demo-up.ts",
     "demo:stop": "bun scripts/demo-stop.ts",
     "demo:seed": "bun scripts/demo-seed.ts",
-    "demo:agent": "bun scripts/demo-agent.ts"
+    "demo:agent": "bun scripts/demo-agent.ts",
+    "demo:settle": "bun scripts/demo-settle-it.ts"
   },
   "devDependencies": {
+    "@modelcontextprotocol/client": "2.4.0",
     "@types/bun": "1.4.5",
     "playwright-core": "1.65.1",
     "typescript": "7.0.2",

@@ -118,9 +118,6 @@ export const api = {
   boundary(): Promise<Boundary> {
     return send(boundarySchema, "/api/boundary", "GET");
   },
-  journalVerify(): Promise<JournalVerify> {
-    return send(journalVerifySchema, "/api/journal/verify", "GET");
-  },
   trace(): Promise<TraceResponse> {
     return send(traceResponseSchema, "/api/trace?limit=300", "GET");
   },

@@ -116,6 +116,81 @@ async function verifyDeleteEvent(input: VerificationInput): Promise<Verification
   };
 }
 
+const paymentLinkSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  cents: z.number().int().nonnegative(),
+  url: z.string(),
+  restaurant: z.string(),
+});
+const paymentLinksResultSchema = z.object({
+  restaurant: z.string(),
+  totalCents: z.number().int().nonnegative(),
+  links: z.array(paymentLinkSchema),
+});
+const paymentLinkListSchema = z.object({ links: z.array(paymentLinkSchema) });
+
+async function verifyPaymentLinks(input: VerificationInput): Promise<Verification> {
+  const created = paymentLinksResultSchema.safeParse(jsonOf(input.result));
+  if (!created.success) {
+    return {
+      verification: "mismatched",
+      summary: "The payment service returned links that could not be read.",
+    };
+  }
+  const listed = paymentLinkListSchema.safeParse(
+    jsonOf(await input.read("list_split_links", {})),
+  );
+  if (!listed.success) {
+    return {
+      verification: "unverified",
+      summary: "The links were created, but the payment service could not be read back.",
+    };
+  }
+  const missing = created.data.links.filter(
+    (link) =>
+      !listed.data.links.some(
+        (stored) =>
+          stored.id === link.id &&
+          stored.cents === link.cents &&
+          stored.name === link.name &&
+          stored.restaurant === created.data.restaurant,
+      ),
+  );
+  const listedTotal = listed.data.links
+    .filter((stored) => created.data.links.some((link) => link.id === stored.id))
+    .reduce((sum, stored) => sum + stored.cents, 0);
+  if (missing.length > 0 || listedTotal !== created.data.totalCents) {
+    return {
+      verification: "mismatched",
+      summary: `The payment service accepted ${created.data.links.length} split links, but reading them back did not match the restaurant, names, shares or total.`,
+    };
+  }
+  const total = (created.data.totalCents / 100).toFixed(2);
+  return {
+    verification: "matched",
+    summary: `Created ${created.data.links.length} split payment links for ${created.data.restaurant} totalling $${total} and read them back.`,
+  };
+}
+
+const paymentAdapter: VerifierAdapter = {
+  name: "mock-pay",
+  matches(connectorUrl) {
+    try {
+      return /\/pay\/mcp$/.test(new URL(connectorUrl).pathname);
+    } catch {
+      return false;
+    }
+  },
+  async verify(input) {
+    if (input.tool === "create_payment_links") return verifyPaymentLinks(input);
+    return {
+      verification: "unverified",
+      summary: `The payment service has no verifier for ${input.tool}, so this change is unverified.`,
+    };
+  },
+};
+
 const calendarAdapter: VerifierAdapter = {
   name: "mock-calendar",
   matches(connectorUrl) {
@@ -135,7 +210,7 @@ const calendarAdapter: VerifierAdapter = {
   },
 };
 
-const adapters: VerifierAdapter[] = [calendarAdapter];
+const adapters: VerifierAdapter[] = [calendarAdapter, paymentAdapter];
 
 export function adapterFor(connectorUrl: string): VerifierAdapter | undefined {
   return adapters.find((adapter) => adapter.matches(connectorUrl));

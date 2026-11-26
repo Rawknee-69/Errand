@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
+import { humanClient } from "./demo-shared.ts";
 import {
   agentKeyCreatedSchema,
   boundarySchema,
@@ -34,15 +35,7 @@ if (!login.ok) throw new Error(`owner login failed: ${login.status} ${await logi
 const cookie = login.headers.get("set-cookie")?.split(";")[0];
 if (cookie === undefined) throw new Error("owner login did not set a cookie");
 
-async function human<T>(schema: z.ZodType<T>, path: string, init: RequestInit = {}): Promise<T> {
-  const response = await fetch(`${base}${path}`, {
-    ...init,
-    headers: { "content-type": "application/json", cookie, ...(init.headers ?? {}) },
-  });
-  const body: unknown = await response.json();
-  if (!response.ok) throw new Error(`${path} -> ${response.status} ${JSON.stringify(body)}`);
-  return schema.parse(body);
-}
+const human = humanClient(base, cookie);
 
 console.log("1. Connectors");
 const listed = await human(

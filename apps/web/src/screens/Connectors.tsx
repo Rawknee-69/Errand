@@ -34,6 +34,15 @@ function hostOf(url: string): string {
   }
 }
 
+function isMock(url: string): boolean {
+  try {
+    const host = new URL(url).hostname;
+    return host === "127.0.0.1" || host === "localhost" || host === "::1";
+  } catch {
+    return false;
+  }
+}
+
 function toolCounts(data: CatalogResponse | null, connectorId: string) {
   const rows = toolsForConnector(data?.tools ?? [], connectorId);
   return { total: rows.length, blocked: blockedToolCount(rows) };
@@ -125,8 +134,11 @@ export function Connectors({ onOpenConnect }: Props) {
           <article key={connector.id} className="panel connector-card">
             <div className="result-head">
               <h2>{connector.name}</h2>
-              <span className={statusClass(connector.authStatus)}>
-                {STATUS_LABELS[connector.authStatus]}
+              <span className="badge-row">
+                {isMock(connector.url) && <span className="badge muted">Mock</span>}
+                <span className={statusClass(connector.authStatus)}>
+                  {STATUS_LABELS[connector.authStatus]}
+                </span>
               </span>
             </div>
             <p className="hint mono">{hostOf(connector.url)}</p>

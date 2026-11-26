@@ -4,7 +4,7 @@ import type {
   AuthUser,
   Boundary,
   HiddenToolReason,
-  JournalVerify,
+  JournalVerifyResponse,
   SlipSummary,
 } from "@errand/shared";
 import { rememberAgentKey, useAgentKeys } from "../agentKeyStore.ts";
@@ -80,7 +80,7 @@ export function Demo({ user, onNavigate }: Props) {
   const [slips, setSlips] = useState<SlipSummary[]>([]);
   const [keyList, setKeyList] = useState<AgentKeyView[]>([]);
   const [job, setJob] = useState<Job>(CALENDAR_JOB);
-  const [verify, setVerify] = useState<JournalVerify | null>(null);
+  const [verify, setVerify] = useState<JournalVerifyResponse | null>(null);
   const storedKeys = useAgentKeys();
   const issued = storedKeys[0] ?? null;
   const [busy, setBusy] = useState(false);
@@ -126,7 +126,7 @@ export function Demo({ user, onNavigate }: Props) {
     setBusy(true);
     setError(null);
     try {
-      setVerify(await api.journalVerify());
+      setVerify(await api.verifyJournal());
     } catch (caught) {
       setError(errorMessage(caught));
     } finally {

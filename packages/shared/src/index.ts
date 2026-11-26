@@ -548,16 +548,6 @@ export const boundarySchema = z.object({
 });
 export type Boundary = z.infer<typeof boundarySchema>;
 
-export const journalVerifySchema = z.union([
-  z.object({ ok: z.literal(true), checked: z.number().int().nonnegative() }),
-  z.object({
-    ok: z.literal(false),
-    checked: z.number().int().nonnegative(),
-    firstBrokenSeq: z.number().int().positive(),
-  }),
-]);
-export type JournalVerify = z.infer<typeof journalVerifySchema>;
-
 export const traceCallSchema = z.object({
   id: z.string(),
   slipId: z.string(),

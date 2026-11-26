@@ -129,6 +129,51 @@ Four cards on **Demo**, all live:
 End by showing the journal after the demo: every request, approval, allowed call
 and denial is an event.
 
+## The Settle It run
+
+One script drives the whole story: three friends, their own read-only slips, a
+shared dinner time, a restaurant search, split payment links behind a human tap,
+a poisoned email that burns a slip, and a learner-to-license promotion followed
+by a bad-receipt demotion.
+
+```sh
+bun run demo:up          # in one terminal
+bun run demo:settle      # in another; approve each friend's slip in the panel
+```
+
+- The three friends are demo guests `Alice`, `Bob` and `Cara`. Each has her own
+  calendar mock (a different bearer token), her own agent key, and approves her
+  own child slip. The coordinator script acts as the coordinator agent: it holds
+  each friend's agent key only long enough to open that friend's session and
+  request one child slip through it. It never receives a friend's upstream
+  credential. There is no cross-user parent slip in the model.
+- The shared hour is computed from the three calendars inside the 18:00–21:00
+  dinner window, so it matches the restaurant's opening time.
+- The restaurant search and the split payment links run through the owner's
+  agent key. The payment call stops at `needs_human`; **Confirm spend** in
+  **Slips** is the human tap. The receipt is read back from the mock payment
+  service and must be `matched`.
+- The inbox carries a poisoned message. The script plays the hijacked agent,
+  follows it to `export_all_contacts`, and the slip burns (`decoy`). **Slips**
+  and the live feed show the burned state.
+- Five clean `calendar__create_event` runs earn the license offer; accepting it
+  shows `tier: license`. The mock calendar is then set to drop writes, a
+  licensed create produces a `mismatched` receipt, and the same errand type
+  returns to `learner` with `cleanRuns: 0`.
+
+Rehearsal flags:
+
+```sh
+bun run demo:settle -- --auto-approve            # approvals via each friend's own session
+bun run demo:settle -- --auto-approve --tap-spend
+```
+
+`--tap-spend` still prints the `needs_human` hold before it confirms; it exists
+so the run is repeatable without a browser. On stage, leave both flags off.
+
+Everything in this run reaches `127.0.0.1` mock services. The script refuses a
+non-loopback gateway or mock URL, and no real order, payment or trade is made.
+
 ## Offline path (network failure plan)
 
 `demo:seed` connects the local mock calendar over its secured path (the token
@@ -160,10 +205,14 @@ On stage, drop `--auto-approve`: the script waits while you approve in
 - Notion and Linear are real remote MCP servers; Google Calendar is a local
   mock and the UI labels the connector as mock.
 - No real payments, orders or trades run.
-- Receipts, Trust, Journal and Keys screens are still placeholders on this
-  branch; the Demo screen carries the live journal check and key issuance.
-- Do not demo a decoy burn: the current policy rejects decoy calls but the burn
-  path is not wired on this branch. Show the `out_of_scope` denial instead.
+- The split payment links are created against the mock payment service; nothing
+  is charged. The receipt says `matched` because the mock links are read back,
+  not because money moved.
+- The three friends' calendars are mocks with different bearer tokens; the UI
+  labels the connector as mock. Only Notion and Linear are real remote servers.
+- The coordinator is a script, not a separate gateway feature: three child
+  slips are three independent slips, one per friend, requested through that
+  friend's key.
 
 ## If something is wrong
 

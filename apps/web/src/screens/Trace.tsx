@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import type { JournalVerify, TraceEvent, TraceResponse } from "@errand/shared";
+import type { JournalVerifyResponse, TraceEvent, TraceResponse } from "@errand/shared";
 import { api, errorMessage } from "../api.ts";
 import { describeTraceEvent, familyOf, prettyJson, TRACE_FAMILIES, type TraceFamily } from "../trace.ts";
 import { useLiveFeed } from "../useLiveFeed.ts";
@@ -51,7 +51,7 @@ function EventRow({ event }: { event: TraceEvent }) {
 export function Trace() {
   const [trace, setTrace] = useState<TraceResponse | null>(null);
   const [family, setFamily] = useState<TraceFamily>("all");
-  const [verify, setVerify] = useState<JournalVerify | null>(null);
+  const [verify, setVerify] = useState<JournalVerifyResponse | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -78,7 +78,7 @@ export function Trace() {
   async function runVerify() {
     setBusy(true);
     try {
-      setVerify(await api.journalVerify());
+      setVerify(await api.verifyJournal());
     } catch (caught) {
       setError(errorMessage(caught));
     } finally {

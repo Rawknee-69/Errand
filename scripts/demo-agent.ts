@@ -1,8 +1,9 @@
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
-import { journalVerifySchema } from "../packages/shared/src/index.ts";
+import { journalVerifyResponseSchema } from "../packages/shared/src/index.ts";
 import { callTool, connectAgent } from "../apps/gateway/tests/agent/mcp-client.ts";
+import { humanClient, section } from "./demo-shared.ts";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
 const autoApprove = Bun.argv.includes("--auto-approve");
@@ -72,20 +73,7 @@ const slipDetailSchema = z
   .object({ card: z.object({ trims: z.array(z.unknown()) }).passthrough() })
   .passthrough();
 
-function section(title: string): void {
-  console.log("");
-  console.log(`== ${title}`);
-}
-
-async function human<T>(schema: z.ZodType<T>, path: string, init: RequestInit = {}): Promise<T> {
-  const response = await fetch(`${state.base}${path}`, {
-    ...init,
-    headers: { "content-type": "application/json", cookie, ...(init.headers ?? {}) },
-  });
-  const body: unknown = await response.json();
-  if (!response.ok) throw new Error(`${path} -> ${response.status} ${JSON.stringify(body)}`);
-  return schema.parse(body);
-}
+const human = humanClient(state.base, cookie);
 
 const agent = await connectAgent(state.base, state.key);
 
@@ -191,7 +179,9 @@ try {
   console.log("   the signed slip is the boundary, not a prompt instruction");
 
   section("7. The journal");
-  const verified = journalVerifySchema.parse(await human(journalVerifySchema, "/api/journal/verify", {}));
+  const verified = journalVerifyResponseSchema.parse(
+    await human(journalVerifyResponseSchema, "/api/journal/verify", {}),
+  );
   console.log(
     verified.ok
       ? `   chain intact, ${verified.checked} events checked`

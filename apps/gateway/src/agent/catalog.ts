@@ -1,4 +1,5 @@
 import {
+  AGENT_LIMITS,
   isToolExposed,
   type AgentCatalogTool,
   type Boundary,
@@ -10,7 +11,6 @@ import { listConnectors } from "../db/scoped-reads.ts";
 import { sanitiseDescription } from "../connectors/sanitise.ts";
 import { isDecoyToolName } from "../policy/decoys.ts";
 import { labelFor } from "../connectors/labels.ts";
-import { AGENT_LIMITS } from "./limits.ts";
 
 export type { AgentCatalogTool };
 
