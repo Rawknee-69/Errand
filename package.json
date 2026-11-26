@@ -11,10 +11,19 @@
     "typecheck": "bun run --filter '*' typecheck && bun run scripts/check.ts",
     "dev:gateway": "bun run --cwd apps/gateway dev",
     "dev:web": "bun run --cwd apps/web dev",
-    "dev:mock-services": "bun run --cwd apps/mock-services dev"
+    "dev:mock-services": "bun run --cwd apps/mock-services dev",
+    "demo:up": "bun scripts/demo-up.ts",
+    "demo:start": "bun scripts/demo-up.ts",
+    "demo:stop": "bun scripts/demo-stop.ts",
+    "demo:seed": "bun scripts/demo-seed.ts",
+    "demo:agent": "bun scripts/demo-agent.ts",
+    "demo:settle": "bun scripts/demo-settle-it.ts"
   },
   "devDependencies": {
+    "@modelcontextprotocol/client": "2.4.0",
     "@types/bun": "1.4.5",
-    "typescript": "7.0.2"
+    "playwright-core": "1.65.1",
+    "typescript": "7.0.2",
+    "zod": "4.6.7"
   }
 }

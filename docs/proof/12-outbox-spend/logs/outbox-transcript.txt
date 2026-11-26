@@ -1,0 +1,34 @@
+
+== log in as the owner
+{"authenticated":true}
+
+== create the agent key and connect the Pay mock
+agent key 0d3a70f1-279c-4146-a6e8-ac665fc52708; one URL http://127.0.0.1:8843/mcp
+pay connector 2a0f5212-fe82-4367-a34a-04cfd95684c6
+
+== stream the live feed from the start of the journal
+
+== a send is held, then the real 30-second window closes and the worker releases it
+held eb616eac-809e-4cf4-bed6-25063eb94976; releaseAt 2026-11-26T12:00:12.265Z; no calls row; callsUsed 1
+released after the hold; state released; call rows 1; result {"content":[{"type":"text","text":"{\"sent\":\"rcpt-proof\"}"}],"isError":false,"truncated":false,"originalBytes":80}
+
+== a second send is cancelled inside the window and never fires
+cancelled 8cdd5dd6-f8c5-4ffa-a158-d4ecb0428372; state cancelled; call rows 0; callsUsed 0
+
+== a spend returns needs_human until a separate human tap, on both tiers
+learner spend 51fcf5c1-393b-4816-babc-8981ce877c70: needs_human, nothing moved
+learner spend confirmed; state confirmed; call rows 1; result {"content":[{"type":"text","text":"{\"chargeId\":\"ch-1\",\"cents\":1250}"}],"isError":false,"truncated":false,"originalBytes":93}
+license spend 3c31b2da-1b71-4c46-9dc2-9cfee0224e0b: needs_human even on the license tier
+license spend denied; state cancelled; call rows 0; spendUsed 0
+
+== an outbox item past its expiry never fires
+expired be15f9ad-07fe-4341-b1bc-18c449a0a12f; state expired; call rows 0 after 32s; callsUsed 0
+
+== the outbox list and the live feed
+outbox list: [{"id":"be15f9ad-07fe-4341-b1bc-18c449a0a12f","slipId":"3512c010-6eda-415d-9e7a-647672900dc7","goal":"Send the receipt","tool":"pay__send_receipt","connectorName":"Pay","toolClass":"send","state":"expired","amountCents":0,"releaseAt":"2026-01-01T00:00:00.000Z","expiresAt":"2026-01-01T00:00:01.000Z","reason":"expired","createdAt":"2026-11-26T12:00:44.735Z"},{"id":"3c31b2da-1b71-4c46-9dc2-9cfee0224e0b","slipId":"0420f78c-dd50-48d7-9081-94962a85627a","goal":"Pay the invoice","tool":"pay__charge_card","connectorName":"Pay","toolClass":"spend","state":"cancelled","amountCents":4400,"releaseAt":null,"expiresAt":"2026-11-26T12:05:44.709Z","reason":"human_cancelled","createdAt":"2026-11-26T12:00:44.709Z"},{"id":"51fcf5c1-393b-4816-babc-8981ce877c70","slipId":"3f452d2b-5426-47ac-a3c5-8d3744c29c55","goal":"Pay the invoice","tool":"pay__charge_card","connectorName":"Pay","toolClass":"spend","state":"confirmed","amountCents":1250,"releaseAt":null,"expiresAt":"2026-11-26T12:05:44.648Z","reason":null,"createdAt":"2026-11-26T12:00:44.648Z"},{"id":"8cdd5dd6-f8c5-4ffa-a158-d4ecb0428372","slipId":"604289d7-49b6-4899-9bbd-e47b35e47365","goal":"Send the receipt","tool":"pay__send_receipt","connectorName":"Pay","toolClass":"send","state":"cancelled","amountCents":0,"releaseAt":"2026-11-26T12:00:42.606Z","expiresAt":"2026-11-26T12:00:47.606Z","reason":"human_cancelled","createdAt":"2026-11-26T12:00:12.606Z"},{"id":"eb616eac-809e-4cf4-bed6-25063eb94976","slipId":"940191ac-bc87-4ecf-a867-9f9748e38ff2","goal":"Send the receipt","tool":"pay__send_receipt","connectorName":"Pay","toolClass":"send","state":"released","amountCents":0,"releaseAt":"2026-11-26T12:00:12.265Z","expiresAt":"2026-11-26T12:00:17.265Z","reason":null,"createdAt":"2026-11-26T11:59:42.265Z"}]
+live feed carried held, released, cancelled, needs_human, confirmed, completed and expired frames
+
+== verify the journal chain
+{"ok":true,"checked":30}
+
+proof drive complete

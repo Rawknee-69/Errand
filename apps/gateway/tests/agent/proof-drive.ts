@@ -5,6 +5,7 @@ import { createMigratedDatabase } from "../../src/db/client.ts";
 import { connectors, tools, users } from "../../src/db/schema.ts";
 import { issueAgentKey } from "../../src/vault/agent-keys.ts";
 import { callTool, connectAgent } from "./mcp-client.ts";
+import { parse, step } from "../support/proof-drive.ts";
 
 const base = process.argv[2] ?? "http://127.0.0.1:8828";
 const databasePath = process.argv[3] ?? "docs/proof/08-agent-keys-catalog/proof.db";
@@ -18,16 +19,6 @@ const keyResponse = z.object({
 });
 const connectorResponse = z.object({ connector: z.object({ id: z.string() }) });
 const connectorList = z.object({ connectors: z.array(z.object({ id: z.string() })) });
-
-function step(name: string): void {
-  console.log(`\n== ${name}`);
-}
-
-async function parse<T>(response: Response, schema: z.ZodType<T>): Promise<T> {
-  const text = await response.text();
-  assert.ok(response.ok, `${response.url} returned ${response.status}: ${text}`);
-  return schema.parse(JSON.parse(text));
-}
 
 step("create the agent key (shown once)");
 const created = await parse(
@@ -149,17 +140,44 @@ console.log(JSON.stringify(status, null, 2));
 assert.equal((status as { state: string }).state, "pending");
 
 step("errand_call is denied before approval and never reaches upstream");
-const run = (await callTool(owner, "errand_call", { slip_id: slipId, tool: "calendar__list_events" })).body;
-console.log(JSON.stringify(run, null, 2));
-assert.equal((run as { state: string }).state, "not_forwarded");
+const early = await callTool(owner, "errand_call", {
+  slip_id: slipId,
+  tool: "calendar__list_events",
+  capability: "cap_not-issued-yet",
+});
+console.log(JSON.stringify({ isError: early.result.isError, body: early.body }, null, 2));
+assert.equal(early.result.isError, true);
+assert.equal((early.body as { error: string }).error, "not_approved");
 
-step("errand_call for a tool outside the slip is refused");
+step("approve, then call inside and outside the slip");
+await parse(
+  await fetch(`${base}/api/slips/${slipId}/approve`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({}),
+  }),
+  z.object({ slip: z.object({ state: z.string() }) }),
+);
+const approvedStatus = (await callTool(owner, "errand_status", { slip_id: slipId })).body;
+const capability = (approvedStatus as { capability: string }).capability;
+assert.match(capability, /^cap_/);
+
 const offSlip = await callTool(owner, "errand_call", {
   slip_id: slipId,
   tool: "calendar__delete_event",
+  capability,
 });
 console.log(JSON.stringify({ isError: offSlip.result.isError, body: offSlip.body }, null, 2));
 assert.equal(offSlip.result.isError, true);
+assert.equal((offSlip.body as { error: string }).error, "out_of_scope");
+
+const run = await callTool(owner, "errand_call", {
+  slip_id: slipId,
+  tool: "calendar__list_events",
+  capability,
+});
+console.log(JSON.stringify(run.body, null, 2));
+assert.equal((run.body as { state: string }).state, "not_forwarded");
 await owner.close();
 
 step("the friend's key sees only the friend's connector");

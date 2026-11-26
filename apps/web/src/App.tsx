@@ -1,12 +1,20 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import type { SessionView } from "@errand/shared";
 import { api } from "./api.ts";
-import { placeholderFor } from "./navigation.ts";
+import type { Screen } from "./navigation.ts";
 import { useScreen } from "./useScreen.ts";
 import { Login } from "./screens/Login.tsx";
 import { Shell } from "./screens/Shell.tsx";
+import { Demo } from "./screens/Demo.tsx";
 import { Connect } from "./screens/Connect.tsx";
-import { Placeholder } from "./screens/Placeholder.tsx";
+import { Catalog } from "./screens/Catalog.tsx";
+import { Trace } from "./screens/Trace.tsx";
+import { Connectors } from "./screens/Connectors.tsx";
+import { Slips } from "./screens/Slips.tsx";
+import { Receipts } from "./screens/Receipts.tsx";
+import { Trust } from "./screens/Trust.tsx";
+import { Journal } from "./screens/Journal.tsx";
+import { Keys } from "./screens/Keys.tsx";
 
 export function App() {
   const [session, setSession] = useState<SessionView | null>(null);
@@ -46,7 +54,7 @@ export function App() {
         demoMode={session?.demoMode ?? false}
         onSession={(view) => {
           setSession(view);
-          if (view.authenticated) navigate("connect");
+          if (view.authenticated) navigate("demo");
         }}
       />
     );
@@ -57,15 +65,23 @@ export function App() {
     setSession({ authenticated: false, demoMode: session?.demoMode ?? false, user: null });
   }
 
-  const placeholder = placeholderFor(screen);
+  const openConnect = () => navigate("connect");
+  const screens: Record<Screen, ReactNode> = {
+    demo: <Demo user={session.user} onNavigate={navigate} />,
+    connect: <Connect onOpenCatalog={() => navigate("catalog")} />,
+    catalog: <Catalog onOpenConnect={openConnect} />,
+    connectors: <Connectors onOpenConnect={openConnect} />,
+    slips: <Slips />,
+    trace: <Trace />,
+    receipts: <Receipts />,
+    trust: <Trust />,
+    journal: <Journal />,
+    keys: <Keys />,
+  };
 
   return (
     <Shell user={session.user} screen={screen} onNavigate={navigate} onSignOut={signOut}>
-      {screen === "connect" ? (
-        <Connect onOpenCatalog={() => navigate("catalog")} />
-      ) : (
-        placeholder !== undefined && <Placeholder {...placeholder} />
-      )}
+      {screens[screen]}
     </Shell>
   );
 }

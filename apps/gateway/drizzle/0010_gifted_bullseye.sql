@@ -1,0 +1,1 @@
+ALTER TABLE `slips` ADD `settled_at` text;

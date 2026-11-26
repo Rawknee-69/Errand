@@ -1,12 +1,14 @@
 import { useState, type FormEvent } from "react";
 import type {
   AgentKeyCreated,
+  AuthHint,
   ConnectorAuthInput,
   ConnectorAuthType,
   ConnectorDetail,
   McpTransportKind,
   ProbeResult,
 } from "@errand/shared";
+import { rememberAgentKey } from "../agentKeyStore.ts";
 import { api, errorMessage } from "../api.ts";
 import { AgentKeyPanel } from "../components/AgentKeyPanel.tsx";
 
@@ -24,6 +26,39 @@ const AUTH_LABELS: Array<{ type: SelectableAuth; label: string }> = [
   { type: "header", label: "Custom header" },
   { type: "basic", label: "Basic" },
 ];
+
+const AUTH_HINT_LABEL: Record<AuthHint, string> = {
+  bearer: "a bearer token",
+  basic: "a username and password",
+  header: "a custom header",
+  oauth: "a browser sign-in (OAuth)",
+};
+
+const KNOWN_SERVERS = [
+  { name: "Notion", url: "https://mcp.notion.com/mcp" },
+  { name: "Linear", url: "https://mcp.linear.app/mcp" },
+  { name: "Mock calendar (offline)", url: "http://127.0.0.1:4001/calendar/mcp" },
+] as const;
+
+function AuthChip(props: {
+  type: ConnectorAuthType;
+  label: string;
+  checked: boolean;
+  onSelect: (type: ConnectorAuthType) => void;
+}) {
+  return (
+    <label className={props.checked ? "chip is-selected" : "chip"}>
+      <input
+        type="radio"
+        name="authType"
+        value={props.type}
+        checked={props.checked}
+        onChange={() => props.onSelect(props.type)}
+      />
+      {props.label}
+    </label>
+  );
+}
 
 function hostOf(url: string): string {
   try {
@@ -44,7 +79,7 @@ export function Connect({ onOpenCatalog }: Props) {
   const [url, setUrl] = useState("");
   const [name, setName] = useState("");
   const [probe, setProbe] = useState<ProbeResult | null>(null);
-  const [authType, setAuthType] = useState<SelectableAuth>("none");
+  const [authType, setAuthType] = useState<ConnectorAuthType>("none");
   const [token, setToken] = useState("");
   const [headerName, setHeaderName] = useState("");
   const [headerValue, setHeaderValue] = useState("");
@@ -79,17 +114,17 @@ export function Connect({ onOpenCatalog }: Props) {
     }
   }
 
-  function authInput(): ConnectorAuthInput {
+  function credentialAuthInput(auth: SelectableAuth): ConnectorAuthInput {
     const base = { name: serverName(), url: url.trim() };
-    switch (authType) {
+    switch (auth) {
       case "bearer":
-        return { ...base, authType, token };
+        return { ...base, authType: auth, token };
       case "header":
-        return { ...base, authType, headerName, headerValue };
+        return { ...base, authType: auth, headerName, headerValue };
       case "basic":
-        return { ...base, authType, username, password };
+        return { ...base, authType: auth, username, password };
       case "none":
-        return { ...base, authType };
+        return { ...base, authType: auth };
     }
   }
 
@@ -98,7 +133,12 @@ export function Connect({ onOpenCatalog }: Props) {
     setBusy(true);
     setError(null);
     try {
-      setResult(await api.connect(authInput()));
+      if (authType === "oauth") {
+        const started = await api.startOAuth(serverName(), url.trim());
+        window.location.assign(started.authorizationUrl);
+        return;
+      }
+      setResult(await api.connect(credentialAuthInput(authType)));
       setStep("connected");
     } catch (caught) {
       setError(errorMessage(caught));
@@ -112,7 +152,9 @@ export function Connect({ onOpenCatalog }: Props) {
     setBusy(true);
     setError(null);
     try {
-      setIssued(await api.issueAgentKey(`${result.connector.name} agent`.slice(0, 64)));
+      const next = await api.issueAgentKey(`${result.connector.name} agent`.slice(0, 64));
+      rememberAgentKey(next);
+      setIssued(next);
     } catch (caught) {
       setError(errorMessage(caught));
     } finally {
@@ -156,6 +198,26 @@ export function Connect({ onOpenCatalog }: Props) {
 
       {step === "url" && (
         <form className="panel stack" onSubmit={checkServer}>
+          <div className="chips" role="group" aria-label="Known MCP servers">
+            {KNOWN_SERVERS.map((server) => (
+              <button
+                key={server.name}
+                type="button"
+                className={url === server.url ? "chip is-selected" : "chip"}
+                onClick={() => {
+                  setUrl(server.url);
+                  setName(server.name);
+                  setError(null);
+                }}
+              >
+                {server.name}
+              </button>
+            ))}
+          </div>
+          <p className="hint">
+            Notion and Linear finish in a browser sign-in. The local calendar is the offline
+            fallback for a demo without network.
+          </p>
           <label className="field">
             <span>MCP server URL</span>
             <input
@@ -201,7 +263,7 @@ export function Connect({ onOpenCatalog }: Props) {
             <p className="probe-name">{serverName()}</p>
             <p className="hint">
               {probe.requiresAuth
-                ? `Protected — it asks for ${probe.authHint ?? "a credential"}.`
+                ? `Protected — it asks for ${probe.authHint === null ? "a credential" : AUTH_HINT_LABEL[probe.authHint]}.`
                 : "Open — no credential required."}{" "}
               {probe.transport !== null && `${transportLabel(probe.transport)} · `}
               {probe.toolCount} {probe.toolCount === 1 ? "tool" : "tools"}
@@ -221,24 +283,34 @@ export function Connect({ onOpenCatalog }: Props) {
           <fieldset className="field-group">
             <legend>How should Errand authenticate?</legend>
             <div className="chips">
+              {probe.authHint === "oauth" && (
+                <AuthChip
+                  type="oauth"
+                  label="Sign in (OAuth)"
+                  checked={authType === "oauth"}
+                  onSelect={setAuthType}
+                />
+              )}
               {AUTH_LABELS.map((option) => (
-                <label
+                <AuthChip
                   key={option.type}
-                  className={authType === option.type ? "chip is-selected" : "chip"}
-                >
-                  <input
-                    type="radio"
-                    name="authType"
-                    value={option.type}
-                    checked={authType === option.type}
-                    onChange={() => setAuthType(option.type)}
-                  />
-                  {option.label}
-                </label>
+                  type={option.type}
+                  label={option.label}
+                  checked={authType === option.type}
+                  onSelect={setAuthType}
+                />
               ))}
             </div>
             {probe.authHint !== null && (
-              <p className="hint">The server's challenge suggests {probe.authHint}.</p>
+              <p className="hint">
+                The server's challenge suggests {AUTH_HINT_LABEL[probe.authHint]}.
+              </p>
+            )}
+            {authType === "oauth" && (
+              <p className="hint">
+                You will be sent to the service to sign in. Errand stores the token; your agent
+                never sees it.
+              </p>
             )}
           </fieldset>
 
@@ -309,7 +381,7 @@ export function Connect({ onOpenCatalog }: Props) {
             </p>
           )}
           <button type="submit" className="button primary" disabled={busy}>
-            {busy ? "Connecting…" : "Connect"}
+            {busy ? "Connecting…" : authType === "oauth" ? "Sign in and connect" : "Connect"}
           </button>
           <p className="hint">
             The credential is encrypted in the vault. It is never returned, logged or shown again.

@@ -1,0 +1,13 @@
+{
+  "viewport": { "width": 390, "height": 844 },
+  "method": "same-origin 390x844 iframe (in-app browser has no device emulation control)",
+  "page": "/connectors",
+  "innerWidth": 390,
+  "innerHeight": 844,
+  "scrollWidth": 375,
+  "horizontalOverflow": false,
+  "visibleControls": 12,
+  "undersizedBelow44": [],
+  "tabbar": { "top": 781, "bottom": 844, "height": 63 },
+  "catalogPage": { "innerWidth": 390, "innerHeight": 844, "scrollWidth": 375, "scrollHeight": 2363 }
+}

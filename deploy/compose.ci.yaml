@@ -1,0 +1,7 @@
+# A CI-only override: the stack probe connects the gateway to its own MCP
+# endpoint over loopback so a real credential reaches the Vault, then scans the
+# replica for plaintext. Never stack this file in production.
+services:
+  gateway:
+    environment:
+      ALLOW_LOCALHOST_DEV: "true"

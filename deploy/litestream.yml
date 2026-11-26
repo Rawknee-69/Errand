@@ -1,0 +1,21 @@
+# The replica is Litestream's compressed LTX stream of the SQLite file. A
+# restored copy carries credential rows already sealed by the Vault, so their
+# connector secrets are useless without VAULT_KEY, which is handed to the
+# gateway from the host and never written here.
+
+logging:
+  level: info
+  type: text
+  stderr: true
+
+# Keep a week of point-in-time restore points.
+snapshot:
+  interval: 1h
+  retention: 168h
+
+dbs:
+  - path: ${LITESTREAM_DATABASE_PATH}
+    # Replication state lives outside the database volume.
+    meta-path: ${LITESTREAM_META_PATH}
+    replica:
+      path: ${LITESTREAM_REPLICA_PATH}

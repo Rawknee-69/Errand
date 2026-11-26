@@ -1,16 +1,16 @@
 import { count, eq } from "drizzle-orm";
 import type { Db } from "../db/client.ts";
 import { connectors } from "../db/schema.ts";
+import { GatewayError } from "../errors.ts";
 
 export const DEFAULT_MAX_CONNECTORS_PER_USER = 10;
 
-export class ConnectorLimitError extends Error {
+export class ConnectorLimitError extends GatewayError {
   readonly count: number;
   readonly limit: number;
 
   constructor(count: number, limit: number) {
-    super(`Connector limit reached: ${count} of ${limit} connectors in use`);
-    this.name = "ConnectorLimitError";
+    super("connector_limit", `Connector limit reached: ${count} of ${limit} connectors in use`, 409);
     this.count = count;
     this.limit = limit;
   }

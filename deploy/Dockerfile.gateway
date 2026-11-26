@@ -1,0 +1,28 @@
+# syntax=docker/dockerfile:1
+
+FROM oven/bun:1.4.4-slim AS deps
+WORKDIR /app
+COPY package.json bun.lock tsconfig.base.json ./
+COPY apps/gateway/package.json apps/gateway/package.json
+COPY apps/mock-services/package.json apps/mock-services/package.json
+COPY apps/web/package.json apps/web/package.json
+COPY packages/shared/package.json packages/shared/package.json
+RUN bun install --frozen-lockfile --production
+
+FROM oven/bun:1.4.4-slim AS runtime
+WORKDIR /app
+ENV NODE_ENV=production
+# Bun hoists some workspace dependencies into apps/gateway/node_modules, so the
+# whole installed tree travels, not just the root node_modules.
+COPY --from=deps /app ./
+COPY package.json tsconfig.base.json ./
+COPY packages/shared ./packages/shared
+COPY apps/gateway/package.json ./apps/gateway/package.json
+COPY apps/gateway/src ./apps/gateway/src
+COPY apps/gateway/drizzle ./apps/gateway/drizzle
+RUN mkdir -p /data && chown bun:bun /data
+USER bun
+EXPOSE 8787
+HEALTHCHECK --interval=15s --timeout=5s --start-period=20s --retries=5 \
+  CMD ["bun", "-e", "const r = await fetch('http://127.0.0.1:8787/health'); if (!r.ok) process.exit(1)"]
+CMD ["bun", "run", "apps/gateway/src/index.ts"]

@@ -1,0 +1,8 @@
+Browser console â€” signed in as owner, /trust then /slips at desktop width, generation 6.
+Captured 2026-11-26 17:50 local.
+
+[info] Download the React DevTools for a better development experience:
+       https://react.dev/link/react-devtools
+       (node_modules/.vite/deps/react-dom_client.js:15803)
+
+No errors and no warnings were recorded in the browser for this window.

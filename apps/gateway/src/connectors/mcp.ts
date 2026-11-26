@@ -7,6 +7,7 @@ import {
 } from "@modelcontextprotocol/client";
 import type { McpTransportKind } from "@errand/shared";
 import { DEFAULT_TIMEOUT_MS, EgressRefusal, egressRequest, type EgressOptions } from "../egress/guard.ts";
+import { GatewayError } from "../errors.ts";
 import { authHeaders, type ConnectorAuth } from "./auth.ts";
 import type { DiscoveredTool } from "./catalog.ts";
 import type { ToolAnnotations } from "./classifier.ts";
@@ -23,14 +24,13 @@ export type DiscoverOptions = EgressOptions & {
 
 export type McpConnectErrorCode = "auth" | "egress" | "connect";
 
-export class McpConnectError extends Error {
+export class McpConnectError extends GatewayError {
   constructor(
-    readonly code: McpConnectErrorCode,
+    override readonly code: McpConnectErrorCode,
     message: string,
     readonly challenge?: string,
   ) {
-    super(message);
-    this.name = "McpConnectError";
+    super(code, message, code === "auth" ? 401 : 502);
   }
 }
 
@@ -67,25 +67,27 @@ type Attempt = {
   client: Client;
 };
 
-async function connectOnce(
+export type McpTransportSetup = {
+  transport: Transport;
+  client: Client;
+};
+
+// Discovery and forwarding share one transport builder so the egress guard,
+// auth headers and redirect policy cannot drift between the two paths.
+export function createMcpTransport(
   kind: McpTransportKind,
   url: string,
   auth: ConnectorAuth,
   options: DiscoverOptions,
-  statuses: number[],
-  challenges: string[],
-): Promise<Attempt> {
+  onResponse?: (response: Response) => void,
+): McpTransportSetup {
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const headers = authHeaders(auth);
   const guardedFetch = (input: string | URL | Request, init?: RequestInit): Promise<Response> => {
     const target = input instanceof Request ? input.url : input;
     const requestInit = input instanceof Request ? { ...init, method: init?.method ?? input.method } : init;
     return egressRequest(target, requestInit ?? {}, { ...options, timeoutMs }).then((response) => {
-      statuses.push(response.status);
-      const challenge = response.headers.get("www-authenticate");
-      if (challenge !== null && (response.status === 401 || response.status === 403)) {
-        challenges.push(challenge);
-      }
+      onResponse?.(response);
       return response;
     });
   };
@@ -104,7 +106,30 @@ async function connectOnce(
           redirectPolicy: "follow",
         });
 
-  const client = new Client({ name: "errand-gateway", version: "0.1.0" });
+  return {
+    transport,
+    client: new Client({ name: "errand-gateway", version: "0.1.0" }),
+  };
+}
+
+async function connectOnce(
+  kind: McpTransportKind,
+  url: string,
+  auth: ConnectorAuth,
+  options: DiscoverOptions,
+  statuses: number[],
+  challenges: string[],
+): Promise<Attempt> {
+  const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  const { client, transport } = createMcpTransport(kind, url, auth, options, (response) => {
+    statuses.push(response.status);
+    const challenge = response.headers.get("www-authenticate");
+    if (challenge !== null && (response.status === 401 || response.status === 403)) {
+      challenges.push(challenge);
+    }
+  });
+
+  const endpoint = new URL(url);
   try {
     await client.connect(transport, { timeout: timeoutMs });
     const listed = await client.listTools(undefined, { timeout: timeoutMs });
@@ -159,5 +184,5 @@ export async function discoverMcpTools(
     }
     throw new McpConnectError("auth", `The server rejected the supplied credentials (${url})`);
   }
-  throw new McpConnectError("connect", `Could not connect to ${url} — ${failures.join("; ")}`);
+  throw new McpConnectError("connect", `Could not connect to ${url} â€” ${failures.join("; ")}`);
 }

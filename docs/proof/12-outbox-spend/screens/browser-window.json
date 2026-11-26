@@ -1,0 +1,10 @@
+{
+  "viewport": {
+    "width": 1440,
+    "height": 900
+  },
+  "url": "http://127.0.0.1:5173/slips",
+  "overflowX": false,
+  "console": [],
+  "failedRequests": []
+}

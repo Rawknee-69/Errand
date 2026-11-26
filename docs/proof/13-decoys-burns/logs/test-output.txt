@@ -1,0 +1,20 @@
+bun test v1.4.4 (38afee6c8)
+bun : 
+At line:1 char:69
++ ... echeck.txt; bun test *> docs/proof/13-decoys-burns/logs/test-output.t ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+apps\gateway\tests\connectors\oauth.test.ts:
+[mcp-sdk] OAuth "invalid_grant" ΓÇö invalidating the stored tokens and retrying authorization. Cause: "refresh token 
+is invalid, rotated or revoked"
+[mcp-sdk] OAuth "invalid_grant" ΓÇö invalidating the stored tokens and retrying authorization. Cause: "refresh token 
+is invalid, rotated or revoked"
+[mcp-sdk] OAuth "invalid_grant" ΓÇö invalidating the stored tokens and retrying authorization. Cause: "refresh token 
+is invalid, rotated or revoked"
+
+ 367 pass
+ 0 fail
+ 1241 expect() calls
+Ran 367 tests across 45 files. [5.71s]

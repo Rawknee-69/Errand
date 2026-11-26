@@ -1,17 +1,25 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
+import { eq } from "drizzle-orm";
 import { startMockServices } from "@errand/mock-services";
 import { z } from "zod";
-import { createGatewayApp } from "../../src/app.ts";
+import { createGatewayApp, type GatewayAppOptions } from "../../src/app.ts";
 import { createMigratedDatabase, type Db } from "../../src/db/client.ts";
-import { connectors, credentials, journal, oauthAttempts, users } from "../../src/db/schema.ts";
+import { connectors, calls, credentials, journal, oauthAttempts, users } from "../../src/db/schema.ts";
 import { verifyJournal } from "../../src/db/journal.ts";
+import { issueAgentKey } from "../../src/vault/agent-keys.ts";
 import { Vault } from "../../src/vault/vault.ts";
 import { VaultKeyring } from "../../src/vault/keyring.ts";
+import { CredentialStore } from "../../src/vault/credentials.ts";
+import { OAuthStore } from "../../src/connectors/oauth/store.ts";
+import { callTool, connectAgent } from "../agent/mcp-client.ts";
+import { requestAndApprove } from "../agent/forward-support.ts";
+import { SLIP_KEY } from "../support/fixtures.ts";
 import {
   connectResponseSchema,
   errorResponseSchema,
   oauthStartResponseSchema,
   readJson,
+  reauthResponseSchema,
 } from "./support.ts";
 
 const TS = "2026-01-01T00:00:00.000Z";
@@ -82,6 +90,21 @@ async function storedTokens(connectorId: string) {
   return vault.withCredential(connectorId, (secret) => storedSecretSchema.parse(JSON.parse(secret)).tokens);
 }
 
+function credentialServiceIds(): string[] {
+  return db.select().from(credentials).all().map((row) => row.serviceId);
+}
+
+function connectorRows() {
+  return db.select().from(connectors).all();
+}
+
+function expireAttempt(attemptId: string): void {
+  db.update(oauthAttempts)
+    .set({ expiresAt: new Date(Date.now() - 1_000).toISOString() })
+    .where(eq(oauthAttempts.id, attemptId))
+    .run();
+}
+
 async function startFlow(name = "OAuth calendar") {
   const response = await post("/api/connectors/oauth/start", { name, url: mcpUrl() });
   expect(response.status).toBe(201);
@@ -111,6 +134,20 @@ function callbackPath(callback: URL): string {
   return `/api/oauth/callback${callback.search}`;
 }
 
+function createTestApp(
+  overrides: Pick<GatewayAppOptions, "webOrigin" | "oauthRedirectUri"> = {},
+): ReturnType<typeof createGatewayApp> {
+  return createGatewayApp(db, {
+    userId: USER,
+    keyring,
+    discoverOptions: { allowLocalhostDev: true, timeoutMs: 5_000 },
+    oauthRedirectUri: overrides.oauthRedirectUri ?? REDIRECT_URI,
+    ...(overrides.webOrigin === undefined ? {} : { webOrigin: overrides.webOrigin }),
+    hmacKey: SLIP_KEY,
+    auth: "disabled",
+  });
+}
+
 async function authorizeFlow(name?: string) {
   const started = await startFlow(name);
   const callback = await approve(started.authorizationUrl);
@@ -131,13 +168,7 @@ beforeEach(async () => {
   db = createMigratedDatabase(":memory:");
   db.insert(users).values({ id: USER, name: "A", createdAt: TS }).run();
   keyring = new VaultKeyring(KEK);
-  app = createGatewayApp(db, {
-    userId: USER,
-    keyring,
-    discoverOptions: { allowLocalhostDev: true, timeoutMs: 5_000 },
-    oauthRedirectUri: REDIRECT_URI,
-    auth: "disabled",
-  });
+  app = createTestApp();
 });
 
 describe("OAuth 2.1 + PKCE via the SDK", () => {
@@ -176,7 +207,7 @@ describe("OAuth 2.1 + PKCE via the SDK", () => {
     expect(eventTypes).toContain("connector.oauth_started");
     expect(eventTypes).toContain("connector.oauth_authorized");
 
-    const connectorRow = db.select().from(connectors).all()[0];
+    const connectorRow = connectorRows()[0];
     expect(connectorRow?.authStatus).toBe("active");
   });
 
@@ -209,7 +240,7 @@ describe("OAuth 2.1 + PKCE via the SDK", () => {
     const unknown = await app.request(`/api/oauth/callback?state=nope&code=x`);
     expect(unknown.status).toBe(400);
 
-    expect(db.select().from(connectors).all()[0]?.authStatus).toBe("active");
+    expect(connectorRows()[0]?.authStatus).toBe("active");
   });
 
   test("renders the connector name as text on the confirmation page", async () => {
@@ -225,6 +256,57 @@ describe("OAuth 2.1 + PKCE via the SDK", () => {
     expect(html).toContain("&lt;img src=x onerror=&quot;alert(1)&quot;&gt;");
   });
 
+  test("redirects a browser to the configured web origin after a successful callback", async () => {
+    const started = await startFlow();
+    const callback = await approve(started.authorizationUrl);
+    const response = await createTestApp({ webOrigin: "https://app.example" }).request(
+      callbackPath(callback),
+      { headers: { accept: "text/html" } },
+    );
+
+    expect(response.status).toBe(302);
+    expect(response.headers.get("location")).toBe("https://app.example/connectors");
+    expect((await mockState()).authorizationCodeGrants).toBe(1);
+  });
+
+  test("normalizes a trailing slash on the web origin", async () => {
+    const started = await startFlow();
+    const callback = await approve(started.authorizationUrl);
+    const response = await createTestApp({ webOrigin: "https://app.example/" }).request(
+      callbackPath(callback),
+      { headers: { accept: "text/html" } },
+    );
+
+    expect(response.headers.get("location")).toBe("https://app.example/connectors");
+  });
+
+  test("ignores callback query parameters when building the redirect target", async () => {
+    const started = await startFlow();
+    const callback = await approve(started.authorizationUrl);
+    callback.searchParams.set("webOrigin", "https://evil.example");
+    callback.searchParams.set("next", "https://evil.example");
+    const response = await createTestApp({ webOrigin: "https://app.example" }).request(
+      callbackPath(callback),
+      { headers: { accept: "text/html" } },
+    );
+
+    expect(response.status).toBe(302);
+    expect(response.headers.get("location")).toBe("https://app.example/connectors");
+  });
+
+  test("keeps the JSON connector detail for non-HTML callers when a web origin is set", async () => {
+    const started = await startFlow();
+    const callback = await approve(started.authorizationUrl);
+    const response = await createTestApp({ webOrigin: "https://app.example" }).request(
+      callbackPath(callback),
+    );
+
+    expect(response.status).toBe(200);
+    const body = await readJson(response, connectResponseSchema);
+    expect(body.connector.id).toBe(started.connector.id);
+    expect(body.connector.authStatus).toBe("active");
+  });
+
   test("rejects a callback whose issuer is not the discovered authorization server", async () => {
     const started = await startFlow();
     const callback = await approve(started.authorizationUrl);
@@ -233,19 +315,13 @@ describe("OAuth 2.1 + PKCE via the SDK", () => {
 
     expect(response.status).toBe(400);
     expect((await readJson(response, errorResponseSchema)).error).toBe("oauth_issuer");
-    expect(db.select().from(connectors).all()[0]?.authStatus).toBe("needs_reauth");
+    expect(connectorRows()[0]?.authStatus).toBe("needs_reauth");
   });
 
   test("rejects a callback delivered to a different redirect URI than the attempt", async () => {
     const started = await startFlow();
     const callback = await approve(started.authorizationUrl);
-    const otherApp = createGatewayApp(db, {
-      userId: USER,
-      keyring,
-      discoverOptions: { allowLocalhostDev: true, timeoutMs: 5_000 },
-      oauthRedirectUri: "http://127.0.0.1:8787/api/oauth/other",
-      auth: "disabled",
-    });
+    const otherApp = createTestApp({ oauthRedirectUri: "http://127.0.0.1:8787/api/oauth/other" });
 
     const response = await otherApp.request(callbackPath(callback));
     expect(response.status).toBe(400);
@@ -272,7 +348,7 @@ describe("OAuth 2.1 + PKCE via the SDK", () => {
     expect(a.status).toBe(200);
     expect(b.status).toBe(200);
     expect((await mockState()).refreshRotations).toBe(3);
-    expect(db.select().from(connectors).all()[0]?.authStatus).toBe("active");
+    expect(connectorRows()[0]?.authStatus).toBe("active");
   });
 
   test("invalid_grant marks needs_reauth and journals once instead of looping", async () => {
@@ -284,7 +360,7 @@ describe("OAuth 2.1 + PKCE via the SDK", () => {
     const refresh = await post(`/api/connectors/${connectorId}/refresh`, {});
     expect(refresh.status).toBe(409);
     expect((await readJson(refresh, errorResponseSchema)).error).toBe("reauth");
-    expect(db.select().from(connectors).all()[0]?.authStatus).toBe("needs_reauth");
+    expect(connectorRows()[0]?.authStatus).toBe("needs_reauth");
 
     const state = await mockState();
     expect(state.refreshGrants).toBe(1);
@@ -303,6 +379,40 @@ describe("OAuth 2.1 + PKCE via the SDK", () => {
     ).toHaveLength(1);
   });
 
+  test("re-authorizes the same connector after a revoked refresh token", async () => {
+    const { started, response } = await authorizeFlow();
+    expect(response.status).toBe(200);
+    const connectorId = started.connector.id;
+    const connectorCount = connectorRows().length;
+    const lastSuccess = connectorRows()[0]?.lastSuccessAt ?? null;
+    expect(lastSuccess).not.toBeNull();
+    await control("/mock/oauth/revoke", { refreshTokens: true });
+
+    const failed = await post(`/api/connectors/${connectorId}/refresh`, {});
+    expect(failed.status).toBe(409);
+    expect(connectorRows()[0]?.authStatus).toBe("needs_reauth");
+
+    const restarted = await post(`/api/connectors/${connectorId}/reauth`, {});
+    expect(restarted.status).toBe(201);
+    const restartedBody = await readJson(restarted, reauthResponseSchema);
+    expect(restartedBody.connector.id).toBe(connectorId);
+    expect(restartedBody.connector.authStatus).toBe("pending");
+    expect(restartedBody.connector.lastSuccessAt).toBe(lastSuccess);
+
+    const callback = await approve(restartedBody.authorizationUrl);
+    const completed = await app.request(callbackPath(callback));
+    expect(completed.status).toBe(200);
+    const completedBody = await readJson(completed, connectResponseSchema);
+    expect(completedBody.connector.id).toBe(connectorId);
+    expect(completedBody.connector.authStatus).toBe("active");
+    expect(completedBody.connector.lastSuccessAt).not.toBeNull();
+    expect(completedBody.summary.total).toBe(3);
+    expect(connectorRows()).toHaveLength(connectorCount);
+    expect(
+      db.select().from(journal).all().some((event) => event.eventType === "connector.oauth_restarted"),
+    ).toBe(true);
+  });
+
   test("a repeated 401 after a refresh marks needs_reauth and emits one event", async () => {
     const { started, response } = await authorizeFlow();
     expect(response.status).toBe(200);
@@ -311,9 +421,205 @@ describe("OAuth 2.1 + PKCE via the SDK", () => {
 
     const refresh = await post(`/api/connectors/${connectorId}/refresh`, {});
     expect(refresh.status).toBe(409);
-    expect(db.select().from(connectors).all()[0]?.lastAuthError).toBe("upstream_401");
+    expect(connectorRows()[0]?.lastAuthError).toBe("upstream_401");
     expect(
       db.select().from(journal).all().filter((event) => event.eventType === "connector.needs_reauth"),
     ).toHaveLength(1);
+  });
+
+  test("an authorized connector forwards a call with its stored OAuth token", async () => {
+    await authorizeFlow();
+    const key = issueAgentKey(db, USER, "oauth forward").key;
+    const server = Bun.serve({ port: 0, fetch: app.fetch });
+    const client = await connectAgent(`http://127.0.0.1:${server.port}`, key);
+    try {
+      const { slipId, capability } = await requestAndApprove(
+        client,
+        ["oauth_calendar__list_events"],
+        async (slipId) => {
+          const approved = await post(`/api/slips/${slipId}/approve`, {});
+          expect(approved.status).toBe(200);
+        },
+      );
+
+      const response = await callTool(client, "errand_call", {
+        slip_id: slipId,
+        tool: "oauth_calendar__list_events",
+        capability,
+      });
+      expect(response.result.isError).toBeFalsy();
+      expect(response.body).toMatchObject({ state: "forwarded", class: "read" });
+      expect(JSON.stringify(response.body)).toContain("Dinner with Sam");
+      expect((await mockState()).refreshGrants).toBeGreaterThan(0);
+
+      const callRow = db.select().from(calls).all().find((row) => row.slipId === slipId);
+      expect(callRow?.error).toBeNull();
+      expect(callRow?.result).not.toBeNull();
+      expect(
+        db.select().from(journal).all().some((event) => event.eventType === "call.succeeded"),
+      ).toBe(true);
+    } finally {
+      await client.close();
+      server.stop(true);
+    }
+  });
+
+  test("discards an abandoned connector when the user starts again", async () => {
+    const abandoned = await startFlow("Abandoned calendar");
+    expect(credentialServiceIds()).toEqual(
+      expect.arrayContaining([abandoned.connector.id, `oauth_attempt:${abandoned.attemptId}`]),
+    );
+    expireAttempt(abandoned.attemptId);
+
+    const replacement = await startFlow("Replacement calendar");
+
+    const rows = connectorRows();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.id).toBe(replacement.connector.id);
+    expect(rows[0]?.authStatus).toBe("pending");
+    expect(db.select().from(oauthAttempts).all().map((row) => row.connectorId)).toEqual([
+      replacement.connector.id,
+    ]);
+    const serviceIds = credentialServiceIds();
+    expect(serviceIds).not.toContain(abandoned.connector.id);
+    expect(serviceIds).not.toContain(`oauth_attempt:${abandoned.attemptId}`);
+    expect(serviceIds).toContain(replacement.connector.id);
+  });
+
+  test("sweeps a pending connector with no tokens and no attempt rows", async () => {
+    const orphan = await startFlow("Orphaned calendar");
+    db.delete(oauthAttempts).where(eq(oauthAttempts.id, orphan.attemptId)).run();
+    db.delete(credentials).where(eq(credentials.serviceId, `oauth_attempt:${orphan.attemptId}`)).run();
+    expect(db.select().from(oauthAttempts).all()).toHaveLength(0);
+
+    const started = await startFlow("Fresh calendar");
+
+    expect(connectorRows()).toHaveLength(1);
+    expect(connectorRows()[0]?.id).toBe(started.connector.id);
+    expect(db.select().from(oauthAttempts).all().map((row) => row.connectorId)).toEqual([
+      started.connector.id,
+    ]);
+    expect(credentialServiceIds()).not.toContain(orphan.connector.id);
+  });
+
+  test("sweeps a pending connector whose attempt was consumed and removes its secret", async () => {
+    const orphan = await startFlow("Consumed calendar");
+    const secretServiceId = `oauth_attempt:${orphan.attemptId}`;
+    expect(credentialServiceIds()).toContain(secretServiceId);
+    db.update(oauthAttempts)
+      .set({ consumedAt: new Date().toISOString() })
+      .where(eq(oauthAttempts.id, orphan.attemptId))
+      .run();
+
+    const started = await startFlow("Fresh calendar");
+
+    expect(connectorRows()).toHaveLength(1);
+    expect(connectorRows()[0]?.id).toBe(started.connector.id);
+    expect(db.select().from(oauthAttempts).all().some((row) => row.id === orphan.attemptId)).toBe(
+      false,
+    );
+    const serviceIds = credentialServiceIds();
+    expect(serviceIds).not.toContain(orphan.connector.id);
+    expect(serviceIds).not.toContain(secretServiceId);
+  });
+
+  test("keeps an authorized connector when a reauth attempt expires", async () => {
+    const { started, response } = await authorizeFlow();
+    expect(response.status).toBe(200);
+    const connectorId = started.connector.id;
+    const tokensBefore = await storedTokens(connectorId);
+
+    const attemptId = "expired-reauth-attempt";
+    const now = new Date();
+    db.insert(oauthAttempts)
+      .values({
+        id: attemptId,
+        userId: USER,
+        connectorId,
+        state: "expired-reauth-state",
+        redirectUri: REDIRECT_URI,
+        createdAt: new Date(now.getTime() - 60_000).toISOString(),
+        expiresAt: new Date(now.getTime() - 1_000).toISOString(),
+      })
+      .run();
+    new OAuthStore(new Vault(db, keyring, USER), new CredentialStore(db, keyring, USER)).saveAttemptSecret(
+      attemptId,
+      { codeVerifier: "expired-verifier" },
+    );
+    db.update(connectors)
+      .set({ authStatus: "pending" })
+      .where(eq(connectors.id, connectorId))
+      .run();
+
+    await startFlow("Additional calendar");
+
+    const existing = connectorRows().find((row) => row.id === connectorId);
+    expect(existing?.authStatus).toBe("pending");
+    expect(await storedTokens(connectorId)).toEqual(tokensBefore);
+    expect(db.select().from(oauthAttempts).all().some((row) => row.id === attemptId)).toBe(false);
+    const serviceIds = credentialServiceIds();
+    expect(serviceIds).toContain(connectorId);
+    expect(serviceIds).not.toContain(`oauth_attempt:${attemptId}`);
+    expect(connectorRows()).toHaveLength(2);
+  });
+
+  test("re-authorizing a connector replaces its expired attempt without discarding it", async () => {
+    const { started, response } = await authorizeFlow();
+    expect(response.status).toBe(200);
+    const connectorId = started.connector.id;
+    await control("/mock/oauth/revoke", { refreshTokens: true });
+
+    const failed = await post(`/api/connectors/${connectorId}/refresh`, {});
+    expect(failed.status).toBe(409);
+
+    const first = await post(`/api/connectors/${connectorId}/reauth`, {});
+    expect(first.status).toBe(201);
+    const firstBody = await readJson(first, oauthStartResponseSchema);
+    expireAttempt(firstBody.attemptId);
+
+    const second = await post(`/api/connectors/${connectorId}/reauth`, {});
+    expect(second.status).toBe(201);
+    const secondBody = await readJson(second, oauthStartResponseSchema);
+    expect(secondBody.connector.id).toBe(connectorId);
+    expect(connectorRows()).toHaveLength(1);
+    const attempts = db.select().from(oauthAttempts).all();
+    expect(attempts).toHaveLength(1);
+    expect(attempts[0]?.id).toBe(secondBody.attemptId);
+    const serviceIds = credentialServiceIds();
+    expect(serviceIds).not.toContain(`oauth_attempt:${firstBody.attemptId}`);
+    expect(serviceIds).toContain(`oauth_attempt:${secondBody.attemptId}`);
+  });
+
+  test("keeps a pending connector whose attempt is still live", async () => {
+    const first = await startFlow("First calendar");
+    const second = await startFlow("Second calendar");
+
+    expect(connectorRows().map((row) => row.id).sort()).toEqual(
+      [first.connector.id, second.connector.id].sort(),
+    );
+  });
+
+  test("never touches another user's pending connector", async () => {
+    db.insert(users).values({ id: "user-b", name: "B", createdAt: TS }).run();
+    db.insert(connectors)
+      .values({
+        id: "user-b-oauth",
+        userId: "user-b",
+        name: "Other calendar",
+        url: mcpUrl(),
+        transport: "streamable-http",
+        authType: "oauth",
+        authStatus: "pending",
+        createdAt: TS,
+        updatedAt: TS,
+      })
+      .run();
+
+    await startFlow();
+
+    const other = connectorRows().find((row) => row.id === "user-b-oauth");
+    expect(other?.userId).toBe("user-b");
+    expect(other?.authStatus).toBe("pending");
+    expect(connectorRows()).toHaveLength(2);
   });
 });

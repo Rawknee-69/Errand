@@ -1,0 +1,29 @@
+bun test
+ 364 pass
+ 0 fail
+ 1155 expect() calls
+ Ran 364 tests across 47 files
+
+bun run typecheck
+ @errand/shared typecheck: Exited with code 0
+ @errand/mock-services typecheck: Exited with code 0
+ @errand/web typecheck: Exited with code 0
+ @errand/gateway typecheck: Exited with code 0
+ 4 checks passed: comments, installed, no-any, oauth-verifier
+
+bun run --cwd apps/web build
+ 135 modules transformed
+ dist/assets/index-C3TdfUqW.js 372.04 kB
+ built in 131ms
+
+bun run demo:seed
+ connected Calendar: 3 tools discovered
+ exposed list_events, create_event; hid delete_event
+ boundary: 3 discovered, 2 visible, 1 hidden
+ issued Demo agent key
+
+bun run demo:agent -- --auto-approve
+ VERDICT: demo pass
+
+bun run demo:agent (human tap in Slips, calls trimmed 4 → 2)
+ VERDICT: demo pass

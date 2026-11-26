@@ -1,0 +1,166 @@
+
+== log in as the owner
+{"authenticated":true}
+
+== create the agent key and connect secure mock services through the paste-URL API
+agent key 90b65be1-75e7-4356-a88b-a5a9cd957c77; one URL http://127.0.0.1:8841/mcp
+calendar bd7acb1d-320c-4838-8c38-5ef2f26ef33c, big 2bd6adea-106e-4250-89fc-f7eae7bf1082, pay 50fcda38-9c16-4886-990d-f83637759723
+
+== the top layer still lists exactly four tools
+tools: errand_call, errand_catalog, errand_status, request_errand
+
+== a read call forwards with the vault-held bearer credential
+{
+  "state": "forwarded",
+  "slipId": "374a0aba-f3fc-4ab8-9062-859583ec41a4",
+  "tool": "calendar__list_events",
+  "class": "read",
+  "result": {
+    "content": [
+      {
+        "type": "text",
+        "text": "[{\"id\":\"evt-1\",\"title\":\"Dinner with Sam\",\"start\":\"2026-12-01T19:00:00Z\"}]"
+      }
+    ],
+    "isError": false,
+    "truncated": false,
+    "originalBytes": 140
+  },
+  "durationMs": 20,
+  "remaining": {
+    "calls": 49,
+    "spendCents": 20000
+  }
+}
+
+== a write call forwards immediately
+{
+  "state": "forwarded",
+  "slipId": "f9528cf2-6008-48c2-9788-f8545c60fa12",
+  "tool": "calendar__create_event",
+  "class": "write",
+  "result": {
+    "content": [
+      {
+        "type": "text",
+        "text": "{\"id\":\"evt-new\",\"title\":\"Dinner with Sam\",\"start\":\"2026-12-01T19:00:00Z\"}"
+      }
+    ],
+    "isError": false,
+    "truncated": false,
+    "originalBytes": 140
+  },
+  "durationMs": 18,
+  "remaining": {
+    "calls": 49,
+    "spendCents": 20000
+  }
+}
+
+== a delete call forwards only when the slip explicitly includes it
+{
+  "state": "forwarded",
+  "slipId": "9970e1f3-34e8-4e10-8e50-3a6ca30d923b",
+  "tool": "calendar__delete_event",
+  "class": "delete",
+  "result": {
+    "content": [
+      {
+        "type": "text",
+        "text": "{\"deleted\":\"evt-1\"}"
+      }
+    ],
+    "isError": false,
+    "truncated": false,
+    "originalBytes": 78
+  },
+  "durationMs": 9,
+  "remaining": {
+    "calls": 49,
+    "spendCents": 20000
+  }
+}
+{
+  "isError": true,
+  "body": {
+    "error": "out_of_scope",
+    "message": "calendar__delete_event is not in slip 374a0aba-f3fc-4ab8-9062-859583ec41a4",
+    "tool": "calendar__delete_event"
+  }
+}
+
+== a result over 256 KB is truncated and flagged
+{
+  "state": "forwarded",
+  "truncated": true,
+  "originalBytes": 307255,
+  "returnedBytes": 261993
+}
+
+== the upstream cannot echo the credential back to the agent
+{
+  "state": "forwarded",
+  "slipId": "49190f66-6e3a-4284-935d-95bc6993aec0",
+  "tool": "big__echo_token",
+  "class": "read",
+  "result": {
+    "content": [
+      {
+        "type": "text",
+        "text": "{\"token\":\"[redacted]\"}"
+      }
+    ],
+    "isError": false,
+    "truncated": false,
+    "originalBytes": 81
+  },
+  "durationMs": 10,
+  "remaining": {
+    "calls": 49,
+    "spendCents": 20000
+  }
+}
+
+== a per-call timeout fails the call, consumes its counter and is journaled
+{
+  "isError": true,
+  "body": {
+    "error": "upstream_timeout",
+    "message": "The upstream call to slow_result timed out after 500ms",
+    "slipId": "95253b06-d679-40a4-a30b-76754878fb16",
+    "tool": "big__slow_result",
+    "remaining": {
+      "calls": 49,
+      "spendCents": 20000
+    }
+  }
+}
+{"callsUsed":1}
+{
+  "journal": "{\"call_id\":\"d5dd6764-3439-4b0c-9bcf-17f10592ce84\",\"class\":\"read\",\"connector_id\":\"2bd6adea-106e-4250-89fc-f7eae7bf1082\",\"duration_ms\":503,\"message\":\"The upstream call to slow_result timed out after 500ms\",\"reason\":\"upstream_timeout\",\"slip_id\":\"95253b06-d679-40a4-a30b-76754878fb16\",\"tool\":\"big__slow_result\"}",
+  "call": {
+    "result": null,
+    "error": "The upstream call to slow_result timed out after 500ms"
+  }
+}
+
+== per-connector concurrency holds at two
+max concurrent upstream calls: 2
+
+== the journal and calls table stay secret-free and the chain verifies
+calls rows: 12
+big__slow_result: result=105 chars error=null
+big__slow_result: result=105 chars error=null
+big__slow_result: result=105 chars error=null
+big__slow_result: result=105 chars error=null
+39 call.allowed {"amount_cents":0,"calls_remaining":5,"connector_id":"2bd6adea-106e-4250-89fc-f7eae7bf1082","reason":"admitted","slip_id":"4f8fd034-75c9-444f-ac81-bc5b9c9b5822","spend_remaining_cents":20000,"tool":"big__slow_result"}
+40 call.allowed {"amount_cents":0,"calls_remaining":4,"connector_id":"2bd6adea-106e-4250-89fc-f7eae7bf1082","reason":"admitted","slip_id":"4f8fd034-75c9-444f-ac81-bc5b9c9b5822","spend_remaining_cents":20000,"tool":"big__slow_result"}
+41 call.succeeded {"call_id":"ac1a10b8-8ea5-4343-ab3e-9268cb4a81ab","class":"read","connector_id":"2bd6adea-106e-4250-89fc-f7eae7bf1082","duration_ms":130,"result_bytes":105,"slip_id":"4f8fd034-75c9-444f-ac81-bc5b9c9b5822","tool":"big__slow_result","truncated":false,"upstream_is_error":false}
+42 call.succeeded {"call_id":"62c78e34-d583-4dfa-886f-810bc7d0973c","class":"read","connector_id":"2bd6adea-106e-4250-89fc-f7eae7bf1082","duration_ms":130,"result_bytes":105,"slip_id":"4f8fd034-75c9-444f-ac81-bc5b9c9b5822","tool":"big__slow_result","truncated":false,"upstream_is_error":false}
+43 call.succeeded {"call_id":"019afb99-882f-4858-a4b9-6712c26a8df4","class":"read","connector_id":"2bd6adea-106e-4250-89fc-f7eae7bf1082","duration_ms":242,"result_bytes":105,"slip_id":"4f8fd034-75c9-444f-ac81-bc5b9c9b5822","tool":"big__slow_result","truncated":false,"upstream_is_error":false}
+44 call.succeeded {"call_id":"cbd7e030-690b-4a8d-8728-53e99a73a995","class":"read","connector_id":"2bd6adea-106e-4250-89fc-f7eae7bf1082","duration_ms":244,"result_bytes":105,"slip_id":"4f8fd034-75c9-444f-ac81-bc5b9c9b5822","tool":"big__slow_result","truncated":false,"upstream_is_error":false}
+45 call.succeeded {"call_id":"1fc38a67-24d1-4e54-a300-207775c37e3f","class":"read","connector_id":"2bd6adea-106e-4250-89fc-f7eae7bf1082","duration_ms":355,"result_bytes":105,"slip_id":"4f8fd034-75c9-444f-ac81-bc5b9c9b5822","tool":"big__slow_result","truncated":false,"upstream_is_error":false}
+46 call.succeeded {"call_id":"3eec6c0b-f801-4966-bf0b-99c30d4be6af","class":"read","connector_id":"2bd6adea-106e-4250-89fc-f7eae7bf1082","duration_ms":356,"result_bytes":105,"slip_id":"4f8fd034-75c9-444f-ac81-bc5b9c9b5822","tool":"big__slow_result","truncated":false,"upstream_is_error":false}
+{"ok":true,"checked":46}
+
+VERDICT: pass

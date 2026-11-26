@@ -1,5 +1,5 @@
 import { randomBytes, randomUUID } from "node:crypto";
-import { and, eq, isNull, lte } from "drizzle-orm";
+import { and, eq, gt, isNull, lte } from "drizzle-orm";
 import {
   AuthorizationServerMismatchError,
   OAuthError,
@@ -7,7 +7,7 @@ import {
   auth,
   type FetchLike,
 } from "@modelcontextprotocol/client";
-import { appendJournalEvent } from "../../db/journal.ts";
+import { recordEvent } from "../../db/events.ts";
 import { oauthAttempts, connectors } from "../../db/schema.ts";
 import { scopedGet } from "../../db/scoped-reads.ts";
 import { assertFetchableUrl, egressRequest } from "../../egress/guard.ts";
@@ -17,6 +17,7 @@ import { applyDiscovery } from "../discovery.ts";
 import {
   connectorRow,
   connectorView,
+  markConnectorNeedsReauth,
   setConnectorAuthStatus,
   type ConnectorBaseDeps,
   type ConnectorView,
@@ -30,6 +31,7 @@ import {
 import type { McpTransportKind } from "@errand/shared";
 import type { DiscoveredTool, IngestSummary } from "../catalog.ts";
 import type { CredentialStore } from "../../vault/credentials.ts";
+import { VaultError } from "../../vault/common.ts";
 import type { Vault } from "../../vault/vault.ts";
 import { ReauthRequiredError } from "./errors.ts";
 import { withConnectorLock } from "./lock.ts";
@@ -90,7 +92,7 @@ function providerFor(
       if (options.attemptId !== undefined) store.saveAttemptSecret(options.attemptId, secret);
     },
     onAuthorizationUrl: options.onAuthorizationUrl ?? (() => undefined),
-    onCredentialsInvalidated: (scope) => markNeedsReauth(deps, connectorId, `invalidated_${scope}`),
+    onCredentialsInvalidated: (scope) => markConnectorNeedsReauth(deps, connectorId, `invalidated_${scope}`),
   });
 }
 
@@ -129,27 +131,64 @@ function asConnectorError(
   return new ConnectorError(fallback, `Authorization failed: ${reason}`);
 }
 
-// Emits once per transition into needs_reauth; a second failure while already
-// needing a sign-in updates the reason without spamming the journal.
-function markNeedsReauth(deps: OAuthServiceDeps, connectorId: string, reason: string): void {
-  const row = connectorRow(deps, connectorId);
-  const wasNeedsReauth = row.authStatus === "needs_reauth";
-  setConnectorAuthStatus(deps, connectorId, "needs_reauth", reason);
-  if (!wasNeedsReauth) {
-    appendJournalEvent(deps.db, {
-      userId: deps.userId,
-      eventType: "connector.needs_reauth",
-      payload: { connectorId, reason },
-    });
-  }
-}
-
 function deleteAttempt(store: OAuthStore, deps: OAuthServiceDeps, attemptId: string): void {
   store.deleteAttemptSecret(attemptId);
   deps.db.delete(oauthAttempts).where(eq(oauthAttempts.id, attemptId)).run();
 }
 
-function pruneExpiredAttempts(deps: OAuthServiceDeps): void {
+function hasLiveAttempt(deps: OAuthServiceDeps, connectorId: string): boolean {
+  return (
+    deps.db
+      .select({ id: oauthAttempts.id })
+      .from(oauthAttempts)
+      .where(
+        and(
+          eq(oauthAttempts.userId, deps.userId),
+          eq(oauthAttempts.connectorId, connectorId),
+          isNull(oauthAttempts.consumedAt),
+          gt(oauthAttempts.expiresAt, new Date().toISOString()),
+        ),
+      )
+      .all().length > 0
+  );
+}
+
+function attemptIdsFor(deps: OAuthServiceDeps, connectorId: string): string[] {
+  return deps.db
+    .select({ id: oauthAttempts.id })
+    .from(oauthAttempts)
+    .where(and(eq(oauthAttempts.userId, deps.userId), eq(oauthAttempts.connectorId, connectorId)))
+    .all()
+    .map((attempt) => attempt.id);
+}
+
+async function connectorIsDiscardable(
+  deps: OAuthServiceDeps,
+  store: OAuthStore,
+  connectorId: string,
+  keepConnectorId?: string,
+): Promise<boolean> {
+  if (connectorId === keepConnectorId) return false;
+  const connector = deps.db
+    .select()
+    .from(connectors)
+    .where(and(eq(connectors.userId, deps.userId), eq(connectors.id, connectorId)))
+    .all()[0];
+  if (connector?.authType !== "oauth" || connector.authStatus !== "pending") return false;
+  try {
+    if ((await store.connectorState(connectorId)).tokens !== undefined) return false;
+  } catch (error) {
+    // An unreadable credential is not proof the flow never finished; keep the connector.
+    if (error instanceof VaultError) return false;
+    throw error;
+  }
+  return !hasLiveAttempt(deps, connectorId);
+}
+
+async function pruneExpiredAttempts(
+  deps: OAuthServiceDeps,
+  keepConnectorId?: string,
+): Promise<void> {
   const rows = deps.db
     .select()
     .from(oauthAttempts)
@@ -161,8 +200,23 @@ function pruneExpiredAttempts(deps: OAuthServiceDeps): void {
       ),
     )
     .all();
+  if (rows.length === 0) return;
+
+  const attemptIdsByConnector = new Map<string, string[]>();
+  for (const row of rows) {
+    const attemptIds = attemptIdsByConnector.get(row.connectorId);
+    if (attemptIds === undefined) attemptIdsByConnector.set(row.connectorId, [row.id]);
+    else attemptIds.push(row.id);
+  }
+
   const store = new OAuthStore(deps.vault, deps.store);
-  for (const row of rows) deleteAttempt(store, deps, row.id);
+  for (const [connectorId, attemptIds] of attemptIdsByConnector) {
+    if (await connectorIsDiscardable(deps, store, connectorId, keepConnectorId)) {
+      discardConnector(deps, connectorId, attemptIdsFor(deps, connectorId));
+    } else {
+      for (const attemptId of attemptIds) deleteAttempt(store, deps, attemptId);
+    }
+  }
 }
 
 function discardConnector(deps: OAuthServiceDeps, connectorId: string, attemptIds: string[]): void {
@@ -173,6 +227,38 @@ function discardConnector(deps: OAuthServiceDeps, connectorId: string, attemptId
     .delete(connectors)
     .where(and(eq(connectors.userId, deps.userId), eq(connectors.id, connectorId)))
     .run();
+}
+
+async function sweepPendingConnectors(
+  deps: OAuthServiceDeps,
+  keepConnectorId?: string,
+): Promise<void> {
+  const rows = deps.db
+    .select()
+    .from(connectors)
+    .where(
+      and(
+        eq(connectors.userId, deps.userId),
+        eq(connectors.authType, "oauth"),
+        eq(connectors.authStatus, "pending"),
+      ),
+    )
+    .all();
+  const store = new OAuthStore(deps.vault, deps.store);
+  for (const row of rows) {
+    if (!(await connectorIsDiscardable(deps, store, row.id, keepConnectorId))) continue;
+    discardConnector(deps, row.id, attemptIdsFor(deps, row.id));
+  }
+}
+
+// Both a new flow and a re-auth start by clearing attempts and connectors that
+// can no longer complete, except the connector the human is explicitly re-authorizing.
+async function cleanupDeadConnectors(
+  deps: OAuthServiceDeps,
+  keepConnectorId?: string,
+): Promise<void> {
+  await pruneExpiredAttempts(deps, keepConnectorId);
+  await sweepPendingConnectors(deps, keepConnectorId);
 }
 
 function pruneAttempts(deps: OAuthServiceDeps, connectorId: string): void {
@@ -208,11 +294,85 @@ async function runAuthorizationLeg(
   }
 }
 
+// Both a fresh connection and a re-authorization start with the same leg: the
+// URL the human must visit, with the verifier kept in the vault.
+async function beginAuthorization(
+  deps: OAuthServiceDeps,
+  connectorId: string,
+  serverUrl: string,
+  store: OAuthStore,
+  attemptId: string,
+  state: string,
+): Promise<{ authorizationUrl: string }> {
+  let authorizationUrl: string | undefined;
+  await runAuthorizationLeg(deps, connectorId, serverUrl, store, {
+    attemptId,
+    state,
+    onAuthorizationUrl: (url) => {
+      authorizationUrl = url.href;
+    },
+  });
+  if (authorizationUrl === undefined) {
+    throw new Error("The authorization server did not return an authorization URL");
+  }
+  return { authorizationUrl };
+}
+
+function insertAttempt(
+  deps: OAuthServiceDeps,
+  values: { attemptId: string; connectorId: string; state: string; now: Date },
+): void {
+  deps.db
+    .insert(oauthAttempts)
+    .values({
+      id: values.attemptId,
+      userId: deps.userId,
+      connectorId: values.connectorId,
+      state: values.state,
+      redirectUri: deps.redirectUri,
+      createdAt: values.now.toISOString(),
+      expiresAt: new Date(values.now.getTime() + OAUTH_ATTEMPT_TTL_MS).toISOString(),
+    })
+    .run();
+}
+
+async function authorizeAndAnnounce(
+  deps: OAuthServiceDeps,
+  input: {
+    connectorId: string;
+    url: string;
+    store: OAuthStore;
+    attemptId: string;
+    state: string;
+    eventType: "connector.oauth_started" | "connector.oauth_restarted";
+  },
+): Promise<OAuthStartResult> {
+  const { authorizationUrl } = await beginAuthorization(
+    deps,
+    input.connectorId,
+    input.url,
+    input.store,
+    input.attemptId,
+    input.state,
+  );
+  pruneAttempts(deps, input.connectorId);
+  recordEvent(deps.db, {
+    userId: deps.userId,
+    eventType: input.eventType,
+    payload: { connector_id: input.connectorId, host: new URL(input.url).host },
+  });
+  return {
+    connector: connectorView(connectorRow(deps, input.connectorId)),
+    authorizationUrl,
+    attemptId: input.attemptId,
+  };
+}
+
 export async function startOAuthFlow(
   deps: OAuthServiceDeps,
   input: { name: string; url: string },
 ): Promise<OAuthStartResult> {
-  pruneExpiredAttempts(deps);
+  await cleanupDeadConnectors(deps);
   assertConnectorQuota(deps.db, deps.userId, deps.maxConnectors);
   const normalized = (await assertFetchableUrl(input.url, deps.discoverOptions)).href;
   const now = new Date();
@@ -234,47 +394,59 @@ export async function startOAuthFlow(
       updatedAt: now.toISOString(),
     })
     .run();
-  deps.db
-    .insert(oauthAttempts)
-    .values({
-      id: attemptId,
-      userId: deps.userId,
-      connectorId,
-      state,
-      redirectUri: deps.redirectUri,
-      createdAt: now.toISOString(),
-      expiresAt: new Date(now.getTime() + OAUTH_ATTEMPT_TTL_MS).toISOString(),
-    })
-    .run();
+  insertAttempt(deps, { attemptId, connectorId, state, now });
 
   const store = new OAuthStore(deps.vault, deps.store);
-  let authorizationUrl: string | undefined;
-
   try {
-    await runAuthorizationLeg(deps, connectorId, normalized, store, {
+    return await authorizeAndAnnounce(deps, {
+      connectorId,
+      url: normalized,
+      store,
       attemptId,
       state,
-      onAuthorizationUrl: (url) => {
-        authorizationUrl = url.href;
-      },
-    });
-    if (authorizationUrl === undefined) {
-      throw new Error("The authorization server did not return an authorization URL");
-    }
-    pruneAttempts(deps, connectorId);
-    appendJournalEvent(deps.db, {
-      userId: deps.userId,
       eventType: "connector.oauth_started",
-      payload: { connectorId, host: new URL(normalized).host },
     });
-    return {
-      connector: connectorView(connectorRow(deps, connectorId)),
-      authorizationUrl,
-      attemptId,
-    };
   } catch (error) {
     discardConnector(deps, connectorId, [attemptId]);
     throw asConnectorError(error, failureReason(error), "oauth_failed");
+  }
+}
+
+// Re-authorization keeps the connector, its catalog and its pinned approvals;
+// only the tokens are replaced when the callback completes.
+export async function startOAuthReauth(
+  deps: OAuthServiceDeps,
+  connectorId: string,
+): Promise<OAuthStartResult> {
+  await cleanupDeadConnectors(deps, connectorId);
+  const row = connectorRow(deps, connectorId);
+  if (row.authType !== "oauth") {
+    throw new ConnectorError("reauth", "Only an OAuth connector can be re-authorized in a browser");
+  }
+  const now = new Date();
+  const attemptId = randomUUID();
+  const state = randomBytes(32).toString("base64url");
+  insertAttempt(deps, { attemptId, connectorId, state, now });
+  deps.db
+    .update(connectors)
+    .set({ authStatus: "pending", updatedAt: now.toISOString() })
+    .where(and(eq(connectors.userId, deps.userId), eq(connectors.id, connectorId)))
+    .run();
+
+  const store = new OAuthStore(deps.vault, deps.store);
+  try {
+    return await authorizeAndAnnounce(deps, {
+      connectorId,
+      url: row.url,
+      store,
+      attemptId,
+      state,
+      eventType: "connector.oauth_restarted",
+    });
+  } catch (error) {
+    deleteAttempt(store, deps, attemptId);
+    markConnectorNeedsReauth(deps, connectorId, failureReason(error));
+    throw asConnectorError(error, failureReason(error), "reauth");
   }
 }
 
@@ -282,7 +454,7 @@ export async function completeOAuthFlow(
   deps: OAuthServiceDeps,
   input: { state: string; code: string; iss?: string },
 ): Promise<OAuthCompleteResult> {
-  pruneExpiredAttempts(deps);
+  await pruneExpiredAttempts(deps);
   const attempt = scopedGet(
     deps.db,
     oauthAttempts,
@@ -324,7 +496,7 @@ export async function completeOAuthFlow(
     input.iss !== issuerMetadata.issuer;
   if ((issuerRequired && input.iss === undefined) || issuerMismatch) {
     deleteAttempt(store, deps, attempt.id);
-    markNeedsReauth(deps, row.id, "issuer_mismatch");
+    markConnectorNeedsReauth(deps, row.id, "issuer_mismatch");
     throw new ConnectorError(
       "oauth_issuer",
       "The callback issuer did not match the authorization server",
@@ -341,14 +513,14 @@ export async function completeOAuthFlow(
   } catch (error) {
     const reason = failureReason(error);
     deleteAttempt(store, deps, attempt.id);
-    markNeedsReauth(deps, row.id, reason);
+    markConnectorNeedsReauth(deps, row.id, reason);
     throw asConnectorError(error, reason, "reauth");
   }
   deleteAttempt(store, deps, attempt.id);
 
   const tokens = (await store.connectorState(row.id)).tokens;
   if (tokens === undefined) {
-    markNeedsReauth(deps, row.id, "no_tokens");
+    markConnectorNeedsReauth(deps, row.id, "no_tokens");
     throw new ConnectorError("reauth", "The authorization server issued no tokens");
   }
 
@@ -361,23 +533,23 @@ export async function completeOAuthFlow(
     );
   } catch (error) {
     if (error instanceof McpConnectError && error.code === "auth") {
-      markNeedsReauth(deps, row.id, "upstream_401");
+      markConnectorNeedsReauth(deps, row.id, "upstream_401");
     } else {
       setConnectorAuthStatus(deps, row.id, "active", failureReason(error));
-      appendJournalEvent(deps.db, {
+      recordEvent(deps.db, {
         userId: deps.userId,
         eventType: "connector.oauth_discovery_failed",
-        payload: { connectorId: row.id, reason: failureReason(error) },
+        payload: { connector_id: row.id, reason: failureReason(error) },
       });
     }
     throw error;
   }
 
   setConnectorAuthStatus(deps, row.id, "active", null);
-  appendJournalEvent(deps.db, {
+  recordEvent(deps.db, {
     userId: deps.userId,
     eventType: "connector.oauth_authorized",
-    payload: { connectorId: row.id, host: new URL(row.url).host },
+    payload: { connector_id: row.id, host: new URL(row.url).host },
   });
   const summary = applyDiscovery(deps, row.id, row.name, connection, "catalog.ingested");
 
@@ -391,16 +563,16 @@ export async function completeOAuthFlow(
 
 // Runs inside the per-connector lock so a rotated refresh token cannot be
 // presented twice.
-export function refreshOAuthConnection(
+export function refreshOAuthAccessToken(
   deps: OAuthServiceDeps,
   connectorId: string,
-): Promise<McpConnection> {
+): Promise<string> {
   return withConnectorLock(connectorId, async () => {
     const row = connectorRow(deps, connectorId);
     const store = new OAuthStore(deps.vault, deps.store);
     const state = await store.connectorState(connectorId);
     if (state.tokens === undefined) {
-      markNeedsReauth(deps, connectorId, "no_tokens");
+      markConnectorNeedsReauth(deps, connectorId, "no_tokens");
       throw new ConnectorError("reauth", "This connector has no tokens; sign in again");
     }
 
@@ -410,13 +582,13 @@ export function refreshOAuthConnection(
       const reason = failureReason(error);
       const reauth = requiresReauth(error) || connectorRow(deps, connectorId).authStatus === "needs_reauth";
       if (reauth) {
-        markNeedsReauth(deps, connectorId, reason);
+        markConnectorNeedsReauth(deps, connectorId, reason);
       } else {
         setConnectorAuthStatus(deps, connectorId, "active", reason);
-        appendJournalEvent(deps.db, {
+        recordEvent(deps.db, {
           userId: deps.userId,
           eventType: "connector.oauth_refresh_failed",
-          payload: { connectorId, reason },
+          payload: { connector_id: connectorId, reason },
         });
       }
       throw asConnectorError(error, reason, reauth ? "reauth" : "oauth_failed");
@@ -425,29 +597,38 @@ export function refreshOAuthConnection(
     const refreshed = await store.connectorState(connectorId);
     const accessToken = refreshed.tokens?.access_token;
     if (accessToken === undefined) {
-      markNeedsReauth(deps, connectorId, "no_tokens");
+      markConnectorNeedsReauth(deps, connectorId, "no_tokens");
       throw new ConnectorError("reauth", "The refresh produced no access token");
     }
-
-    try {
-      const connection = await discoverMcpTools(
-        row.url,
-        { type: "oauth", accessToken },
-        deps.discoverOptions,
-      );
-      setConnectorAuthStatus(deps, connectorId, "active", null);
-      appendJournalEvent(deps.db, {
-        userId: deps.userId,
-        eventType: "connector.oauth_refreshed",
-        payload: { connectorId },
-      });
-      return connection;
-    } catch (error) {
-      if (error instanceof McpConnectError && error.code === "auth") {
-        markNeedsReauth(deps, connectorId, "upstream_401");
-        throw new ConnectorError("reauth", "The upstream still rejected the refreshed token");
-      }
-      throw error;
-    }
+    return accessToken;
   });
+}
+
+export async function refreshOAuthConnection(
+  deps: OAuthServiceDeps,
+  connectorId: string,
+): Promise<McpConnection> {
+  const row = connectorRow(deps, connectorId);
+  const accessToken = await refreshOAuthAccessToken(deps, connectorId);
+
+  try {
+    const connection = await discoverMcpTools(
+      row.url,
+      { type: "oauth", accessToken },
+      deps.discoverOptions,
+    );
+    setConnectorAuthStatus(deps, connectorId, "active", null);
+    recordEvent(deps.db, {
+      userId: deps.userId,
+      eventType: "connector.oauth_refreshed",
+      payload: { connector_id: connectorId },
+    });
+    return connection;
+  } catch (error) {
+    if (error instanceof McpConnectError && error.code === "auth") {
+      markConnectorNeedsReauth(deps, connectorId, "upstream_401");
+      throw new ConnectorError("reauth", "The upstream still rejected the refreshed token");
+    }
+    throw error;
+  }
 }

@@ -11,6 +11,7 @@ const EXPECTED_TABLES = [
   "tools",
   "slips",
   "calls",
+  "outbox",
   "receipts",
   "undo_actions",
   "trust",

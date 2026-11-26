@@ -1,0 +1,1 @@
+ALTER TABLE `slips` ADD `trims` text DEFAULT '[]' NOT NULL;

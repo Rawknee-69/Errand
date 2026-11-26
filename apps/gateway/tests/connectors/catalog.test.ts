@@ -1,7 +1,12 @@
 import { beforeEach, describe, expect, test } from "bun:test";
 import { createMigratedDatabase, type Db } from "../../src/db/client.ts";
 import { connectors, tools, users } from "../../src/db/schema.ts";
-import { approveTool, ingestTools, listCatalog } from "../../src/connectors/catalog.ts";
+import {
+  approveCatalogTool,
+  ingestTools,
+  listCatalog,
+  setToolRequestable,
+} from "../../src/connectors/catalog.ts";
 
 const TS = "2026-01-01T00:00:00.000Z";
 
@@ -138,7 +143,7 @@ describe("ingestTools", () => {
     const after = listCatalog(db, "user-a")[0]!;
     expect(summary.changed).toBe(1);
     expect(after.state).toBe("changed");
-    expect(after.requestable).toBe(false);
+    expect(after.requestable).toBe(true);
     expect(after.changedAt).toBe("2026-01-02T00:00:00.000Z");
     expect(after.definitionHash).toBe(before.definitionHash);
     expect(after.observedHash).not.toBe(before.definitionHash);
@@ -163,13 +168,52 @@ describe("ingestTools", () => {
     expect(changed.description).toBe("List events");
     expect(changed.observedDescription).toBe("Changed");
 
-    const approved = approveTool(db, "user-a", changed.id, "2026-01-03T00:00:00.000Z");
+    const approved = approveCatalogTool(db, "user-a", changed.id, "2026-01-03T00:00:00.000Z");
 
     expect(approved.state).toBe("active");
     expect(approved.requestable).toBe(true);
     expect(approved.changedAt).toBeNull();
     expect(approved.definitionHash).toBe(changed.observedHash);
     expect(approved.description).toBe("Changed");
+  });
+
+  test("keeps a human's off toggle across a change and re-approval", () => {
+    ingestTools(db, {
+      userId: "user-a",
+      connectorId: "conn-1",
+      connectorName: "Calendar",
+      tools: [listEvents],
+      now: TS,
+    });
+    const before = listCatalog(db, "user-a")[0]!;
+    setToolRequestable(db, "user-a", before.id, false);
+
+    ingestTools(db, {
+      userId: "user-a",
+      connectorId: "conn-1",
+      connectorName: "Calendar",
+      tools: [{ ...listEvents, description: "Changed" }],
+      now: "2026-01-02T00:00:00.000Z",
+    });
+    const changed = listCatalog(db, "user-a")[0]!;
+    expect(changed.state).toBe("changed");
+    expect(changed.requestable).toBe(false);
+
+    const approved = approveCatalogTool(db, "user-a", changed.id);
+    expect(approved.requestable).toBe(false);
+  });
+
+  test("refuses to expose an unclassified tool", () => {
+    ingestTools(db, {
+      userId: "user-a",
+      connectorId: "conn-1",
+      connectorName: "Calendar",
+      tools: [{ name: "zeta" }],
+      now: TS,
+    });
+    const unknown = listCatalog(db, "user-a")[0]!;
+    expect(unknown.class).toBe("unknown");
+    expect(() => setToolRequestable(db, "user-a", unknown.id, true)).toThrow("no safe class");
   });
 
   test("keeps the pinned class until the changed definition is approved", () => {
@@ -198,9 +242,9 @@ describe("ingestTools", () => {
     expect(changed.observedClass).toBe("read");
     expect(changed.requestable).toBe(false);
 
-    const approved = approveTool(db, "user-a", changed.id);
+    const approved = approveCatalogTool(db, "user-a", changed.id);
     expect(approved.class).toBe("read");
-    expect(approved.requestable).toBe(true);
+    expect(approved.requestable).toBe(false);
   });
 
   test("marks a tool the server no longer lists as removed and blocks it", () => {
@@ -223,7 +267,7 @@ describe("ingestTools", () => {
     const removed = listCatalog(db, "user-a").find((row) => row.name === "create_event");
     expect(summary.removed).toBe(1);
     expect(removed?.state).toBe("removed");
-    expect(removed?.requestable).toBe(false);
+    expect(removed?.requestable).toBe(true);
     expect(removed?.removedAt).toBe("2026-01-02T00:00:00.000Z");
   });
 
@@ -303,7 +347,7 @@ describe("ingestTools", () => {
   });
 });
 
-describe("approveTool", () => {
+describe("approveCatalogTool", () => {
   test("refuses to approve a removed tool", () => {
     const db = fixture();
     ingestTools(db, {
@@ -322,6 +366,6 @@ describe("approveTool", () => {
     });
     const removed = db.select().from(tools).all()[0]!;
 
-    expect(() => approveTool(db, "user-a", removed.id, TS)).toThrow("removed");
+    expect(() => approveCatalogTool(db, "user-a", removed.id, TS)).toThrow("removed");
   });
 });

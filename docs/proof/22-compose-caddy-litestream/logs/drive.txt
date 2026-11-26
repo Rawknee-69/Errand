@@ -1,0 +1,9 @@
+ok: gateway session endpoint through Caddy
+ok: web routes and SPA fallback
+ok: agent endpoint, API and OAuth callback reach the gateway
+ok: first login
+ok: agent key issued
+ok: connector connected and its credential stored
+ok: journal verifies
+ok: the restored replica holds the credential only as ciphertext and the KEK nowhere
+native stack probe passed

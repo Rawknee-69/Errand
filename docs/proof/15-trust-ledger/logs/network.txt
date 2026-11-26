@@ -1,0 +1,14 @@
+Browser network â€” /slips after the proof drive, desktop window (generation 6).
+Captured 2026-11-26 17:50 local. Every request completed with 2xx; the SSE
+stream stays pending for the life of the page, as designed.
+
+GET  /slips                                 304
+GET  /api/auth/session                      200
+GET  /api/slips                             200
+GET  /api/events                            200 (eventsource, pending â€” live feed)
+GET  /api/slips/4ce5ecb2-7ad5-4bed-ad28-72a71b92ee78   200
+GET  /api/slips/5e5b6cf5-0947-4f7f-8d51-858f4959f7b9   200
+
+No failed requests. No credential, key or token appears in the page, the
+network payloads or the console; the trust and receipt payloads carry only
+counts and summaries.

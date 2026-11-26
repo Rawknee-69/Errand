@@ -1,0 +1,140 @@
+event: ready
+data: {"since":0}
+retry: 2000
+
+event: feed
+data: {"seq":1,"eventType":"agent_key.created","createdAt":"2026-11-26T11:59:42.003Z","payload":{"agent_key_id":"0d3a70f1-279c-4146-a6e8-ac665fc52708","name":"outbox proof agent"}}
+id: 1
+
+event: feed
+data: {"seq":2,"eventType":"connector.connected","createdAt":"2026-11-26T11:59:42.077Z","payload":{"authType":"header","connectorId":"2a0f5212-fe82-4367-a34a-04cfd95684c6","host":"127.0.0.1:4122","toolCount":4,"transport":"streamable-http"}}
+id: 2
+
+event: feed
+data: {"seq":3,"eventType":"catalog.ingested","createdAt":"2026-11-26T11:59:42.092Z","payload":{"changed":0,"connectorId":"2a0f5212-fe82-4367-a34a-04cfd95684c6","new":4,"removed":0,"total":4,"unchanged":0}}
+id: 3
+
+event: feed
+data: {"seq":4,"eventType":"catalog.requestable_changed","createdAt":"2026-11-26T11:59:42.105Z","payload":{"connectorId":"2a0f5212-fe82-4367-a34a-04cfd95684c6","name":"send_receipt","requestable":true,"toolId":"eea0d04b-a44e-4340-a61d-fd3a66f0ce5a"}}
+id: 4
+
+event: feed
+data: {"seq":5,"eventType":"catalog.requestable_changed","createdAt":"2026-11-26T11:59:42.109Z","payload":{"connectorId":"2a0f5212-fe82-4367-a34a-04cfd95684c6","name":"charge_card","requestable":true,"toolId":"5aa62cea-3790-419e-9356-72ada6e5c4ea"}}
+id: 5
+
+event: feed
+data: {"seq":6,"eventType":"slip.approved","createdAt":"2026-11-26T11:59:42.153Z","payload":{"call_cap":10,"errand_type":"2d50d9d60e0276574678b37664db6f37a4a48adff041b8c155130a8caca9babe","expires_at":"2026-11-26T12:29:42.146Z","slip_id":"940191ac-bc87-4ecf-a867-9f9748e38ff2","spend_cap_cents":10000,"tier":"learner","trims":[]}}
+id: 6
+
+event: feed
+data: {"seq":7,"eventType":"call.allowed","createdAt":"2026-11-26T11:59:42.264Z","payload":{"amount_cents":0,"arguments":{"id":"rcpt-proof"},"calls_remaining":9,"connector_id":"2a0f5212-fe82-4367-a34a-04cfd95684c6","reason":"admitted","slip_id":"940191ac-bc87-4ecf-a867-9f9748e38ff2","spend_remaining_cents":10000,"tool":"pay__send_receipt"}}
+id: 7
+
+event: feed
+data: {"seq":8,"eventType":"outbox.held","createdAt":"2026-11-26T11:59:42.267Z","payload":{"amount_cents":0,"class":"send","expires_at":"2026-11-26T12:00:17.265Z","outbox_id":"eb616eac-809e-4cf4-bed6-25063eb94976","release_at":"2026-11-26T12:00:12.265Z","slip_id":"940191ac-bc87-4ecf-a867-9f9748e38ff2","tool":"pay__send_receipt"}}
+id: 8
+
+: keep-alive
+
+: keep-alive
+
+event: feed
+data: {"seq":9,"eventType":"call.succeeded","createdAt":"2026-11-26T12:00:12.487Z","payload":{"call_id":"6fb2ef8a-6394-44c7-90cb-294847f31d26","class":"send","connector_id":"2a0f5212-fe82-4367-a34a-04cfd95684c6","duration_ms":19,"result_bytes":117,"slip_id":"940191ac-bc87-4ecf-a867-9f9748e38ff2","tool":"pay__send_receipt","truncated":false,"upstream_is_error":false}}
+id: 9
+
+event: feed
+data: {"seq":10,"eventType":"receipt.created","createdAt":"2026-11-26T12:00:12.490Z","payload":{"call_id":"6fb2ef8a-6394-44c7-90cb-294847f31d26","irreversible":true,"receipt_id":"ae30f63d-865b-4ddd-adea-297daf5d8ee8","slip_id":"940191ac-bc87-4ecf-a867-9f9748e38ff2","summary":"No verifier is installed for Pay, so this change is unverified. This cannot be undone.","tool_class":"send","undo_available":false,"verification":"unverified"}}
+id: 10
+
+event: feed
+data: {"seq":11,"eventType":"outbox.released","createdAt":"2026-11-26T12:00:12.492Z","payload":{"amount_cents":0,"call_id":"6fb2ef8a-6394-44c7-90cb-294847f31d26","class":"send","outbox_id":"eb616eac-809e-4cf4-bed6-25063eb94976","outcome":"succeeded","reason":null,"slip_id":"940191ac-bc87-4ecf-a867-9f9748e38ff2","tool":"pay__send_receipt"}}
+id: 11
+
+event: feed
+data: {"seq":12,"eventType":"slip.approved","createdAt":"2026-11-26T12:00:12.583Z","payload":{"call_cap":10,"errand_type":"2d50d9d60e0276574678b37664db6f37a4a48adff041b8c155130a8caca9babe","expires_at":"2026-11-26T12:30:12.577Z","slip_id":"604289d7-49b6-4899-9bbd-e47b35e47365","spend_cap_cents":10000,"tier":"learner","trims":[]}}
+id: 12
+
+event: feed
+data: {"seq":13,"eventType":"call.allowed","createdAt":"2026-11-26T12:00:12.603Z","payload":{"amount_cents":0,"arguments":{"id":"rcpt-proof"},"calls_remaining":9,"connector_id":"2a0f5212-fe82-4367-a34a-04cfd95684c6","reason":"admitted","slip_id":"604289d7-49b6-4899-9bbd-e47b35e47365","spend_remaining_cents":10000,"tool":"pay__send_receipt"}}
+id: 13
+
+event: feed
+data: {"seq":14,"eventType":"outbox.held","createdAt":"2026-11-26T12:00:12.607Z","payload":{"amount_cents":0,"class":"send","expires_at":"2026-11-26T12:00:47.606Z","outbox_id":"8cdd5dd6-f8c5-4ffa-a158-d4ecb0428372","release_at":"2026-11-26T12:00:42.606Z","slip_id":"604289d7-49b6-4899-9bbd-e47b35e47365","tool":"pay__send_receipt"}}
+id: 14
+
+event: feed
+data: {"seq":15,"eventType":"outbox.cancelled","createdAt":"2026-11-26T12:00:12.613Z","payload":{"class":"send","outbox_id":"8cdd5dd6-f8c5-4ffa-a158-d4ecb0428372","reason":"human_cancelled","slip_id":"604289d7-49b6-4899-9bbd-e47b35e47365","tool":"pay__send_receipt"}}
+id: 15
+
+: keep-alive
+
+: keep-alive
+
+: keep-alive
+
+event: feed
+data: {"seq":16,"eventType":"slip.approved","createdAt":"2026-11-26T12:00:44.632Z","payload":{"call_cap":10,"errand_type":"3a4a248a67c1df4c03b435876da30e94ebd4b7f8a5058087aa6ba8fcf4e1341b","expires_at":"2026-11-26T12:30:44.623Z","slip_id":"3f452d2b-5426-47ac-a3c5-8d3744c29c55","spend_cap_cents":10000,"tier":"learner","trims":[]}}
+id: 16
+
+event: feed
+data: {"seq":17,"eventType":"call.allowed","createdAt":"2026-11-26T12:00:44.647Z","payload":{"amount_cents":1250,"arguments":{"cents":1250},"calls_remaining":9,"connector_id":"2a0f5212-fe82-4367-a34a-04cfd95684c6","reason":"admitted","slip_id":"3f452d2b-5426-47ac-a3c5-8d3744c29c55","spend_remaining_cents":8750,"tool":"pay__charge_card"}}
+id: 17
+
+event: feed
+data: {"seq":18,"eventType":"outbox.needs_human","createdAt":"2026-11-26T12:00:44.649Z","payload":{"amount_cents":1250,"class":"spend","expires_at":"2026-11-26T12:05:44.648Z","outbox_id":"51fcf5c1-393b-4816-babc-8981ce877c70","release_at":null,"slip_id":"3f452d2b-5426-47ac-a3c5-8d3744c29c55","tool":"pay__charge_card"}}
+id: 18
+
+event: feed
+data: {"seq":19,"eventType":"outbox.confirmed","createdAt":"2026-11-26T12:00:44.655Z","payload":{"amount_cents":1250,"class":"spend","outbox_id":"51fcf5c1-393b-4816-babc-8981ce877c70","slip_id":"3f452d2b-5426-47ac-a3c5-8d3744c29c55","tool":"pay__charge_card"}}
+id: 19
+
+event: feed
+data: {"seq":20,"eventType":"call.succeeded","createdAt":"2026-11-26T12:00:44.684Z","payload":{"call_id":"6d1c2de9-5c92-4acc-8acf-def1465a7070","class":"spend","connector_id":"2a0f5212-fe82-4367-a34a-04cfd95684c6","duration_ms":25,"result_bytes":130,"slip_id":"3f452d2b-5426-47ac-a3c5-8d3744c29c55","tool":"pay__charge_card","truncated":false,"upstream_is_error":false}}
+id: 20
+
+event: feed
+data: {"seq":21,"eventType":"receipt.created","createdAt":"2026-11-26T12:00:44.686Z","payload":{"call_id":"6d1c2de9-5c92-4acc-8acf-def1465a7070","irreversible":true,"receipt_id":"67f8fd69-d550-4fe6-965a-62203cfe133e","slip_id":"3f452d2b-5426-47ac-a3c5-8d3744c29c55","summary":"No verifier is installed for Pay, so this change is unverified. This cannot be undone.","tool_class":"spend","undo_available":false,"verification":"unverified"}}
+id: 21
+
+event: feed
+data: {"seq":22,"eventType":"outbox.completed","createdAt":"2026-11-26T12:00:44.688Z","payload":{"amount_cents":1250,"call_id":"6d1c2de9-5c92-4acc-8acf-def1465a7070","class":"spend","outbox_id":"51fcf5c1-393b-4816-babc-8981ce877c70","outcome":"succeeded","reason":null,"slip_id":"3f452d2b-5426-47ac-a3c5-8d3744c29c55","tool":"pay__charge_card"}}
+id: 22
+
+event: feed
+data: {"seq":23,"eventType":"slip.approved","createdAt":"2026-11-26T12:00:44.697Z","payload":{"call_cap":10,"errand_type":"3a4a248a67c1df4c03b435876da30e94ebd4b7f8a5058087aa6ba8fcf4e1341b","expires_at":"2026-11-26T12:30:44.691Z","slip_id":"0420f78c-dd50-48d7-9081-94962a85627a","spend_cap_cents":10000,"tier":"license","trims":[]}}
+id: 23
+
+event: feed
+data: {"seq":24,"eventType":"call.allowed","createdAt":"2026-11-26T12:00:44.709Z","payload":{"amount_cents":4400,"arguments":{"cents":4400},"calls_remaining":9,"connector_id":"2a0f5212-fe82-4367-a34a-04cfd95684c6","reason":"admitted","slip_id":"0420f78c-dd50-48d7-9081-94962a85627a","spend_remaining_cents":5600,"tool":"pay__charge_card"}}
+id: 24
+
+event: feed
+data: {"seq":25,"eventType":"outbox.needs_human","createdAt":"2026-11-26T12:00:44.710Z","payload":{"amount_cents":4400,"class":"spend","expires_at":"2026-11-26T12:05:44.709Z","outbox_id":"3c31b2da-1b71-4c46-9dc2-9cfee0224e0b","release_at":null,"slip_id":"0420f78c-dd50-48d7-9081-94962a85627a","tool":"pay__charge_card"}}
+id: 25
+
+event: feed
+data: {"seq":26,"eventType":"outbox.cancelled","createdAt":"2026-11-26T12:00:44.715Z","payload":{"class":"spend","outbox_id":"3c31b2da-1b71-4c46-9dc2-9cfee0224e0b","reason":"human_cancelled","slip_id":"0420f78c-dd50-48d7-9081-94962a85627a","tool":"pay__charge_card"}}
+id: 26
+
+event: feed
+data: {"seq":27,"eventType":"slip.approved","createdAt":"2026-11-26T12:00:44.723Z","payload":{"call_cap":10,"errand_type":"2d50d9d60e0276574678b37664db6f37a4a48adff041b8c155130a8caca9babe","expires_at":"2026-11-26T12:30:44.718Z","slip_id":"3512c010-6eda-415d-9e7a-647672900dc7","spend_cap_cents":10000,"tier":"learner","trims":[]}}
+id: 27
+
+event: feed
+data: {"seq":28,"eventType":"call.allowed","createdAt":"2026-11-26T12:00:44.734Z","payload":{"amount_cents":0,"arguments":{"id":"rcpt-proof"},"calls_remaining":9,"connector_id":"2a0f5212-fe82-4367-a34a-04cfd95684c6","reason":"admitted","slip_id":"3512c010-6eda-415d-9e7a-647672900dc7","spend_remaining_cents":10000,"tool":"pay__send_receipt"}}
+id: 28
+
+event: feed
+data: {"seq":29,"eventType":"outbox.held","createdAt":"2026-11-26T12:00:44.736Z","payload":{"amount_cents":0,"class":"send","expires_at":"2026-11-26T12:01:19.735Z","outbox_id":"be15f9ad-07fe-4341-b1bc-18c449a0a12f","release_at":"2026-11-26T12:01:14.735Z","slip_id":"3512c010-6eda-415d-9e7a-647672900dc7","tool":"pay__send_receipt"}}
+id: 29
+
+event: feed
+data: {"seq":30,"eventType":"outbox.expired","createdAt":"2026-11-26T12:00:45.491Z","payload":{"class":"send","expires_at":"2026-01-01T00:00:01.000Z","outbox_id":"be15f9ad-07fe-4341-b1bc-18c449a0a12f","reason":"expired","slip_id":"3512c010-6eda-415d-9e7a-647672900dc7","tool":"pay__send_receipt"}}
+id: 30
+
+: keep-alive
+
+: keep-alive
+
+: keep-alive
+

@@ -1,17 +1,31 @@
+import { GatewayError, type HttpStatus } from "../errors.ts";
+
 export type ConnectorErrorCode =
   | "not_found"
   | "credential"
   | "oauth_state"
   | "oauth_issuer"
   | "oauth_failed"
-  | "reauth";
+  | "reauth"
+  | "confirmation_required"
+  | "blocked";
 
-export class ConnectorError extends Error {
+const STATUS: Record<ConnectorErrorCode, HttpStatus> = {
+  not_found: 404,
+  credential: 400,
+  oauth_state: 400,
+  oauth_issuer: 400,
+  oauth_failed: 502,
+  reauth: 409,
+  confirmation_required: 409,
+  blocked: 409,
+};
+
+export class ConnectorError extends GatewayError {
   constructor(
-    readonly code: ConnectorErrorCode,
+    override readonly code: ConnectorErrorCode,
     message: string,
   ) {
-    super(message);
-    this.name = "ConnectorError";
+    super(code, message, STATUS[code]);
   }
 }

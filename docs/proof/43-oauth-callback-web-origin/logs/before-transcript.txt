@@ -1,0 +1,17 @@
+# OAuth callback proof — before — gateway http://127.0.0.1:8789, mock http://127.0.0.1:4002
+POST /api/auth/login -> 200 authenticated=true
+POST /api/connectors/oauth/start -> 201
+  connector bed19d79-3da5-4ed0-906e-713fab7d48d3 authStatus=pending
+GET /oauth/authorize (open) -> 200
+GET /oauth/authorize (refresh mid-flow) -> 200
+POST /oauth/authorize (Approve) -> 302
+  Location: http://127.0.0.1:8789/api/oauth/callback?code=<redacted>&state=<redacted>&iss=http%3A%2F%2F127.0.0.1%3A4002
+GET /api/oauth/callback?code=<redacted>&state=<redacted>&iss=http%3A%2F%2F127.0.0.1%3A4002 (success, Accept: text/html)
+  status: 200
+  Location: null
+  Content-Type: text/html; charset=UTF-8
+  body: <!doctype html> <meta charset="utf-8"> <title>Errand — connected</title> <body style="font-family: system-ui, sans-serif; max-width: 32rem; margin: 4rem auto"> <h1>Connected</h1> <p><strong>Mock calendar before 1</strong> is authorized and its tools are catalogued.</p> <p><a href="/api/catalog">Open
+GET /api/oauth/callback?state=<redacted>&code=<redacted> (unknown state, Accept: text/html)
+  status: 400
+  body: {"error":"oauth_state","message":"The authorization state is unknown or already used"}
+# end

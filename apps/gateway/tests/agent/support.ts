@@ -10,6 +10,7 @@ export type SeededTool = {
   name: string;
   agentName: string;
   description?: string;
+  inputSchema?: string;
   class?: ToolClass;
   requestable?: boolean;
   state?: ToolState;
@@ -40,7 +41,9 @@ export function seedTool(db: Db, userId: string, tool: SeededTool): void {
       name: tool.name,
       agentName: tool.agentName,
       description,
+      inputSchema: tool.inputSchema ?? "{}",
       observedDescription: description,
+      observedInputSchema: tool.inputSchema ?? "{}",
       class: tool.class ?? "read",
       definitionHash: `hash-${tool.id}`,
       observedHash: `hash-${tool.id}`,

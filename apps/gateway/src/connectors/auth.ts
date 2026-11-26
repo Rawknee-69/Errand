@@ -42,6 +42,23 @@ export function authHeaders(auth: ConnectorAuth): Record<string, string> {
   }
 }
 
+// The values an upstream could echo back; redaction uses them before a result
+// reaches the agent, the journal or the calls table.
+export function authSecrets(auth: ConnectorAuth): string[] {
+  switch (auth.type) {
+    case "none":
+      return [];
+    case "bearer":
+      return [auth.token];
+    case "oauth":
+      return [auth.accessToken];
+    case "header":
+      return [auth.value];
+    case "basic":
+      return [auth.password, Buffer.from(`${auth.username}:${auth.password}`).toString("base64")];
+  }
+}
+
 export function serialiseCredential(auth: ConnectorAuth): string | undefined {
   switch (auth.type) {
     case "none":

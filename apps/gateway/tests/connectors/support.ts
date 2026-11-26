@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { authHintSchema } from "@errand/shared";
 import { CONNECTOR_AUTH_STATUSES } from "../../src/db/schema.ts";
 
 export const errorResponseSchema = z.object({
@@ -17,6 +18,7 @@ export const connectorSchema = z.object({
   authType: z.string(),
   authStatus: z.enum(CONNECTOR_AUTH_STATUSES),
   lastAuthError: z.string().nullable(),
+  lastSuccessAt: z.string().nullable(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });
@@ -74,11 +76,16 @@ export const approveResponseSchema = z.object({
   tool: catalogToolSchema,
 });
 
+export const reauthResponseSchema = z.object({
+  connector: connectorSchema,
+  authorizationUrl: z.string(),
+});
+
 export const probeResponseSchema = z.object({
   reachable: z.boolean(),
   transport: z.string().nullable(),
   requiresAuth: z.boolean(),
-  authHint: z.enum(["bearer", "basic", "header"]).nullable(),
+  authHint: authHintSchema.nullable(),
   toolCount: z.number(),
 });
 

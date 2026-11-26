@@ -1,6 +1,6 @@
 import { and, eq } from "drizzle-orm";
 import { connectors } from "../db/schema.ts";
-import { appendJournalEvent } from "../db/journal.ts";
+import { recordEvent } from "../db/events.ts";
 import { ingestTools, type IngestSummary } from "./catalog.ts";
 import type { McpConnection } from "./mcp.ts";
 import type { ConnectorBaseDeps } from "./records.ts";
@@ -14,9 +14,10 @@ export function applyDiscovery(
   connection: McpConnection,
   eventType: "catalog.ingested" | "catalog.refreshed",
 ): IngestSummary {
+  const now = new Date().toISOString();
   deps.db
     .update(connectors)
-    .set({ transport: connection.transport, updatedAt: new Date().toISOString() })
+    .set({ transport: connection.transport, lastSuccessAt: now, updatedAt: now })
     .where(and(eq(connectors.userId, deps.userId), eq(connectors.id, connectorId)))
     .run();
   const summary = ingestTools(deps.db, {
@@ -25,10 +26,10 @@ export function applyDiscovery(
     connectorName,
     tools: connection.tools,
   });
-  appendJournalEvent(deps.db, {
+  recordEvent(deps.db, {
     userId: deps.userId,
     eventType,
-    payload: { connectorId, ...summary },
+    payload: { connector_id: connectorId, ...summary },
   });
   return summary;
 }

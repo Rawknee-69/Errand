@@ -1,6 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import type { ConnectorView } from "@errand/shared";
 import type { Db } from "../db/client.ts";
+import { recordEvent } from "../db/events.ts";
 import { connectors, type ConnectorAuthStatus } from "../db/schema.ts";
 import { scopedGet } from "../db/scoped-reads.ts";
 import { ConnectorError } from "./errors.ts";
@@ -21,6 +22,7 @@ export function connectorView(row: typeof connectors.$inferSelect): ConnectorVie
     authType: row.authType,
     authStatus: row.authStatus,
     lastAuthError: row.lastAuthError,
+    lastSuccessAt: row.lastSuccessAt,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
@@ -48,6 +50,34 @@ export function setConnectorAuthStatus(
   deps.db
     .update(connectors)
     .set({ authStatus, lastAuthError, updatedAt: new Date().toISOString() })
+    .where(and(eq(connectors.userId, deps.userId), eq(connectors.id, connectorId)))
+    .run();
+}
+
+// Emits once per transition into needs_reauth; a second failure while already
+// needing a sign-in updates the reason without spamming the journal.
+export function markConnectorNeedsReauth(
+  deps: ConnectorBaseDeps,
+  connectorId: string,
+  reason: string,
+): void {
+  const row = connectorRow(deps, connectorId);
+  const wasNeedsReauth = row.authStatus === "needs_reauth";
+  setConnectorAuthStatus(deps, connectorId, "needs_reauth", reason);
+  if (!wasNeedsReauth) {
+    recordEvent(deps.db, {
+      userId: deps.userId,
+      eventType: "connector.needs_reauth",
+      payload: { connector_id: connectorId, reason },
+    });
+  }
+}
+
+export function markConnectorSuccess(deps: ConnectorBaseDeps, connectorId: string): void {
+  const now = new Date().toISOString();
+  deps.db
+    .update(connectors)
+    .set({ lastSuccessAt: now, updatedAt: now })
     .where(and(eq(connectors.userId, deps.userId), eq(connectors.id, connectorId)))
     .run();
 }

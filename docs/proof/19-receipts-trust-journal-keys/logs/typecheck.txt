@@ -1,0 +1,6 @@
+$ bun run --filter '*' typecheck && bun run scripts/check.ts
+@errand/shared typecheck: Exited with code 0
+@errand/mock-services typecheck: Exited with code 0
+@errand/web typecheck: Exited with code 0
+@errand/gateway typecheck: Exited with code 0
+✓ 5 checks passed: comments, installed, journal-last-event, no-any, oauth-verifier

@@ -2,7 +2,7 @@ import type { Context, Hono } from "hono";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import { loginRequestSchema, type SessionView } from "@errand/shared";
 import type { Db } from "../db/client.ts";
-import { appendJournalEvent } from "../db/journal.ts";
+import { recordEvent } from "../db/events.ts";
 import { users } from "../db/schema.ts";
 import { getUser } from "../db/scoped-reads.ts";
 import { DEFAULT_OWNER_ID } from "./owner.ts";
@@ -114,10 +114,10 @@ async function login(c: Context<GatewayEnv>, deps: AuthDeps): Promise<Response> 
         .run();
     }
     deps.limiter.recordAttempt();
-    appendJournalEvent(deps.db, {
+    recordEvent(deps.db, {
       userId: id,
       eventType: "demo.login",
-      payload: { userId: id, name: body.demoUser },
+      payload: { user_id: id, name: body.demoUser },
     });
     return signIn(c, deps, { userId: id, demo: true });
   }

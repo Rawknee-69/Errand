@@ -28,7 +28,7 @@ describe("agent catalog", () => {
       name: "changed_event",
       agentName: "calendar__changed_event",
       state: "changed",
-      requestable: false,
+      requestable: true,
     });
 
     expect(agentCatalog(db, "user-a")).toEqual([

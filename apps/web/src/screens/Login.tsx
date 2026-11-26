@@ -10,7 +10,7 @@ type Props = {
 export function Login({ demoMode, onSession }: Props) {
   const [mode, setMode] = useState<"owner" | "demo">("owner");
   const [passphrase, setPassphrase] = useState("");
-  const [name, setName] = useState("");
+  const [name, setName] = useState("Demo");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -70,6 +70,7 @@ export function Login({ demoMode, onSession }: Props) {
         )}
 
         <form onSubmit={submit} className="stack">
+          <input type="text" name="username" autoComplete="username" value="owner" readOnly hidden />
           {mode === "demo" ? (
             <label className="field">
               <span>Your name</span>

@@ -1,24 +1,30 @@
 import { index, integer, primaryKey, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { DEFAULT_CALL_RATE_PER_MINUTE } from "../policy/rate.ts";
 import {
   CONNECTOR_AUTH_STATUSES,
   type ConnectorAuthStatus,
   type ConnectorAuthType,
   type McpTransportKind,
+  type OutboxClass,
+  type OutboxState,
+  type SlipState,
+  type Tier,
   type ToolClass,
   type ToolState,
+  type VerificationOutcome,
 } from "@errand/shared";
 
 export { CONNECTOR_AUTH_STATUSES };
-export type { ConnectorAuthStatus, ConnectorAuthType, ToolClass, ToolState };
-
-// Trust tiers (GLOSSARY.md): `learner` needs a human tap; `license` auto-approves within caps.
-export type Tier = "learner" | "license";
-
-// Verifier outcomes per change; `unverified` never implies success (GLOSSARY.md).
-export type VerificationOutcome = "matched" | "mismatched" | "unverified";
-
-// A slip's lifecycle: a request waits as pending until a human decides.
-export type SlipState = "pending" | "approved" | "denied" | "expired" | "burned";
+export type {
+  ConnectorAuthStatus,
+  ConnectorAuthType,
+  OutboxClass,
+  OutboxState,
+  SlipState,
+  Tier,
+  ToolClass,
+  ToolState,
+};
 
 export const users = sqliteTable("users", {
   id: text("id").primaryKey(),
@@ -52,6 +58,7 @@ export const connectors = sqliteTable(
     authStatus: text("auth_status").notNull().default("active").$type<ConnectorAuthStatus>(),
     // Short, secret-free reason for the last authorization failure.
     lastAuthError: text("last_auth_error"),
+    lastSuccessAt: text("last_success_at"),
     createdAt: text("created_at").notNull(),
     updatedAt: text("updated_at").notNull(),
   },
@@ -111,6 +118,8 @@ export const tools = sqliteTable(
     inputSchema: text("input_schema").notNull().default("{}"),
     annotations: text("annotations").notNull().default("{}"),
     class: text("class").notNull().default("unknown").$type<ToolClass>(),
+    // A human-set class outlives refresh and re-approval; null means classifier-owned.
+    classOverride: text("class_override").$type<ToolClass>(),
     // The hash the human saw and approved; observedHash follows the upstream definition.
     definitionHash: text("definition_hash").notNull(),
     observedDescription: text("observed_description").notNull().default(""),
@@ -144,10 +153,17 @@ export const slips = sqliteTable(
     tier: text("tier").notNull().$type<Tier>(),
     tools: text("tools").notNull().default("[]"),
     constraints: text("constraints").notNull().default("{}"),
+    trims: text("trims").notNull().default("[]"),
     callCap: integer("call_cap").notNull().default(0),
     callsUsed: integer("calls_used").notNull().default(0),
+    // Server ceiling on calls per rolling minute; not agent-adjustable.
+    rateCap: integer("rate_cap").notNull().default(DEFAULT_CALL_RATE_PER_MINUTE),
+    rateWindowStartedAt: text("rate_window_started_at"),
+    rateWindowCalls: integer("rate_window_calls").notNull().default(0),
     spendCapCents: integer("spend_cap_cents").notNull().default(0),
     spendUsedCents: integer("spend_used_cents").notNull().default(0),
+    // Out-of-scope attempts against this slip; the second one burns it.
+    scopeViolations: integer("scope_violations").notNull().default(0),
     capabilityHash: text("capability_hash"),
     signature: text("signature"),
     expiresAt: text("expires_at").notNull(),
@@ -156,6 +172,8 @@ export const slips = sqliteTable(
     approvedAt: text("approved_at"),
     burnedAt: text("burned_at"),
     burnedReason: text("burned_reason"),
+    // Set once when the run ends (cap reached or expired) and its trust effect is applied.
+    settledAt: text("settled_at"),
   },
   (t) => [index("slips_user_id_idx").on(t.userId)],
 );
@@ -176,6 +194,35 @@ export const calls = sqliteTable(
   (t) => [index("calls_user_id_idx").on(t.userId), index("calls_slip_id_idx").on(t.slipId)],
 );
 
+// A send held for a short cancel window, or a spend waiting for the human tap.
+// `expires_at` is the point after which it is too late to run at all.
+export const outbox = sqliteTable(
+  "outbox",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id").notNull().references(() => users.id),
+    slipId: text("slip_id").notNull().references(() => slips.id),
+    connectorId: text("connector_id").notNull().references(() => connectors.id),
+    tool: text("tool").notNull(),
+    toolClass: text("tool_class").notNull().$type<OutboxClass>(),
+    arguments: text("arguments").notNull().default("{}"),
+    // The capability the agent presented; release re-checks it before forwarding.
+    capability: text("capability").notNull(),
+    amountCents: integer("amount_cents").notNull().default(0),
+    state: text("state").notNull().$type<OutboxState>(),
+    releaseAt: text("release_at"),
+    expiresAt: text("expires_at").notNull(),
+    callId: text("call_id").references(() => calls.id),
+    reason: text("reason"),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (t) => [
+    index("outbox_user_id_idx").on(t.userId),
+    index("outbox_state_release_at_idx").on(t.state, t.releaseAt),
+  ],
+);
+
 // Human-readable result of an errand; never claims verification it did not perform (GLOSSARY.md).
 export const receipts = sqliteTable(
   "receipts",
@@ -186,6 +233,8 @@ export const receipts = sqliteTable(
     callId: text("call_id").references(() => calls.id),
     errandType: text("errand_type").notNull(),
     verification: text("verification").notNull().$type<VerificationOutcome>(),
+    toolClass: text("tool_class").notNull().default("unknown").$type<ToolClass>(),
+    irreversible: integer("irreversible", { mode: "boolean" }).notNull().default(false),
     summary: text("summary").notNull().default(""),
     createdAt: text("created_at").notNull(),
   },
@@ -201,7 +250,10 @@ export const undoActions = sqliteTable(
     receiptId: text("receipt_id").references(() => receipts.id),
     callId: text("call_id").references(() => calls.id),
     inverse: text("inverse").notNull(),
+    startedAt: text("started_at"),
     appliedAt: text("applied_at"),
+    verification: text("verification").$type<VerificationOutcome>(),
+    summary: text("summary"),
     createdAt: text("created_at").notNull(),
   },
   (t) => [index("undo_actions_user_id_idx").on(t.userId)],
