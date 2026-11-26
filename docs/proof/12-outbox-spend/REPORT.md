@@ -75,10 +75,10 @@ $ bun run typecheck
 ✓ 4 checks passed: comments, installed, no-any, oauth-verifier
 
 $ bun test
- 378 pass
+ 384 pass
  0 fail
- 1329 expect() calls
-Ran 378 tests across 46 files.
+ 1384 expect() calls
+Ran 384 tests across 46 files.
 ```
 
 The full pasted output is `docs/proof/12-outbox-spend/logs/test-output.txt`
@@ -92,7 +92,7 @@ and `logs/typecheck.txt`.
   refunded call; `needs_human` on learner and license spends; a separate
   confirm with one call row; a denied spend with zero spend used; an expired
   row that never fired after 32 more seconds; four findings from the browser
-  pass; `{ok:true, checked:27}`.
+  pass; `{ok:true, checked:30}`.
 - `logs/sse.txt` — the live feed frames for three holds, one release, two
   cancellations, two spend taps, one confirmation and one expiry.
 - `screens/01-desktop-outbox.png`, `03-desktop-send-stopped.png`,

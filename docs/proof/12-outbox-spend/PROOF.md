@@ -37,7 +37,7 @@
 The transcript is `logs/outbox-transcript.txt`; the SSE capture is
 `logs/sse.txt`; the server windows are `logs/gateway-server.txt`,
 `logs/gateway-ui-server.txt`, `logs/mock-services.txt` and
-`logs/web-server.txt`. Journal verify ended `{ok:true, checked:28}`.
+`logs/web-server.txt`. Journal verify ended `{ok:true, checked:30}`.
 
 ## Findings
 

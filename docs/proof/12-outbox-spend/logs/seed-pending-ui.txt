@@ -2,24 +2,9 @@
 == log in and create a browser-proof agent key
 
 == create one held send and one spend waiting for the tap
-{"send":{"outboxId":"9dc168ec-81e4-4142-a284-f2043312ce81","slipId":"dfb4f63c-25f7-47b3-8553-5d2da2e6a11d","state":"held"},"spend":{"outboxId":"29896f2e-01c2-4b34-bef1-448f871d3ddd","slipId":"e640cd4d-765b-4782-b375-7c24c25b83d9","state":"needs_human"}}
+{"send":{"outboxId":"61c0a861-9929-4ca6-a613-b76f903d73c1","slipId":"88e2974c-110c-4e05-a8bb-96b6d53484f4","state":"held"},"spend":{"outboxId":"eef20d69-fb10-47b2-9a0b-6783003ff2f3","slipId":"80cb14d9-8ae8-466b-8dfe-c840fd3c5d9a","state":"needs_human"}}
 
 == log in and create a browser-proof agent key
 
 == create one held send and one spend waiting for the tap
-{"send":{"outboxId":"6c9e8d65-3980-46c3-9355-95ed1ecb2c5b","slipId":"c78ed999-76b5-45cf-aae1-ad15fc861a4d","state":"held"},"spend":{"outboxId":"bef75558-6240-41a4-81cb-3c939a093c39","slipId":"20332629-2ae7-4f25-ab99-401815e2354f","state":"needs_human"}}
-
-== log in and create a browser-proof agent key
-
-== create one held send and one spend waiting for the tap
-{"send":{"outboxId":"2d9c1f9a-cb1c-4824-8f05-1870be015684","slipId":"b7009e85-5c4c-49af-8b76-181e123ac5cc","state":"held"},"spend":{"outboxId":"c86b686e-fe3c-4fe3-b309-e224d47fe2c8","slipId":"fade34fe-8006-4044-908f-9c854d38566b","state":"needs_human"}}
-
-== log in and create a browser-proof agent key
-
-== create one held send and one spend waiting for the tap
-{"send":{"outboxId":"d131d9cd-a556-4936-a6f8-a35828a392c9","slipId":"bee586ab-9c2a-4883-a84a-4452e5d379ea","state":"held"},"spend":{"outboxId":"afd4b9ef-a1ac-49e5-a9ed-f9daf857596e","slipId":"f0f452dd-ef06-46ee-8bff-cacde78f677c","state":"needs_human"}}
-
-== log in and create a browser-proof agent key
-
-== create one held send and one spend waiting for the tap
-{"send":{"outboxId":"34766924-037f-41a5-a8c5-8709de75480c","slipId":"b9103e44-0e5d-4478-a991-702ff5d0964f","state":"held"},"spend":{"outboxId":"75a2c2f6-e616-4217-98e8-abef1523ae2e","slipId":"5945706f-fe35-48e0-ac1a-45320b38b00f","state":"needs_human"}}
+{"send":{"outboxId":"097b831c-877b-42a3-8ddb-20a747a29fc9","slipId":"95143d88-b8c3-4cd4-bd96-65c8b3c4f09e","state":"held"},"spend":{"outboxId":"f1a82118-f162-4a1f-9c3e-9b74b5ae04fd","slipId":"49bc5105-8d3f-4a17-bf08-d01a08b78d97","state":"needs_human"}}

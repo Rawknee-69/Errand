@@ -6,24 +6,7 @@ At line:1 char:43
     + FullyQualifiedErrorId : NativeCommandError
  
 
-  [32m[1mVITE[22m v8.3.8[39m  [2mready in [0m[1m2283[22m[2m[0m ms[22m
+  [32m[1mVITE[22m v8.3.8[39m  [2mready in [0m[1m165[22m[2m[0m ms[22m
 
   [32mΓ₧£[39m  [1mLocal[22m:   [36mhttp://127.0.0.1:[1m5173[22m/[39m
-[2m4:59:44 pm[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/styles.css[22m
-[2m5:00:07 pm[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/styles.css[22m
-[2m5:00:28 pm[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/styles.css[22m
-[2m5:01:13 pm[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/components/OutboxPanel.tsx[22m
-[2m5:01:18 pm[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/components/OutboxPanel.tsx[22m
-[2m5:05:32 pm[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/events[39m
-Error: read ECONNRESET
-    at TCP.onStreamRead (node:internal/stream_base_commons:221:20)
-[2m5:06:20 pm[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/styles.css[22m
-[2m5:15:11 pm[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/App.tsx, /src/screens/Login.tsx, /src/screens/Connect.tsx, /src/screens/Connectors.tsx, /src/screens/Catalog.tsx, /src/screens/Slips.tsx, /src/screens/Shell.tsx[22m
-[2m5:17:14 pm[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/screens/Slips.tsx[22m
-[2m5:17:18 pm[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/screens/Slips.tsx[22m
-[2m5:17:22 pm[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/screens/Slips.tsx[22m
-[2m5:17:31 pm[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/components/OutboxPanel.tsx[22m
-[2m5:17:37 pm[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/components/OutboxPanel.tsx[22m
-[2m5:17:42 pm[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/components/OutboxPanel.tsx[22m
-[2m5:17:47 pm[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/components/OutboxPanel.tsx[22m
-[2m5:17:59 pm[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/screens/Slips.tsx[22m
+error: script "dev" exited with code 255
