@@ -12,6 +12,7 @@
     "@errand/shared": "workspace:*",
     "@modelcontextprotocol/client": "2.4.0",
     "@modelcontextprotocol/server": "2.4.0",
+    "ajv": "8.20.0",
     "drizzle-orm": "0.45.4",
     "hono": "4.13.22",
     "jose": "6.2.18",

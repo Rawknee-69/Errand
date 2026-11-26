@@ -15,6 +15,7 @@ function slip(overrides: Partial<SlipRecord> = {}): SlipRecord {
     tools: JSON.stringify([{ name: "calendar__list_events", connectorId: "conn-a", class: "read" }]),
     constraints: JSON.stringify({ time_window: "evening" }),
     callCap: 5,
+    rateCap: 20,
     spendCapCents: 5000,
     expiresAt: "2026-04-01T12:30:00.000Z",
     approvedAt: APPROVED_AT,
@@ -40,6 +41,7 @@ describe("slip signing", () => {
   const alterations: { name: string; change: Partial<SlipRecord> }[] = [
     { name: "goal", change: { goal: "Transfer everything" } },
     { name: "call cap", change: { callCap: 50 } },
+    { name: "rate cap", change: { rateCap: 500 } },
     { name: "spend cap", change: { spendCapCents: 500_000 } },
     { name: "expiry", change: { expiresAt: "2026-04-02T12:30:00.000Z" } },
     {

@@ -144,15 +144,10 @@ describe("agent MCP endpoint", () => {
       const run = await callTool(client, "errand_call", {
         slip_id: slipId,
         tool: "calendar__list_events",
+        capability: "cap_not-issued-yet",
       });
-      expect(run.body).toMatchObject({ state: "not_forwarded", slipId });
-
-      const offSlip = await callTool(client, "errand_call", {
-        slip_id: slipId,
-        tool: "calendar__delete_event",
-      });
-      expect(offSlip.result.isError).toBe(true);
-      expect(offSlip.body).toMatchObject({ error: "out_of_scope", tool: "calendar__delete_event" });
+      expect(run.result.isError).toBe(true);
+      expect(run.body).toMatchObject({ error: "not_approved" });
     } finally {
       await client.close();
     }
@@ -208,6 +203,22 @@ describe("agent MCP endpoint", () => {
         callsRemaining: 3,
       });
       expect(afterBody.capability).toMatch(/^cap_/);
+
+      const offSlip = await callTool(client, "errand_call", {
+        slip_id: slipId,
+        tool: "calendar__delete_event",
+        capability: afterBody.capability,
+      });
+      expect(offSlip.result.isError).toBe(true);
+      expect(offSlip.body).toMatchObject({ error: "out_of_scope" });
+
+      const run = await callTool(client, "errand_call", {
+        slip_id: slipId,
+        tool: "calendar__list_events",
+        capability: afterBody.capability,
+      });
+      expect(run.result.isError).toBeFalsy();
+      expect(run.body).toMatchObject({ state: "not_forwarded", slipId });
     } finally {
       await client.close();
     }

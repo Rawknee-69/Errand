@@ -17,6 +17,7 @@ function slip(overrides: Partial<SlipRecord> = {}): SlipRecord {
     tools: "[]",
     constraints: "{}",
     callCap: 5,
+    rateCap: 20,
     spendCapCents: 100,
     expiresAt: EXPIRES,
     approvedAt: NOW.toISOString(),

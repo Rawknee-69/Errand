@@ -15,6 +15,7 @@ export type SlipRecord = Pick<
   | "tools"
   | "constraints"
   | "callCap"
+  | "rateCap"
   | "spendCapCents"
   | "expiresAt"
   | "approvedAt"
@@ -30,6 +31,7 @@ export type SlipDocument = {
   tools: SlipTool[];
   constraints: unknown;
   call_cap: number;
+  rate_cap: number;
   spend_cap_cents: number;
   tier: Tier;
   expires_at: string;
@@ -54,6 +56,7 @@ export function slipDocument(slip: SlipRecord): SlipDocument {
     tools: parseSlipTools(slip.tools),
     constraints: JSON.parse(slip.constraints),
     call_cap: slip.callCap,
+    rate_cap: slip.rateCap,
     spend_cap_cents: slip.spendCapCents,
     tier: slip.tier,
     expires_at: slip.expiresAt,

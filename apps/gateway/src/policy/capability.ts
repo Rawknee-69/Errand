@@ -43,38 +43,79 @@ function signatureMatches(master: string, payload: string, presented: string): b
   return expected.length === given.length && timingSafeEqual(expected, given);
 }
 
+export type CapabilityFailure =
+  | "not_approved"
+  | "slip_denied"
+  | "expired"
+  | "burned"
+  | "capability_invalid";
+
+export type CapabilityCheck = { ok: true } | { ok: false; reason: CapabilityFailure };
+
+function stateFailure(state: SlipRecord["state"]): CapabilityFailure {
+  if (state === "pending") return "not_approved";
+  if (state === "denied") return "slip_denied";
+  if (state === "expired") return "expired";
+  if (state === "burned") return "burned";
+  return "capability_invalid";
+}
+
+// Reports the first reason a capability does not admit the slip, so the call
+// pipeline can deny and journal precisely rather than collapse every failure.
+export function checkCapability(
+  slip: SlipRecord,
+  token: string,
+  master: string,
+  now: Date,
+): CapabilityCheck {
+  if (slip.state !== "approved" || slip.capabilityHash === null) {
+    return { ok: false, reason: stateFailure(slip.state) };
+  }
+
+  const stored = Buffer.from(slip.capabilityHash, "hex");
+  const presented = Buffer.from(hashCapability(token), "hex");
+  if (stored.length !== presented.length || !timingSafeEqual(stored, presented)) {
+    return { ok: false, reason: "capability_invalid" };
+  }
+
+  if (!token.startsWith(TOKEN_PREFIX)) return { ok: false, reason: "capability_invalid" };
+  const [payload, signature, ...rest] = token.slice(TOKEN_PREFIX.length).split(".");
+  if (payload === undefined || signature === undefined || rest.length > 0) {
+    return { ok: false, reason: "capability_invalid" };
+  }
+  if (!signatureMatches(master, payload, signature)) {
+    return { ok: false, reason: "capability_invalid" };
+  }
+
+  let claims: CapabilityClaims;
+  try {
+    claims = claimsSchema.parse(JSON.parse(Buffer.from(payload, "base64url").toString("utf8")));
+  } catch {
+    return { ok: false, reason: "capability_invalid" };
+  }
+
+  if (
+    claims.aud !== slip.id ||
+    claims.uid !== slip.userId ||
+    claims.exp !== slip.expiresAt
+  ) {
+    return { ok: false, reason: "capability_invalid" };
+  }
+
+  const expiresAt = Date.parse(slip.expiresAt);
+  if (!Number.isFinite(expiresAt) || now.getTime() >= expiresAt) {
+    return { ok: false, reason: "expired" };
+  }
+  return { ok: true };
+}
+
 export function verifyCapability(
   slip: SlipRecord,
   token: string,
   master: string,
   now: Date,
 ): boolean {
-  if (slip.state !== "approved" || slip.capabilityHash === null) return false;
-
-  const stored = Buffer.from(slip.capabilityHash, "hex");
-  const presented = Buffer.from(hashCapability(token), "hex");
-  if (stored.length !== presented.length || !timingSafeEqual(stored, presented)) return false;
-
-  if (!token.startsWith(TOKEN_PREFIX)) return false;
-  const [payload, signature, ...rest] = token.slice(TOKEN_PREFIX.length).split(".");
-  if (payload === undefined || signature === undefined || rest.length > 0) return false;
-  if (!signatureMatches(master, payload, signature)) return false;
-
-  let claims: CapabilityClaims;
-  try {
-    claims = claimsSchema.parse(JSON.parse(Buffer.from(payload, "base64url").toString("utf8")));
-  } catch {
-    return false;
-  }
-
-  const expiresAt = Date.parse(slip.expiresAt);
-  return (
-    claims.aud === slip.id &&
-    claims.uid === slip.userId &&
-    claims.exp === slip.expiresAt &&
-    Number.isFinite(expiresAt) &&
-    now.getTime() < expiresAt
-  );
+  return checkCapability(slip, token, master, now).ok;
 }
 
 export function issueValidCapability(
