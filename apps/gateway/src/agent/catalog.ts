@@ -4,6 +4,7 @@ import { listCatalog, type CatalogTool } from "../connectors/catalog.ts";
 import { listConnectors } from "../db/scoped-reads.ts";
 import { sanitiseDescription } from "../connectors/sanitise.ts";
 import { isDecoyToolName } from "../policy/decoys.ts";
+import { labelFor } from "../connectors/labels.ts";
 
 export type AgentCatalogTool = {
   name: string;
@@ -12,12 +13,6 @@ export type AgentCatalogTool = {
   class: ToolClass;
   connector: string;
 };
-
-function labelFor(connectorName: string, toolName: string): string {
-  const connector = sanitiseDescription(connectorName, 40).replace(/[.,;:]+$/, "");
-  const action = toolName.replace(/[_-]+/g, " ").toLowerCase();
-  return sanitiseDescription(`${connector}: ${action}`, 80);
-}
 
 export function isRequestableTool(tool: CatalogTool): boolean {
   return (

@@ -50,7 +50,7 @@ function toRequestedLimits(limits: z.infer<typeof limitsInput> | undefined): Req
   };
 }
 
-function agentServer(db: Db, userId: string): McpServer {
+function agentServer(db: Db, userId: string, hmacKey: string | undefined): McpServer {
   const server = new McpServer({ name: "errand", version: gatewayPackage.version });
 
   server.registerTool(
@@ -101,12 +101,12 @@ function agentServer(db: Db, userId: string): McpServer {
     "errand_status",
     {
       description:
-        "Read a slip's state, remaining caps and expiry. Poll this after requesting; nothing runs until it is approved.",
+        "Read a slip's state, remaining caps, expiry and, once approved, its capability. Poll this after requesting; nothing runs until it is approved.",
       inputSchema: z.object({ slip_id: z.string().min(1) }),
       annotations: { readOnlyHint: true },
     },
     async ({ slip_id }) => {
-      const status = errandStatus(db, userId, slip_id);
+      const status = errandStatus(db, userId, slip_id, { hmacKey });
       if (status === undefined) return errorResult("not_found", `No slip ${slip_id} for this key`);
       return textResult(status);
     },
@@ -136,12 +136,12 @@ function agentServer(db: Db, userId: string): McpServer {
   return server;
 }
 
-export function createAgentHandler(db: Db): McpHttpHandler {
+export function createAgentHandler(db: Db, hmacKey: string | undefined): McpHttpHandler {
   return createMcpHandler((context) => {
     const userId = context.authInfo?.clientId;
     if (userId === undefined) {
       throw new Error("Agent request reached the MCP handler without authentication");
     }
-    return agentServer(db, userId);
+    return agentServer(db, userId, hmacKey);
   });
 }

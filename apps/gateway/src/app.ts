@@ -1,5 +1,6 @@
 import {
   escapeHtml,
+  slipApprovalInputSchema,
   type CatalogToolView,
   type ConnectorDetail,
   type GatewayHealth,
@@ -35,6 +36,8 @@ import { completeOAuthFlow, startOAuthFlow } from "./connectors/oauth/service.ts
 import { CredentialStore } from "./vault/credentials.ts";
 import { VaultKeyring } from "./vault/keyring.ts";
 import { Vault } from "./vault/vault.ts";
+import { approveSlip, denySlip, SlipError } from "./slips/approval.ts";
+import { getSlipDetail, listSlipSummaries } from "./slips/view.ts";
 
 export { DEFAULT_OWNER_ID };
 export const DEFAULT_OAUTH_REDIRECT_URI = "http://127.0.0.1:8787/api/oauth/callback";
@@ -45,11 +48,21 @@ export type GatewayAppOptions = {
   discoverOptions?: DiscoverOptions;
   maxConnectors?: number;
   oauthRedirectUri?: string;
+  hmacKey?: string;
   auth: AuthOptions | "disabled";
 };
 
 const probeSchema = z.object({ url: z.string().min(1) });
 const agentKeyCreateSchema = z.object({ name: z.string().trim().min(1).max(64) });
+const slipDenySchema = z.object({ reason: z.string().max(500).optional() }).strict();
+
+async function optionalJson(c: Context<GatewayEnv>): Promise<unknown> {
+  try {
+    return await c.req.json();
+  } catch {
+    return {};
+  }
+}
 
 function bearerToken(header: string | undefined): string | undefined {
   return header?.match(/^Bearer\s+(\S+)$/i)?.[1];
@@ -114,7 +127,7 @@ export function createGatewayApp(
   }
   const discoverOptions = options.discoverOptions ?? {};
   const keyring = options.keyring;
-  const agentHandler = createAgentHandler(db);
+  const agentHandler = createAgentHandler(db, options.hmacKey);
   const oauthRedirectUri = options.oauthRedirectUri ?? DEFAULT_OAUTH_REDIRECT_URI;
 
   if (options.auth !== "disabled") registerAuth(app, db, options.auth);
@@ -213,6 +226,31 @@ export function createGatewayApp(
     return agentHandler.fetch(c.req.raw, { authInfo });
   });
 
+  app.get("/api/slips", (c) => {
+    const userId = userIdFor(c);
+    return c.json({ slips: listSlipSummaries(db, userId) });
+  });
+
+  app.get("/api/slips/:id", (c) => {
+    const userId = userIdFor(c);
+    const detail = getSlipDetail(db, userId, c.req.param("id"));
+    if (detail === undefined) return c.json({ error: "not_found" }, 404);
+    return c.json(detail);
+  });
+
+  app.post("/api/slips/:id/approve", async (c) => {
+    const userId = userIdFor(c);
+    const body = slipApprovalInputSchema.parse(await optionalJson(c));
+    const result = approveSlip(db, userId, c.req.param("id"), body, { hmacKey: options.hmacKey });
+    return c.json({ ...result.detail, trims: result.trims });
+  });
+
+  app.post("/api/slips/:id/deny", async (c) => {
+    const userId = userIdFor(c);
+    const body = slipDenySchema.parse(await optionalJson(c));
+    return c.json(denySlip(db, userId, c.req.param("id"), body.reason));
+  });
+
   app.post("/api/connectors/probe", async (c) => {
     const body = probeSchema.parse(await c.req.json());
     return c.json(await probeUrl(discoverOptions, body.url));
@@ -285,6 +323,17 @@ export function createGatewayApp(
   });
 
   app.onError((error, c) => {
+    if (error instanceof SlipError) {
+      const status =
+        error.code === "not_found"
+          ? 404
+          : error.code === "cap_above_request"
+            ? 400
+            : error.code === "signing_unavailable"
+              ? 500
+              : 409;
+      return c.json({ error: error.code, message: error.message }, status);
+    }
     if (error instanceof z.ZodError) {
       return c.json(
         {
