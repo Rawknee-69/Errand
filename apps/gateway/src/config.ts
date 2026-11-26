@@ -11,6 +11,7 @@ const configSchema = z.object({
   HMAC_KEY: secret,
   JWT_SECRET: secret,
   PORT: z.coerce.number().int().min(1).max(65535).default(8787),
+  DATABASE_PATH: z.string().min(1).default("errand.db"),
 });
 
 export type GatewayConfig = z.infer<typeof configSchema>;
