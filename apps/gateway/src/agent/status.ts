@@ -1,7 +1,15 @@
+import type { SlipState, SlipTool, Tier } from "@errand/shared";
 import type { Db } from "../db/client.ts";
 import { getSlip } from "../db/scoped-reads.ts";
-import type { SlipState, Tier } from "../db/schema.ts";
-import { parseSlipTools, type SlipTool } from "./slip-tools.ts";
+import { issueValidCapability } from "../policy/capability.ts";
+import { remainingAllowance } from "../slips/caps.ts";
+import { parseSlipTools } from "./slip-tools.ts";
+import { effectiveSlipState } from "../slips/state.ts";
+
+export type ErrandStatusOptions = {
+  now?: Date;
+  hmacKey?: string | undefined;
+};
 
 export type ErrandStatusResult = {
   slipId: string;
@@ -11,23 +19,33 @@ export type ErrandStatusResult = {
   tools: SlipTool[];
   callCap: number;
   callsUsed: number;
+  callsRemaining: number;
   spendCapCents: number;
   spendUsedCents: number;
+  spendRemainingCents: number;
   expiresAt: string;
+  timeLeftSeconds: number;
   createdAt: string;
+  capability: string | null;
 };
 
 export function errandStatus(
   db: Db,
   userId: string,
   slipId: string,
-  now = new Date(),
+  options: ErrandStatusOptions = {},
 ): ErrandStatusResult | undefined {
   const slip = getSlip(db, userId, slipId);
   if (slip === undefined) return undefined;
-  const expired = Date.parse(slip.expiresAt) <= now.getTime();
-  const state: SlipState =
-    expired && (slip.state === "pending" || slip.state === "approved") ? "expired" : slip.state;
+  const now = options.now ?? new Date();
+  const state = effectiveSlipState(slip, now);
+
+  const capability =
+    state === "approved" && options.hmacKey !== undefined
+      ? issueValidCapability(slip, options.hmacKey, now)
+      : null;
+
+  const allowance = remainingAllowance(slip, now);
   return {
     slipId: slip.id,
     state,
@@ -36,9 +54,13 @@ export function errandStatus(
     tools: parseSlipTools(slip.tools),
     callCap: slip.callCap,
     callsUsed: slip.callsUsed,
+    callsRemaining: allowance.callsRemaining,
     spendCapCents: slip.spendCapCents,
     spendUsedCents: slip.spendUsedCents,
+    spendRemainingCents: allowance.spendRemainingCents,
     expiresAt: slip.expiresAt,
+    timeLeftSeconds: allowance.timeLeftSeconds,
     createdAt: slip.createdAt,
+    capability,
   };
 }

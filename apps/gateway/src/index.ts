@@ -19,6 +19,7 @@ const app = createGatewayApp(db, {
   },
   maxConnectors: config.MAX_CONNECTORS_PER_USER,
   oauthRedirectUri: config.OAUTH_REDIRECT_URI ?? DEFAULT_OAUTH_REDIRECT_URI,
+  hmacKey: config.HMAC_KEY,
   auth: {
     passphrase: config.OWNER_PASSPHRASE,
     sessionSecret: config.JWT_SECRET,

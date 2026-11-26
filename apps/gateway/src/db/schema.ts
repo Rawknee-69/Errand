@@ -4,21 +4,17 @@ import {
   type ConnectorAuthStatus,
   type ConnectorAuthType,
   type McpTransportKind,
+  type SlipState,
+  type Tier,
   type ToolClass,
   type ToolState,
 } from "@errand/shared";
 
 export { CONNECTOR_AUTH_STATUSES };
-export type { ConnectorAuthStatus, ConnectorAuthType, ToolClass, ToolState };
-
-// Trust tiers (GLOSSARY.md): `learner` needs a human tap; `license` auto-approves within caps.
-export type Tier = "learner" | "license";
+export type { ConnectorAuthStatus, ConnectorAuthType, SlipState, Tier, ToolClass, ToolState };
 
 // Verifier outcomes per change; `unverified` never implies success (GLOSSARY.md).
 export type VerificationOutcome = "matched" | "mismatched" | "unverified";
-
-// A slip's lifecycle: a request waits as pending until a human decides.
-export type SlipState = "pending" | "approved" | "denied" | "expired" | "burned";
 
 export const users = sqliteTable("users", {
   id: text("id").primaryKey(),
@@ -144,6 +140,7 @@ export const slips = sqliteTable(
     tier: text("tier").notNull().$type<Tier>(),
     tools: text("tools").notNull().default("[]"),
     constraints: text("constraints").notNull().default("{}"),
+    trims: text("trims").notNull().default("[]"),
     callCap: integer("call_cap").notNull().default(0),
     callsUsed: integer("calls_used").notNull().default(0),
     spendCapCents: integer("spend_cap_cents").notNull().default(0),

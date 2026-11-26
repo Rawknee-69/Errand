@@ -1,9 +1,12 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
+import { agentKeyCreatedSchema } from "@errand/shared";
+import { z } from "zod";
 import { createGatewayApp } from "../../src/app.ts";
 import type { Db } from "../../src/db/client.ts";
 import { issueAgentKey } from "../../src/vault/agent-keys.ts";
 import { callTool, connectAgent } from "./mcp-client.ts";
 import { seedConnector, seedTool, userDb } from "./support.ts";
+import { SLIP_KEY } from "../support/fixtures.ts";
 
 const AGENT_TOOLS = ["errand_call", "errand_catalog", "errand_status", "request_errand"];
 
@@ -23,7 +26,7 @@ async function createKey(): Promise<{ key: string; id: string }> {
     body: JSON.stringify({ name: "test agent" }),
   });
   expect(response.status).toBe(201);
-  const body = (await response.json()) as { key: string; agentKey: { id: string } };
+  const body = agentKeyCreatedSchema.parse(await response.json());
   return { key: body.key, id: body.agentKey.id };
 }
 
@@ -54,7 +57,7 @@ beforeAll(() => {
     name: "search_pages",
     agentName: "notion__search_pages",
   });
-  app = createGatewayApp(db, { userId: "user-a", auth: "disabled" });
+  app = createGatewayApp(db, { userId: "user-a", auth: "disabled", hmacKey: SLIP_KEY });
   server = Bun.serve({ port: 0, fetch: app.fetch });
 });
 
@@ -134,7 +137,7 @@ describe("agent MCP endpoint", () => {
         ],
       });
 
-      const slipId = (requested.body as { slipId: string }).slipId;
+      const slipId = z.object({ slipId: z.string() }).parse(requested.body).slipId;
       const status = await callTool(client, "errand_status", { slip_id: slipId });
       expect(status.body).toMatchObject({ slipId, state: "pending", callsUsed: 0, spendUsedCents: 0 });
 
@@ -166,6 +169,45 @@ describe("agent MCP endpoint", () => {
         expect(result.isError).toBe(true);
         expect(body).toMatchObject({ tool });
       }
+    } finally {
+      await client.close();
+    }
+  });
+
+  test("errand_status returns a capability only after a human approves", async () => {
+    const client = await connect(key);
+    try {
+      const requested = await callTool(client, "request_errand", {
+        goal: "Find a dinner slot",
+        tools: ["calendar__list_events"],
+      });
+      const slipId = z.object({ slipId: z.string() }).parse(requested.body).slipId;
+
+      const before = await callTool(client, "errand_status", { slip_id: slipId });
+      expect(before.body).toMatchObject({ state: "pending", capability: null });
+
+      const approved = await app.request(`/api/slips/${slipId}/approve`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ callCap: 3 }),
+      });
+      expect(approved.status).toBe(200);
+
+      const after = await callTool(client, "errand_status", { slip_id: slipId });
+      const afterBody = z
+        .object({
+          state: z.string(),
+          callCap: z.number(),
+          callsRemaining: z.number(),
+          capability: z.string(),
+        })
+        .parse(after.body);
+      expect(afterBody).toMatchObject({
+        state: "approved",
+        callCap: 3,
+        callsRemaining: 3,
+      });
+      expect(afterBody.capability).toMatch(/^cap_/);
     } finally {
       await client.close();
     }

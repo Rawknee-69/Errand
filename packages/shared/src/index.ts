@@ -18,6 +18,100 @@ export type MockServicesHealth = Health & {
 export const toolClassSchema = z.enum(["read", "write", "send", "delete", "spend", "unknown"]);
 export type ToolClass = z.infer<typeof toolClassSchema>;
 
+export const slipStateSchema = z.enum(["pending", "approved", "denied", "expired", "burned"]);
+export type SlipState = z.infer<typeof slipStateSchema>;
+
+export const tierSchema = z.enum(["learner", "license"]);
+export type Tier = z.infer<typeof tierSchema>;
+
+export const slipToolSchema = z.object({
+  name: z.string(),
+  connectorId: z.string(),
+  class: toolClassSchema,
+});
+export type SlipTool = z.infer<typeof slipToolSchema>;
+
+export const capTrimSchema = z.object({
+  field: z.enum(["call_cap", "spend_cap_cents"]),
+  requested: z.number().int(),
+  applied: z.number().int(),
+  reason: z.literal("human_trim"),
+});
+export type CapTrim = z.infer<typeof capTrimSchema>;
+
+export const slipSummarySchema = z.object({
+  slipId: z.string(),
+  state: slipStateSchema,
+  tier: tierSchema,
+  goal: z.string(),
+  errandType: z.string(),
+  callCap: z.number().int(),
+  callsUsed: z.number().int(),
+  spendCapCents: z.number().int(),
+  spendUsedCents: z.number().int(),
+  trims: z.array(capTrimSchema),
+  expiresAt: z.string(),
+  createdAt: z.string(),
+  approvedAt: z.string().nullable(),
+  burnedAt: z.string().nullable(),
+  burnedReason: z.string().nullable(),
+});
+export type SlipSummary = z.infer<typeof slipSummarySchema>;
+
+export const approvalCardSchema = z.object({
+  slipId: z.string(),
+  state: slipStateSchema,
+  tier: tierSchema,
+  goal: z.string(),
+  services: z.array(
+    z.object({
+      id: z.string(),
+      name: z.string(),
+      tools: z.array(z.string()),
+    }),
+  ),
+  can: z.array(
+    z.object({
+      tool: z.string(),
+      label: z.string(),
+      connector: z.string(),
+      class: toolClassSchema,
+    }),
+  ),
+  cannot: z.array(z.string()),
+  callCap: z.number().int(),
+  callsUsed: z.number().int(),
+  callsRemaining: z.number().int(),
+  spendCapCents: z.number().int(),
+  spendUsedCents: z.number().int(),
+  spendRemainingCents: z.number().int(),
+  trims: z.array(capTrimSchema),
+  expiresAt: z.string(),
+  timeLeftSeconds: z.number().int(),
+});
+export type ApprovalCard = z.infer<typeof approvalCardSchema>;
+
+export const slipApprovalInputSchema = z
+  .object({
+    callCap: z.number().int().positive().optional(),
+    spendCapCents: z.number().int().nonnegative().optional(),
+  })
+  .strict();
+export type SlipApprovalInput = z.infer<typeof slipApprovalInputSchema>;
+
+export const slipDetailSchema = z.object({
+  slip: slipSummarySchema,
+  card: approvalCardSchema,
+});
+export type SlipDetail = z.infer<typeof slipDetailSchema>;
+
+export const slipApprovedSchema = z.object({
+  slip: slipSummarySchema,
+  card: approvalCardSchema,
+  trims: z.array(capTrimSchema),
+});
+export type SlipApproved = z.infer<typeof slipApprovedSchema>;
+
 export const toolStateSchema = z.enum(["new", "active", "changed", "removed"]);
 export type ToolState = z.infer<typeof toolStateSchema>;
 
