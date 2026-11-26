@@ -49,11 +49,10 @@ export function describeTraceEvent(event: TraceEvent): TraceLine {
   const duration = count(payload, "duration_ms");
   const bytes = count(payload, "result_bytes");
   const calls = count(payload, "call_cap");
-  const connector =
-    event.connectorName ?? text(payload, "connector_id") ?? text(payload, "connectorId");
+  const connector = event.connectorName ?? text(payload, "connector_id");
   const host = text(payload, "host");
-  const authType = text(payload, "auth_type") ?? text(payload, "authType");
-  const toolCount = count(payload, "toolCount") ?? count(payload, "total");
+  const authType = text(payload, "auth_type");
+  const toolCount = count(payload, "tool_count") ?? count(payload, "total");
 
   switch (event.eventType) {
     case "slip.requested":

@@ -1,6 +1,6 @@
 import { and, eq } from "drizzle-orm";
 import type { Db } from "../db/client.ts";
-import { appendJournalEventIn } from "../db/journal.ts";
+import { recordEventIn } from "../db/events.ts";
 import { slips } from "../db/schema.ts";
 import { demoteTrust } from "./trust.ts";
 
@@ -39,7 +39,7 @@ export function recordViolation(db: Db, input: ViolationInput): ViolationOutcome
         ? "second_scope_violation"
         : null;
 
-    appendJournalEventIn(tx, {
+    recordEventIn(tx, {
       userId: input.userId,
       eventType: isDecoy ? "call.denied" : "call.scope_violation",
       payload: {
@@ -63,7 +63,7 @@ export function recordViolation(db: Db, input: ViolationInput): ViolationOutcome
 
     // The burn event's timestamp is the slip's burn time, so the audit trail
     // and the slip row cannot disagree.
-    const burnEvent = appendJournalEventIn(tx, {
+    const burnEvent = recordEventIn(tx, {
       userId: input.userId,
       eventType: "slip.burned",
       payload: {

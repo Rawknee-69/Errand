@@ -292,6 +292,328 @@ export const CONNECTOR_AUTH_STATUSES = connectorAuthStatusSchema.options;
 export const mcpTransportSchema = z.enum(["streamable-http", "sse"]);
 export type McpTransportKind = z.infer<typeof mcpTransportSchema>;
 
+// The Journal's vocabulary: one schema per event kind, in one casing. Producers
+// are checked against it and readers parse with it, so neither side guesses.
+const journalText = z.string();
+const journalCount = z.number().int();
+const journalArgs = z.record(z.string(), z.unknown());
+
+const outboxEventBase = {
+  outbox_id: journalText,
+  slip_id: journalText,
+  tool: journalText,
+  class: outboxClassSchema,
+  amount_cents: journalCount,
+};
+
+export const journalPayloads = {
+  "slip.requested": z.object({
+    slip_id: journalText,
+    errand_type: journalText,
+    goal: journalText,
+    tools: z.array(journalText),
+    call_cap: journalCount,
+    spend_cap_cents: journalCount,
+    expires_at: journalText,
+    tier: tierSchema,
+    auto_approved: z.boolean(),
+    clamped: z.array(limitClampSchema),
+  }),
+  "slip.approved": z.object({
+    slip_id: journalText,
+    errand_type: journalText,
+    tier: tierSchema,
+    call_cap: journalCount,
+    spend_cap_cents: journalCount,
+    expires_at: journalText,
+    trims: z.array(capTrimSchema),
+  }),
+  "slip.denied": z.object({
+    slip_id: journalText,
+    errand_type: journalText,
+    reason: journalText,
+  }),
+  "slip.burned": z.object({
+    slip_id: journalText,
+    errand_type: journalText,
+    reason: journalText,
+    tool: journalText,
+    scope_violations: journalCount,
+    capability_revoked: z.boolean(),
+  }),
+  "call.allowed": z.object({
+    slip_id: journalText,
+    tool: journalText,
+    connector_id: journalText,
+    reason: journalText,
+    arguments: journalArgs,
+    amount_cents: journalCount,
+    calls_remaining: journalCount,
+    spend_remaining_cents: journalCount,
+  }),
+  "call.denied": z.object({
+    slip_id: journalText,
+    tool: journalText,
+    reason: journalText,
+    arguments: journalArgs,
+    scope_violations: journalCount.optional(),
+    burned: z.boolean().optional(),
+  }),
+  "call.scope_violation": z.object({
+    slip_id: journalText,
+    tool: journalText,
+    reason: journalText,
+    arguments: journalArgs,
+    scope_violations: journalCount,
+    burned: z.boolean(),
+  }),
+  "call.succeeded": z.object({
+    slip_id: journalText,
+    tool: journalText,
+    connector_id: journalText,
+    call_id: journalText,
+    class: toolClassSchema,
+    arguments: journalArgs,
+    duration_ms: journalCount,
+    result_bytes: journalCount,
+    truncated: z.boolean(),
+    upstream_is_error: z.boolean(),
+  }),
+  "call.failed": z.object({
+    slip_id: journalText,
+    tool: journalText,
+    connector_id: journalText,
+    call_id: journalText,
+    class: toolClassSchema,
+    arguments: journalArgs,
+    reason: journalText,
+    message: journalText,
+    duration_ms: journalCount,
+  }),
+  "outbox.held": z.object({
+    ...outboxEventBase,
+    release_at: z.string().nullable(),
+    expires_at: journalText,
+  }),
+  "outbox.needs_human": z.object({
+    ...outboxEventBase,
+    release_at: z.string().nullable(),
+    expires_at: journalText,
+  }),
+  "outbox.confirmed": z.object(outboxEventBase),
+  "outbox.released": z.object({
+    ...outboxEventBase,
+    call_id: z.string().nullable(),
+    outcome: z.enum(["succeeded", "failed"]),
+    reason: z.string().nullable(),
+  }),
+  "outbox.completed": z.object({
+    ...outboxEventBase,
+    call_id: z.string().nullable(),
+    outcome: z.enum(["succeeded", "failed"]),
+    reason: z.string().nullable(),
+  }),
+  "outbox.cancelled": z.object({
+    ...outboxEventBase,
+    reason: journalText,
+  }),
+  "outbox.expired": z.object({
+    ...outboxEventBase,
+    reason: journalText,
+    expires_at: journalText,
+  }),
+  "receipt.created": z.object({
+    receipt_id: journalText,
+    slip_id: journalText,
+    call_id: journalText,
+    tool_class: toolClassSchema,
+    verification: verificationOutcomeSchema,
+    irreversible: z.boolean(),
+    undo_available: z.boolean(),
+    summary: journalText,
+  }),
+  "receipt.failed": z.object({
+    slip_id: journalText,
+    call_id: journalText,
+    tool: journalText,
+  }),
+  "undo.failed": z.object({
+    receipt_id: journalText,
+    slip_id: journalText,
+    message: journalText,
+  }),
+  "undo.applied": z.object({
+    receipt_id: journalText,
+    slip_id: journalText,
+    tool: journalText,
+    verification: verificationOutcomeSchema,
+    summary: journalText,
+  }),
+  "undo.mismatched": z.object({
+    receipt_id: journalText,
+    slip_id: journalText,
+    tool: journalText,
+    verification: verificationOutcomeSchema,
+    summary: journalText,
+  }),
+  "trust.run_clean": z.object({
+    slip_id: journalText,
+    errand_type: journalText,
+    clean_runs: journalCount,
+  }),
+  "trust.run_unclean": z.object({
+    slip_id: journalText,
+    errand_type: journalText,
+    reason: journalText,
+  }),
+  "trust.license_offered": z.object({
+    errand_type: journalText,
+    clean_runs: journalCount,
+  }),
+  "trust.license_accepted": z.object({
+    errand_type: journalText,
+    caps: trustCapsSchema,
+    clean_runs: journalCount,
+  }),
+  "trust.license_used": z.object({
+    slip_id: journalText,
+    errand_type: journalText,
+    caps: trustCapsSchema,
+    call_cap: journalCount,
+    spend_cap_cents: journalCount,
+  }),
+  "trust.demoted": z.object({
+    errand_type: journalText,
+    reason: journalText,
+    from_tier: tierSchema,
+    from_clean_runs: journalCount,
+  }),
+  "vault.credential_used": z.object({
+    connector_id: journalText,
+    auth_type: connectorAuthTypeSchema,
+    purpose: journalText,
+  }),
+  "vault.credential_sealed": z.object({
+    connector_id: journalText,
+    auth_type: connectorAuthTypeSchema,
+  }),
+  "connector.connected": z.object({
+    connector_id: journalText,
+    host: journalText,
+    transport: mcpTransportSchema,
+    auth_type: connectorAuthTypeSchema,
+    tool_count: journalCount,
+  }),
+  "connector.needs_reauth": z.object({
+    connector_id: journalText,
+    reason: journalText,
+  }),
+  "connector.refresh_failed": z.object({
+    connector_id: journalText,
+    message: journalText,
+  }),
+  "connector.oauth_started": z.object({
+    connector_id: journalText,
+    host: journalText,
+  }),
+  "connector.oauth_restarted": z.object({
+    connector_id: journalText,
+    host: journalText,
+  }),
+  "connector.oauth_authorized": z.object({
+    connector_id: journalText,
+    host: journalText,
+  }),
+  "connector.oauth_discovery_failed": z.object({
+    connector_id: journalText,
+    reason: journalText,
+  }),
+  "connector.oauth_refresh_failed": z.object({
+    connector_id: journalText,
+    reason: journalText,
+  }),
+  "connector.oauth_refreshed": z.object({
+    connector_id: journalText,
+  }),
+  "catalog.ingested": z.object({
+    connector_id: journalText,
+    new: journalCount,
+    changed: journalCount,
+    removed: journalCount,
+    unchanged: journalCount,
+    total: journalCount,
+  }),
+  "catalog.refreshed": z.object({
+    connector_id: journalText,
+    new: journalCount,
+    changed: journalCount,
+    removed: journalCount,
+    unchanged: journalCount,
+    total: journalCount,
+  }),
+  "catalog.tool_approved": z.object({
+    tool_id: journalText,
+    connector_id: journalText,
+    name: journalText,
+    previous_class: toolClassSchema,
+    class: toolClassSchema,
+    previous_hash: journalText,
+    hash: journalText,
+  }),
+  "catalog.class_changed": z.object({
+    tool_id: journalText,
+    connector_id: journalText,
+    name: journalText,
+    from: toolClassSchema,
+    to: toolClassSchema,
+    loosened: z.boolean(),
+    confirmed: z.boolean(),
+  }),
+  "catalog.requestable_changed": z.object({
+    tool_id: journalText,
+    connector_id: journalText,
+    name: journalText,
+    requestable: z.boolean(),
+  }),
+  "agent_key.created": z.object({
+    agent_key_id: journalText,
+    name: journalText,
+  }),
+  "agent_key.revoked": z.object({
+    agent_key_id: journalText,
+  }),
+  "demo.login": z.object({
+    user_id: journalText,
+    name: journalText,
+  }),
+} as const;
+
+export type JournalEventType = keyof typeof journalPayloads;
+export type JournalPayload<T extends JournalEventType> = z.infer<(typeof journalPayloads)[T]>;
+export type JournalEventInput<T extends JournalEventType = JournalEventType> = {
+  userId: string;
+  eventType: T;
+  payload: JournalPayload<T>;
+};
+
+export function isJournalEventType(value: string): value is JournalEventType {
+  return Object.hasOwn(journalPayloads, value);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+// Read side: known kinds are normalised to the canonical payload; an older row
+// of an unknown kind is returned as it was written.
+export function journalPayload(eventType: string, raw: unknown): Record<string, unknown> {
+  if (isJournalEventType(eventType)) {
+    const parsed = journalPayloads[eventType].safeParse(raw);
+    if (parsed.success && isRecord(parsed.data)) return parsed.data;
+  }
+  return isRecord(raw) ? raw : {};
+}
+
 export const authUserSchema = z.object({
   id: z.string(),
   name: z.string(),

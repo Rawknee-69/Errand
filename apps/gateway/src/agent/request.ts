@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { Db } from "../db/client.ts";
-import { appendJournalEvent } from "../db/journal.ts";
+import { recordEvent } from "../db/events.ts";
 import { slips, type Tier } from "../db/schema.ts";
 import { listCatalog } from "../connectors/catalog.ts";
 import { isRequestableTool } from "./catalog.ts";
@@ -106,7 +106,7 @@ export function requestErrand(
     })
     .run();
 
-  appendJournalEvent(db, {
+  recordEvent(db, {
     userId,
     eventType: "slip.requested",
     payload: {
@@ -123,9 +123,9 @@ export function requestErrand(
     },
   });
 
-  if (autoApproved) {
+  if (autoApproved && licenseCaps !== null) {
     approveSlip(db, userId, id, {}, { now, hmacKey });
-    appendJournalEvent(db, {
+    recordEvent(db, {
       userId,
       eventType: "trust.license_used",
       payload: {

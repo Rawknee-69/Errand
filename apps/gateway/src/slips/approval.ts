@@ -1,7 +1,7 @@
 import type { CapTrim, SlipApprovalInput, SlipDetail } from "@errand/shared";
 import { and, eq } from "drizzle-orm";
 import type { Db } from "../db/client.ts";
-import { appendJournalEventIn } from "../db/journal.ts";
+import { recordEventIn } from "../db/events.ts";
 import { slips } from "../db/schema.ts";
 import { getSlip } from "../db/scoped-reads.ts";
 import { issueCapability, hashCapability } from "../policy/capability.ts";
@@ -130,7 +130,7 @@ export function approveSlip(
       .all()[0];
     if (row === undefined) throw new Error(`Slip ${id} vanished while approving`);
 
-    appendJournalEventIn(tx, {
+    recordEventIn(tx, {
       userId,
       eventType: "slip.approved",
       payload: {
@@ -176,7 +176,7 @@ export function denySlip(
       .all()[0];
     if (row === undefined) throw new Error(`Slip ${id} vanished while denying`);
 
-    appendJournalEventIn(tx, {
+    recordEventIn(tx, {
       userId,
       eventType: "slip.denied",
       payload: {

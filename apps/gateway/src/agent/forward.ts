@@ -1,13 +1,11 @@
 import { randomUUID } from "node:crypto";
 import type { ReceiptView } from "@errand/shared";
 import type { Db } from "../db/client.ts";
-import { appendJournalEvent } from "../db/journal.ts";
+import { recordEvent } from "../db/events.ts";
 import { getConnector, getSlip } from "../db/scoped-reads.ts";
 import { calls } from "../db/schema.ts";
 import {
-  callConnectorTool,
   ConnectorCallError,
-  connectorTarget,
   DEFAULT_CALL_TIMEOUT_MS,
   DEFAULT_CONNECTOR_CONCURRENCY,
   DEFAULT_RESULT_CAP_BYTES,
@@ -18,11 +16,11 @@ import { ConnectorLimiter } from "../connectors/concurrency.ts";
 import { ConnectorError } from "../connectors/errors.ts";
 import type { DiscoverOptions } from "../connectors/mcp.ts";
 import { markConnectorNeedsReauth, markConnectorSuccess } from "../connectors/records.ts";
-import { createConnectorServiceDeps, type ConnectorServiceDeps } from "../connectors/service.ts";
+import { createUpstream, type Upstream, type UpstreamRead } from "../connectors/upstream.ts";
 import { createOutboxService, type OutboxService } from "../outbox/service.ts";
 import type { CallDecision } from "../policy/pipeline.ts";
 import { recordReceipt } from "../receipts/receipts.ts";
-import { verifyChange, type UpstreamRead } from "../receipts/verifier.ts";
+import { verifyChange } from "../receipts/verifier.ts";
 import { settleSlip } from "../policy/trust.ts";
 import { VaultError } from "../vault/common.ts";
 import type { VaultKeyring } from "../vault/keyring.ts";
@@ -138,7 +136,7 @@ function recordSuccess(
 ): string {
   const serialized = JSON.stringify(result);
   const callId = insertCall(db, userId, decision, args, { result: serialized, error: null });
-  appendJournalEvent(db, {
+  recordEvent(db, {
     userId,
     eventType: "call.succeeded",
     payload: {
@@ -170,7 +168,7 @@ function recordFailure(
     result: null,
     error: failure.message,
   });
-  appendJournalEvent(db, {
+  recordEvent(db, {
     userId,
     eventType: "call.failed",
     payload: {
@@ -199,19 +197,13 @@ type ReceiptContext = {
   callId: string;
   args: Record<string, unknown>;
   result: ConnectorToolResult;
-  serviceDeps: ConnectorServiceDeps;
-  timeoutMs: number;
-  resultCapBytes: number;
+  upstream: Upstream;
 };
 
 async function receiptForChange(context: ReceiptContext): Promise<ReceiptView | undefined> {
   const slip = getSlip(context.db, context.userId, context.decision.slipId);
   if (slip === undefined) return undefined;
-  const read: UpstreamRead = (tool, args) =>
-    callConnectorTool(context.serviceDeps, connectorTarget(context.connector), tool, args, {
-      timeoutMs: context.timeoutMs,
-      resultCapBytes: context.resultCapBytes,
-    });
+  const read: UpstreamRead = context.upstream.reader(context.connector);
   const verification = await verifyChange({
     connectorUrl: context.connector.url,
     connectorName: context.connector.name,
@@ -259,12 +251,14 @@ export function createUpstreamForwarder(options: ForwarderOptions): Forwarder {
       return { state: "failed", ...failure, durationMs: 0 };
     }
 
-    const serviceDeps = createConnectorServiceDeps({
+    const upstream = createUpstream({
       db: options.db,
       keyring: options.keyring,
       userId,
       discoverOptions: options.discoverOptions,
       redirectUri: options.redirectUri,
+      timeoutMs: callTimeoutMs,
+      resultCapBytes,
     });
     const started = Date.now();
     const deadline = started + callTimeoutMs;
@@ -279,13 +273,7 @@ export function createUpstreamForwarder(options: ForwarderOptions): Forwarder {
             `The upstream call to ${decision.tool} timed out waiting for a connector slot`,
           );
         }
-        return callConnectorTool(
-          serviceDeps,
-          connectorTarget(connector),
-          decision.upstreamTool,
-          args,
-          { timeoutMs: remaining, resultCapBytes },
-        );
+        return upstream.call(connector, decision.upstreamTool, args, remaining);
       });
     } catch (error) {
       failure = failureFrom(error, decision.tool);
@@ -314,12 +302,10 @@ export function createUpstreamForwarder(options: ForwarderOptions): Forwarder {
           callId,
           args,
           result,
-          serviceDeps,
-          timeoutMs: callTimeoutMs,
-          resultCapBytes,
+          upstream,
         });
       } catch {
-        appendJournalEvent(options.db, {
+        recordEvent(options.db, {
           userId,
           eventType: "receipt.failed",
           payload: {

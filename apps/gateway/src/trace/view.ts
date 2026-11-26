@@ -42,11 +42,7 @@ export function traceView(db: Db, userId: string, limit = TRACE_LIMIT): TraceRes
       typeof event.payload.call_id === "string" ? event.payload.call_id : null;
     const row = callId === null ? undefined : byId.get(callId);
     const connectorId =
-      callId === null && typeof event.payload.connector_id === "string"
-        ? event.payload.connector_id
-        : typeof event.payload.connectorId === "string"
-          ? event.payload.connectorId
-          : row?.connectorId;
+      typeof event.payload.connector_id === "string" ? event.payload.connector_id : row?.connectorId;
     return {
       ...event,
       connectorName: connectorId === undefined ? null : (connectorNames.get(connectorId) ?? null),

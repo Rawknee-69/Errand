@@ -2,7 +2,8 @@ import { randomUUID } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import { isBlockedToolState, isClassLoosening, type IngestSummary } from "@errand/shared";
 import type { Db } from "../db/client.ts";
-import { appendJournalEvent, canonicalJson } from "../db/journal.ts";
+import { canonicalJson } from "../db/journal.ts";
+import { recordEvent } from "../db/events.ts";
 import { scopedGet, scopedList } from "../db/scoped-reads.ts";
 import { tools, type ToolClass, type ToolState } from "../db/schema.ts";
 import { classifyTool, defaultRequestable, type ToolAnnotations } from "./classifier.ts";
@@ -253,12 +254,12 @@ export function setToolClass(
     })
     .where(and(eq(tools.userId, userId), eq(tools.id, row.id)))
     .run();
-  appendJournalEvent(db, {
+  recordEvent(db, {
     userId,
     eventType: "catalog.class_changed",
     payload: {
-      toolId: row.id,
-      connectorId: row.connectorId,
+      tool_id: row.id,
+      connector_id: row.connectorId,
       name: row.name,
       from: row.class,
       to: nextClass,
@@ -295,12 +296,12 @@ export function setToolRequestable(
     .set({ requestable, updatedAt: now })
     .where(and(eq(tools.userId, userId), eq(tools.id, row.id)))
     .run();
-  appendJournalEvent(db, {
+  recordEvent(db, {
     userId,
     eventType: "catalog.requestable_changed",
     payload: {
-      toolId: row.id,
-      connectorId: row.connectorId,
+      tool_id: row.id,
+      connector_id: row.connectorId,
       name: row.name,
       requestable,
     },

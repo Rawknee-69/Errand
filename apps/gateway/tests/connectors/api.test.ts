@@ -228,10 +228,12 @@ describe("catalog routes", () => {
       .all()
       .find((entry) => entry.eventType === "catalog.tool_approved");
 
-    expect(approved?.payload).toContain('"previousClass"');
+    expect(approved?.payload).toContain('"previous_class"');
     expect(approved?.payload).toContain('"class"');
-    expect(approved?.payload).toContain('"previousHash"');
+    expect(approved?.payload).toContain('"previous_hash"');
     expect(approved?.payload).toContain('"hash"');
+    expect(approved?.payload).toContain('"tool_id"');
+    expect(approved?.payload).toContain('"connector_id"');
   });
 });
 

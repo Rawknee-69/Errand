@@ -29,7 +29,8 @@ import { registerAuth, requestUserId, type AuthOptions, type GatewayEnv } from "
 import { DEFAULT_OWNER_ID } from "./auth/owner.ts";
 import { webOriginSchema } from "./config.ts";
 import { createMigratedDatabase, type Db } from "./db/client.ts";
-import { appendJournalEvent, verifyJournal } from "./db/journal.ts";
+import { verifyJournal } from "./db/journal.ts";
+import { recordEvent } from "./db/events.ts";
 import { users } from "./db/schema.ts";
 import { getUser, listAgentKeys } from "./db/scoped-reads.ts";
 import { EgressRefusal } from "./egress/guard.ts";
@@ -157,7 +158,7 @@ export function catalogToolView(row: CatalogTool): CatalogToolView {
 function oauthCallbackPage(connectorName: string): string {
   return `<!doctype html>
 <meta charset="utf-8">
-<title>Errand — connected</title>
+<title>Errand â€” connected</title>
 <body style="font-family: system-ui, sans-serif; max-width: 32rem; margin: 4rem auto">
   <h1>Connected</h1>
   <p><strong>${escapeHtml(connectorName)}</strong> is authorized and its tools are catalogued.</p>
@@ -263,7 +264,7 @@ export function createGatewayApp(
     const userId = userIdFor(c);
     const body = agentKeyCreateSchema.parse(await c.req.json());
     const issued = issueAgentKey(db, userId, body.name);
-    appendJournalEvent(db, {
+    recordEvent(db, {
       userId,
       eventType: "agent_key.created",
       payload: { agent_key_id: issued.record.id, name: issued.record.name },
@@ -283,7 +284,7 @@ export function createGatewayApp(
     const result = revokeAgentKey(db, userId, c.req.param("id"));
     if (result === undefined) return c.json({ error: "not_found" }, 404);
     if (result.changed) {
-      appendJournalEvent(db, {
+      recordEvent(db, {
         userId,
         eventType: "agent_key.revoked",
         payload: { agent_key_id: result.record.id },

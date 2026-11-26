@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import type { ReceiptView, ToolClass, VerificationOutcome } from "@errand/shared";
 import type { Db } from "../db/client.ts";
-import { appendJournalEvent, appendJournalEventIn } from "../db/journal.ts";
+import { recordEvent, recordEventIn } from "../db/events.ts";
 import { receipts, undoActions } from "../db/schema.ts";
 import { demoteTrust } from "../policy/trust.ts";
 import {
@@ -13,22 +13,10 @@ import {
   listUndoActions,
   listReceipts,
 } from "../db/scoped-reads.ts";
-import {
-  callConnectorTool,
-  connectorTarget,
-  DEFAULT_CALL_TIMEOUT_MS,
-  DEFAULT_RESULT_CAP_BYTES,
-} from "../connectors/call.ts";
-import { createConnectorServiceDeps } from "../connectors/service.ts";
 import type { DiscoverOptions } from "../connectors/mcp.ts";
+import { createUpstream, type Upstream } from "../connectors/upstream.ts";
 import type { VaultKeyring } from "../vault/keyring.ts";
-import {
-  inverseSchema,
-  verifyChange,
-  type Inverse,
-  type UpstreamRead,
-  type Verification,
-} from "./verifier.ts";
+import { inverseSchema, verifyChange, type Inverse, type Verification } from "./verifier.ts";
 
 type ReceiptRow = typeof receipts.$inferSelect;
 type UndoRow = typeof undoActions.$inferSelect;
@@ -127,7 +115,7 @@ export function recordReceipt(input: RecordReceiptInput): ReceiptView {
         .run();
     }
 
-    appendJournalEventIn(tx, {
+    recordEventIn(tx, {
       userId: input.userId,
       eventType: "receipt.created",
       payload: {
@@ -192,30 +180,11 @@ export type UndoResult =
     };
 
 async function verifyUndo(
-  deps: UndoDeps,
-  userId: string,
+  upstream: Upstream,
   connector: NonNullable<ReturnType<typeof getConnector>>,
   inverse: Inverse,
-  read: UpstreamRead,
 ): Promise<Verification> {
-  const serviceDeps = createConnectorServiceDeps({
-    db: deps.db,
-    keyring: deps.keyring,
-    userId,
-    discoverOptions: deps.discoverOptions,
-    redirectUri: deps.redirectUri,
-  });
-  const options = {
-    timeoutMs: deps.callTimeoutMs ?? DEFAULT_CALL_TIMEOUT_MS,
-    resultCapBytes: deps.resultCapBytes ?? DEFAULT_RESULT_CAP_BYTES,
-  };
-  const result = await callConnectorTool(
-    serviceDeps,
-    connectorTarget(connector),
-    inverse.tool,
-    inverse.arguments,
-    options,
-  );
+  const result = await upstream.call(connector, inverse.tool, inverse.arguments);
   return verifyChange({
     connectorUrl: connector.url,
     connectorName: connector.name,
@@ -223,7 +192,7 @@ async function verifyUndo(
     arguments: inverse.arguments,
     result,
     toolClass: inverse.toolClass,
-    read,
+    read: upstream.reader(connector),
   });
 }
 
@@ -265,23 +234,19 @@ export async function applyUndo(
     };
   }
 
-  const serviceDeps = createConnectorServiceDeps({
+  const upstream = createUpstream({
     db: deps.db,
     keyring: deps.keyring,
     userId,
     discoverOptions: deps.discoverOptions,
     redirectUri: deps.redirectUri,
+    ...(deps.callTimeoutMs === undefined ? {} : { timeoutMs: deps.callTimeoutMs }),
+    ...(deps.resultCapBytes === undefined ? {} : { resultCapBytes: deps.resultCapBytes }),
   });
-  const options = {
-    timeoutMs: deps.callTimeoutMs ?? DEFAULT_CALL_TIMEOUT_MS,
-    resultCapBytes: deps.resultCapBytes ?? DEFAULT_RESULT_CAP_BYTES,
-  };
-  const read: UpstreamRead = (tool, args) =>
-    callConnectorTool(serviceDeps, connectorTarget(connector), tool, args, options);
 
   let verification: Verification;
   try {
-    verification = await verifyUndo(deps, userId, connector, parsed.data, read);
+    verification = await verifyUndo(upstream, connector, parsed.data);
   } catch (error) {
     deps.db
       .update(undoActions)
@@ -289,7 +254,7 @@ export async function applyUndo(
       .where(and(eq(undoActions.userId, userId), eq(undoActions.id, undo.id)))
       .run();
     const message = error instanceof Error ? error.message : String(error);
-    appendJournalEvent(deps.db, {
+    recordEvent(deps.db, {
       userId,
       eventType: "undo.failed",
       payload: { receipt_id: receipt.id, slip_id: receipt.slipId, message },
@@ -309,7 +274,7 @@ export async function applyUndo(
       .where(and(eq(undoActions.userId, userId), eq(undoActions.id, undo.id)))
       .run();
 
-    appendJournalEventIn(tx, {
+    recordEventIn(tx, {
       userId,
       eventType: matched ? "undo.applied" : "undo.mismatched",
       payload: {
