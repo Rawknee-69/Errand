@@ -1,5 +1,4 @@
 import {
-  CLEAN_RUNS_FOR_LICENSE,
   capTrimSchema,
   feedEventSchema,
   limitClampSchema,
@@ -9,9 +8,10 @@ import {
 } from "@errand/shared";
 import { formatCalls, formatMoney } from "./format.ts";
 import { describeTrims } from "./slips.ts";
-import { capsSummary } from "./trust.ts";
+import type { BadgeTone } from "./tone.ts";
+import { capsSummary, cleanRunView } from "./trust.ts";
 
-export type FeedTone = "ok" | "danger" | "accent" | "muted";
+type FeedTone = BadgeTone;
 
 export type FeedItem = {
   seq: number;
@@ -226,7 +226,7 @@ export function describeFeedEvent(event: FeedEvent): FeedItem {
         "Clean run counted",
         cleanRuns === null
           ? "The run verified clean"
-          : `${cleanRuns} of ${CLEAN_RUNS_FOR_LICENSE} clean runs toward a license`,
+          : `${cleanRunView(cleanRuns).label} toward a license`,
         "ok",
       );
     }

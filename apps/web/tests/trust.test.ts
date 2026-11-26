@@ -5,6 +5,7 @@ import {
   parseTrustCapsEdit,
   tierView,
   trustCapInputs,
+  trustTitle,
 } from "../src/trust.ts";
 
 describe("tier and clean-run copy", () => {
@@ -19,6 +20,13 @@ describe("tier and clean-run copy", () => {
       tone: "ok",
       detail: "Runs without a tap inside the caps you set.",
     });
+  });
+
+  test("names a row by the tools that define its kind, falling back to the hash", () => {
+    expect(
+      trustTitle({ tools: ["calendar__list_events", "calendar__create_event"], errandType: "abc" }),
+    ).toBe("calendar__list_events, calendar__create_event");
+    expect(trustTitle({ tools: [], errandType: "0123456789abcdef" })).toBe("01234567…cdef");
   });
 
   test("counts the clean runs still needed for a license", () => {

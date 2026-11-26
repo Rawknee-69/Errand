@@ -47,6 +47,11 @@ export function IssuedKey({ issued }: { issued: AgentKeyCreated }) {
         <pre>{text}</pre>
         <CopyButton value={text} label={active.copyLabel} />
       </div>
+
+      <p className="hint">
+        Cursor: save the snippet as <span className="mono">.cursor/mcp.json</span>. Claude Code: run
+        the command once.
+      </p>
     </>
   );
 }

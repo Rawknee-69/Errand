@@ -1,7 +1,5 @@
 import { AGENT_LIMITS, type LimitClamp } from "@errand/shared";
 
-export { AGENT_LIMITS };
-
 export type RequestedLimits = {
   calls?: number;
   spendCents?: number;

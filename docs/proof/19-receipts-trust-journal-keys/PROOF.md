@@ -16,12 +16,13 @@
   passphrase and agent keys lived only in process environment and an untracked
   temp file.
 - Real clients: the mock MCP servers through real connectors, a real MCP client
-  through a real agent key, and Chromium 1255 driven by Playwright 1.65.1 at
-  real 1440×900 and 390×844 viewports. The in-app browser was opened first and
-  read the same pages; the Playwright MCP server cannot launch on this machine
-  because Chrome is not installed at its configured path (same deviation as
-  #18). Direct Chromium is not device emulation: the viewport and media queries
-  are the real ones.
+  through a real agent key, and Chromium 1255 driven by the repo's
+  `playwright-core` devDependency at real 1440×900 and 390×844 viewports. The
+  in-app browser was opened first and read the same pages; the Playwright MCP
+  server cannot launch on this machine because Chrome is not installed at its
+  configured path (same deviation as #18). Direct Chromium is not device
+  emulation: the viewport and media queries are the real ones. The driver
+  scripts are committed under `browser/`.
 
 Commands:
 
@@ -32,14 +33,17 @@ PORT=8899 DATABASE_PATH=<temp>/errand-19-proof.db ALLOW_LOCALHOST_DEV=true \
   SESSION_COOKIE_SECURE=false bun apps/gateway/src/index.ts
 GATEWAY_URL=http://127.0.0.1:8899 bun run --cwd apps/web dev -- --port 5301
 bun docs/proof/19-receipts-trust-journal-keys/drive.ts
-bun <temp>/proof19-runner/drive-proof.ts
-bun <temp>/proof19-runner/phone-proof.ts
-bun <temp>/proof19-runner/tamper.ts && bun <temp>/proof19-runner/journal-broken.ts
-bun <temp>/proof19-runner/empty-proof.ts
-bun <temp>/proof19-runner/error-proof.ts
-bun <temp>/proof19-runner/trust-proof.ts
-bun <temp>/proof19-runner/loading-proof.ts
+bun docs/proof/19-receipts-trust-journal-keys/browser/01-desktop-and-phone.ts
+bun docs/proof/19-receipts-trust-journal-keys/browser/02-phone.ts
+bun docs/proof/19-receipts-trust-journal-keys/browser/03-tamper-journal.ts
+bun docs/proof/19-receipts-trust-journal-keys/browser/04-journal-broken.ts
+bun docs/proof/19-receipts-trust-journal-keys/browser/05-empty-states.ts
+bun docs/proof/19-receipts-trust-journal-keys/browser/06-error-states.ts
+bun docs/proof/19-receipts-trust-journal-keys/browser/08-loading-states.ts
+bun docs/proof/19-receipts-trust-journal-keys/browser/09-capture-api.ts
 ```
+
+The order and prerequisites are in `browser/README.md`.
 
 ## Data driven
 
@@ -72,9 +76,12 @@ Desktop 1440×900:
 2. Pressed **Undo this change** on a verified create. The inverse ran, was
    re-read, and the card changed to **Undone** with the verifier's summary
    (`screens/02-desktop-receipts-undone.png`).
-3. `/trust` — four errand types: the list_events type showed 5 of 5 clean runs
-   and a caps form; the others showed their clean-run progress and no form
-   (`screens/03-desktop-trust-offer.png`).
+3. `/trust` — four errand types, each named by the tools that define it
+   (`calendar__create_event`, `dine_out__reserve_table`,
+   `calendar__list_events`, `calendar__delete_event`) with its tier and
+   clean-run count. Every row shows the calls / dollars / minutes controls; the
+   row with 5 of 5 clean runs is enabled and the learners' controls are disabled
+   with the reason (`screens/03-desktop-trust-offer.png`).
 4. Typed 2 calls / $15.00 / 5 minutes and pressed **Accept license with these
    caps**. The badge changed to **License**, the caps summary appeared, and the
    button became **Update caps** (`screens/04-desktop-trust-license.png`).
@@ -88,10 +95,13 @@ Desktop 1440×900:
    pressed **Run the journal check** again. The verdict named **Chain broken at
    sequence 7**, 6 entries intact, with the sequence in plain text
    (`screens/13-desktop-journal-broken.png`, `logs/journal-broken.txt`).
+8. With that broken verdict on screen, made the next check fail with a 503. The
+   old verdict left the page and the error was shown alone
+   (`screens/24-desktop-journal-stale-error.png`).
 
 Phone 390×844:
 
-8. `/receipts` (`09-phone-receipts.png`, scrolled to the undo card in
+9. `/receipts` (`09-phone-receipts.png`, scrolled to the undo card in
    `09b-phone-receipts-undo.png`), `/trust` (`10-phone-trust.png`, caps form in
    `10b-phone-trust-caps.png`), `/journal` after a run (`11-phone-journal.png`),
    `/keys` (`12-phone-keys.png`). The tab bar stays fixed at the bottom and the
@@ -99,15 +109,15 @@ Phone 390×844:
 
 States:
 
-9. Empty database: `/receipts` “No receipts yet”
-   (`14-desktop-receipts-empty.png`), `/trust` “No errand types have run yet”
-   (`15-desktop-trust-empty.png`), `/keys` “No keys yet”
-   (`16-desktop-keys-empty.png`), `/journal` before the first run
-   (`17-desktop-journal-initial.png`).
-10. Deliberate 503 per store: each screen showed the gateway's message and a
+10. Empty database: `/receipts` “No receipts yet”
+    (`14-desktop-receipts-empty.png`), `/trust` “No errand types have run yet”
+    (`15-desktop-trust-empty.png`), `/keys` “No keys yet”
+    (`16-desktop-keys-empty.png`), `/journal` before the first run
+    (`17-desktop-journal-initial.png`).
+11. Deliberate 503 per store: each screen showed the gateway's message and a
     **Try again** button (`18`–`21`), and the journal error stayed on the same
     panel (`21-desktop-journal-error.png`).
-11. Delayed responses captured the loading copy for receipts and trust
+12. Delayed responses captured the loading copy for receipts and trust
     (`22-desktop-receipts-loading.png`, `23-desktop-trust-loading.png`).
 
 Console and network: `logs/browser-window.txt` recorded only the four
@@ -127,7 +137,9 @@ only for that capture and was not journalled anywhere else.
 | # | Severity | What happened | Artifact | Status |
 |---|---|---|---|---|
 | 1 | low | The trust row footer said “Last settled”, but `updatedAt` also moves on creation and on an accepted license, not only when a run settles. Renamed to “Updated”; all trust screenshots were recaptured. | screens/03-desktop-trust-offer.png, screens/04-desktop-trust-license.png | fixed |
-| 2 | info | `/api/events` shows `ERR_ABORTED` whenever the user navigates between screens. That is the EventSource being closed, not a failed read; every screen's data request completed 200. | logs/browser-window.txt | expected |
+| 2 | medium | After a failed re-check, the journal screen kept the previous clean/broken verdict beside the error, which reported a result the check had not produced. The run now clears the old verdict on failure; re-driven from a broken verdict to a 503 and the page showed the error alone. | screens/24-desktop-journal-stale-error.png | fixed |
+| 3 | medium | Trust rows showed only a truncated errand-type hash, so the human could not tell which kind of work a license applied to. `GET /api/trust` now includes the tool names and the row is named by them, with the hash still in the tooltip. | screens/03-desktop-trust-offer.png | fixed |
+| 4 | info | `/api/events` shows `ERR_ABORTED` whenever the user navigates between screens. That is the EventSource being closed, not a failed read; every screen's data request completed 200. | logs/browser-window.txt | expected |
 
 ## Not proven
 
@@ -141,6 +153,9 @@ only for that capture and was not journalled anywhere else.
 - A license being demoted from the UI. There is no “give up the license”
   control in the ticket; demotion is the gateway's behaviour and was proven in
   #15. This screen displays the resulting learner row.
+- A mismatched undo being retried from the Receipts screen. The “Retry undo”
+  path is unit-tested and was proven at the API level in #14, but the browser
+  pass only applied a successful undo.
 - Two undos racing on the same receipt from two tabs; the gateway's claim is
   tested in #14.
 

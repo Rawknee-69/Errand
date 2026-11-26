@@ -1,8 +1,14 @@
-import { AGENT_LIMITS, CLEAN_RUNS_FOR_LICENSE, type Tier, type TrustCaps } from "@errand/shared";
-import { formatMoney } from "./format.ts";
+import {
+  AGENT_LIMITS,
+  CLEAN_RUNS_FOR_LICENSE,
+  type Tier,
+  type TrustCaps,
+  type TrustView,
+} from "@errand/shared";
+import { errandTypeLabel, formatCalls, formatDollarsInput, formatMoney } from "./format.ts";
 import type { BadgeTone } from "./tone.ts";
 
-export type TierView = {
+type TierView = {
   label: string;
   tone: BadgeTone;
   detail: string;
@@ -29,13 +35,16 @@ export function cleanRunView(cleanRuns: number): { remaining: number; label: str
   };
 }
 
-export function capsSummary(caps: TrustCaps | null): string {
-  if (caps === null) return "No caps set";
-  const calls = `${caps.callCap} ${caps.callCap === 1 ? "call" : "calls"}`;
-  return `${calls} · ${formatMoney(caps.spendCapCents)} · ${caps.minutes} min`;
+export function trustTitle(trust: Pick<TrustView, "tools" | "errandType">): string {
+  return trust.tools.length === 0 ? errandTypeLabel(trust.errandType) : trust.tools.join(", ");
 }
 
-export type TrustCapEdits = {
+export function capsSummary(caps: TrustCaps | null): string {
+  if (caps === null) return "No caps set";
+  return `${formatCalls(caps.callCap)} · ${formatMoney(caps.spendCapCents)} · ${caps.minutes} min`;
+}
+
+type TrustCapEdits = {
   calls: string;
   spendDollars: string;
   minutes: string;
@@ -45,12 +54,12 @@ export function trustCapInputs(caps: TrustCaps | null): TrustCapEdits {
   if (caps === null) return { calls: "5", spendDollars: "10.00", minutes: "10" };
   return {
     calls: String(caps.callCap),
-    spendDollars: (caps.spendCapCents / 100).toFixed(2),
+    spendDollars: formatDollarsInput(caps.spendCapCents),
     minutes: String(caps.minutes),
   };
 }
 
-export type TrustCapsParseResult =
+type TrustCapsParseResult =
   | { ok: true; caps: TrustCaps }
   | { ok: false; message: string };
 

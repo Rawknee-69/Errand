@@ -2,8 +2,10 @@ import { useCallback, useState, type FormEvent } from "react";
 import type { AgentKeyCreated, AgentKeyView, FeedEvent } from "@errand/shared";
 import { api, errorMessage } from "../api.ts";
 import { IssuedKey } from "../components/IssuedKey.tsx";
+import { ResourceState } from "../components/ResourceState.tsx";
 import { formatTimestamp } from "../format.ts";
-import { keyStatusView, splitAgentKeys } from "../keys.ts";
+import { isActiveKey, keyStatusView, splitAgentKeys } from "../keys.ts";
+import { replaceRow } from "../rows.ts";
 import { useLiveFeed } from "../useLiveFeed.ts";
 import { useResource } from "../useResource.ts";
 
@@ -28,9 +30,9 @@ function KeyRow({
 
   return (
     <li className="key-card">
-      <div className="receipt-head">
-        <div className="receipt-title">
-          <p className="receipt-summary">{agentKey.name}</p>
+      <div className="card-head">
+        <div className="card-title">
+          <p className="card-heading">{agentKey.name}</p>
           <p className="hint">
             Created {formatTimestamp(agentKey.createdAt)}
             {agentKey.revokedAt !== null && ` · revoked ${formatTimestamp(agentKey.revokedAt)}`}
@@ -39,7 +41,7 @@ function KeyRow({
         <span className={`badge ${status.tone}`}>{status.label}</span>
       </div>
 
-      {agentKey.revokedAt === null && (
+      {isActiveKey(agentKey) && (
         <div className="actions">
           {confirming ? (
             <>
@@ -81,7 +83,7 @@ export function Keys() {
   const [createError, setCreateError] = useState<string | null>(null);
   const [confirmId, setConfirmId] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
-  const [rowErrors, setRowErrors] = useState<Record<string, string>>({});
+  const [rowErrors, setRowErrors] = useState<Record<string, string | null>>({});
 
   const onEvent = useCallback(
     (event: FeedEvent) => {
@@ -109,19 +111,17 @@ export function Keys() {
 
   async function revoke(agentKey: AgentKeyView) {
     setBusyId(agentKey.id);
-    setRowErrors((current) => {
-      const next = { ...current };
-      delete next[agentKey.id];
-      return next;
-    });
+    setRowErrors((current) => ({ ...current, [agentKey.id]: null }));
     try {
       const result = await api.revokeAgentKey(agentKey.id);
       setData((current) =>
         current === null
           ? current
           : {
-              agentKeys: current.agentKeys.map((row) =>
-                row.id === result.agentKey.id ? result.agentKey : row,
+              agentKeys: replaceRow(
+                current.agentKeys,
+                (row) => row.id === result.agentKey.id,
+                result.agentKey,
               ),
             },
       );
@@ -193,42 +193,21 @@ export function Keys() {
           <p className="eyebrow">New key</p>
           <h2>{issued.agentKey.name}</h2>
           <IssuedKey issued={issued} />
-          <p className="hint">
-            Cursor: save the snippet as <span className="mono">.cursor/mcp.json</span>. Claude Code:
-            run the command once.
-          </p>
           <button type="button" className="link-button" onClick={() => setIssued(null)}>
             I saved it, hide the key
           </button>
         </div>
       )}
 
-      {loading && keys.length === 0 && (
-        <p className="panel hint" aria-busy="true">
-          Reading keys…
-        </p>
-      )}
-
-      {error !== null && (
-        <div className="panel stack">
-          <p className="alert" role="alert">
-            {error}
-          </p>
-          <button type="button" className="button secondary" onClick={() => void reload()}>
-            Try again
-          </button>
-        </div>
-      )}
-
-      {!loading && error === null && keys.length === 0 && (
-        <div className="panel stack empty">
-          <h2>No keys yet</h2>
-          <p className="lede">
-            Create one above and paste it into your agent. Until then, nothing can connect to the
-            agent endpoint.
-          </p>
-        </div>
-      )}
+      <ResourceState
+        loading={loading}
+        error={error}
+        isEmpty={keys.length === 0}
+        loadingCopy="Reading keys…"
+        emptyTitle="No keys yet"
+        emptyCopy="Create one above and paste it into your agent. Until then, nothing can connect to the agent endpoint."
+        onRetry={() => void reload()}
+      />
 
       {grouped.active.length > 0 && (
         <section className="stack" aria-label="Active keys">

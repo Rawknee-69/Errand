@@ -2,7 +2,6 @@ import { describe, expect, test } from "bun:test";
 import type { ReceiptView } from "@errand/shared";
 import {
   canUndo,
-  errandTypeLabel,
   summariseVerifications,
   undoView,
   verificationView,
@@ -114,10 +113,5 @@ describe("receipt summaries", () => {
         receipt({ id: "d", verification: "matched" }),
       ]),
     ).toEqual({ matched: 2, mismatched: 1, unverified: 1 });
-  });
-
-  test("shortens an errand type for a label but keeps a short one whole", () => {
-    expect(errandTypeLabel("0123456789abcdef")).toBe("01234567…cdef");
-    expect(errandTypeLabel("short")).toBe("short");
   });
 });

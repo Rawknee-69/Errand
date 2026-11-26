@@ -31,10 +31,7 @@ export function AgentKeyPanel({ issued, busy, error, onCreate }: Props) {
       ) : (
         <>
           <IssuedKey issued={issued} />
-          <p className="hint">
-            Cursor: save the snippet as <span className="mono">.cursor/mcp.json</span>. Claude Code:
-            run the command once. The key is bound to your account, not to this connector.
-          </p>
+          <p className="hint">The key is bound to your account, not to this connector.</p>
         </>
       )}
     </div>

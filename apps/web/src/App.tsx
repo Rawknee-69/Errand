@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import type { SessionView } from "@errand/shared";
 import { api } from "./api.ts";
+import type { Screen } from "./navigation.ts";
 import { useScreen } from "./useScreen.ts";
 import { Login } from "./screens/Login.tsx";
 import { Shell } from "./screens/Shell.tsx";
@@ -63,26 +64,20 @@ export function App() {
   }
 
   const openConnect = () => navigate("connect");
+  const screens: Record<Screen, ReactNode> = {
+    connect: <Connect onOpenCatalog={() => navigate("catalog")} />,
+    catalog: <Catalog onOpenConnect={openConnect} />,
+    connectors: <Connectors onOpenConnect={openConnect} />,
+    slips: <Slips />,
+    receipts: <Receipts />,
+    trust: <Trust />,
+    journal: <Journal />,
+    keys: <Keys />,
+  };
 
   return (
     <Shell user={session.user} screen={screen} onNavigate={navigate} onSignOut={signOut}>
-      {screen === "connect" ? (
-        <Connect onOpenCatalog={() => navigate("catalog")} />
-      ) : screen === "catalog" ? (
-        <Catalog onOpenConnect={openConnect} />
-      ) : screen === "connectors" ? (
-        <Connectors onOpenConnect={openConnect} />
-      ) : screen === "slips" ? (
-        <Slips />
-      ) : screen === "receipts" ? (
-        <Receipts />
-      ) : screen === "trust" ? (
-        <Trust />
-      ) : screen === "journal" ? (
-        <Journal />
-      ) : (
-        <Keys />
-      )}
+      {screens[screen]}
     </Shell>
   );
 }

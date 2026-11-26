@@ -219,6 +219,7 @@ export type TrustCaps = z.infer<typeof trustCapsSchema>;
 
 export const trustViewSchema = z.object({
   errandType: z.string(),
+  tools: z.array(z.string()),
   tier: tierSchema,
   cleanRuns: z.number().int().nonnegative(),
   licenseOffered: z.boolean(),

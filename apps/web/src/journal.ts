@@ -1,10 +1,11 @@
 import type { JournalVerifyResponse } from "@errand/shared";
 import type { BadgeTone } from "./tone.ts";
 
-export type JournalVerdict = {
+type JournalVerdict = {
   tone: BadgeTone;
   title: string;
   detail: string;
+  checked: number;
   brokenSeq: number | null;
 };
 
@@ -18,6 +19,7 @@ export function journalVerdict(result: JournalVerifyResponse): JournalVerdict {
       tone: "ok",
       title: "Chain intact",
       detail: `${entries(result.checked)} recomputed; every hash matches.`,
+      checked: result.checked,
       brokenSeq: null,
     };
   }
@@ -25,6 +27,7 @@ export function journalVerdict(result: JournalVerifyResponse): JournalVerdict {
     tone: "danger",
     title: `Chain broken at sequence ${result.firstBrokenSeq}`,
     detail: `${entries(result.checked)} before it are intact. The journal was altered or an entry is missing.`,
+    checked: result.checked,
     brokenSeq: result.firstBrokenSeq,
   };
 }

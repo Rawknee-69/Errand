@@ -1466,21 +1466,21 @@ pre {
   gap: 11px;
 }
 
-.receipt-head {
+.card-head {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
 }
 
-.receipt-title {
+.card-title {
   display: flex;
   flex-direction: column;
   gap: 6px;
   min-width: 0;
 }
 
-.receipt-summary {
+.card-heading {
   font-size: 15px;
   font-weight: 600;
   line-height: 1.4;
@@ -1508,20 +1508,6 @@ pre {
 
 .receipt-undo .alert {
   flex-basis: 100%;
-}
-
-.trust-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.trust-title {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  min-width: 0;
 }
 
 .trust-caps {

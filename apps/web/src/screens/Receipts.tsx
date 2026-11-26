@@ -1,14 +1,10 @@
 import { useCallback, useState } from "react";
 import type { FeedEvent, ReceiptView } from "@errand/shared";
 import { api, errorMessage } from "../api.ts";
-import { formatTimestamp } from "../format.ts";
-import {
-  canUndo,
-  errandTypeLabel,
-  summariseVerifications,
-  undoView,
-  verificationView,
-} from "../receipts.ts";
+import { ResourceState } from "../components/ResourceState.tsx";
+import { errandTypeLabel, formatTimestamp } from "../format.ts";
+import { canUndo, summariseVerifications, undoView, verificationView } from "../receipts.ts";
+import { replaceRow } from "../rows.ts";
 import { useLiveFeed } from "../useLiveFeed.ts";
 import { useResource } from "../useResource.ts";
 
@@ -35,12 +31,12 @@ function ReceiptCard({
 
   return (
     <li className="receipt-card">
-      <div className="receipt-head">
-        <div className="receipt-title">
+      <div className="card-head">
+        <div className="card-title">
           <p className="eyebrow mono" title={receipt.errandType}>
             {errandTypeLabel(receipt.errandType)}
           </p>
-          <p className="receipt-summary">{receipt.summary}</p>
+          <p className="card-heading">{receipt.summary}</p>
         </div>
         <span className={`badge ${verification.tone}`}>{verification.label}</span>
       </div>
@@ -78,7 +74,7 @@ function ReceiptCard({
 export function Receipts() {
   const { data, loading, error, reload, setData } = useResource(api.receipts);
   const [busyId, setBusyId] = useState<string | null>(null);
-  const [undoErrors, setUndoErrors] = useState<Record<string, string>>({});
+  const [undoErrors, setUndoErrors] = useState<Record<string, string | null>>({});
 
   const onEvent = useCallback(
     (event: FeedEvent) => {
@@ -90,19 +86,17 @@ export function Receipts() {
 
   async function undo(receipt: ReceiptView) {
     setBusyId(receipt.id);
-    setUndoErrors((current) => {
-      const next = { ...current };
-      delete next[receipt.id];
-      return next;
-    });
+    setUndoErrors((current) => ({ ...current, [receipt.id]: null }));
     try {
       const result = await api.undoReceipt(receipt.id);
       setData((current) =>
         current === null
           ? current
           : {
-              receipts: current.receipts.map((row) =>
-                row.id === result.receipt.id ? result.receipt : row,
+              receipts: replaceRow(
+                current.receipts,
+                (row) => row.id === result.receipt.id,
+                result.receipt,
               ),
             },
       );
@@ -141,32 +135,15 @@ export function Receipts() {
         </ul>
       )}
 
-      {loading && receipts.length === 0 && (
-        <p className="panel hint" aria-busy="true">
-          Reading receipts…
-        </p>
-      )}
-
-      {error !== null && (
-        <div className="panel stack">
-          <p className="alert" role="alert">
-            {error}
-          </p>
-          <button type="button" className="button secondary" onClick={() => void reload()}>
-            Try again
-          </button>
-        </div>
-      )}
-
-      {!loading && error === null && receipts.length === 0 && (
-        <div className="panel stack empty">
-          <h2>No receipts yet</h2>
-          <p className="lede">
-            When an agent writes, sends or spends through an approved slip, its receipt lands here
-            with the verifier's verdict.
-          </p>
-        </div>
-      )}
+      <ResourceState
+        loading={loading}
+        error={error}
+        isEmpty={receipts.length === 0}
+        loadingCopy="Reading receipts…"
+        emptyTitle="No receipts yet"
+        emptyCopy="When an agent writes, sends or spends through an approved slip, its receipt lands here with the verifier's verdict."
+        onRetry={() => void reload()}
+      />
 
       {receipts.length > 0 && (
         <ul className="receipt-list">

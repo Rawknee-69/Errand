@@ -1,14 +1,16 @@
 import { useCallback, useState, type FormEvent } from "react";
 import { AGENT_LIMITS, type FeedEvent, type TrustView } from "@errand/shared";
 import { api, errorMessage } from "../api.ts";
+import { ResourceState } from "../components/ResourceState.tsx";
 import { formatMoney, formatTimestamp } from "../format.ts";
-import { errandTypeLabel } from "../receipts.ts";
+import { replaceRow } from "../rows.ts";
 import {
   capsSummary,
   cleanRunView,
   parseTrustCapsEdit,
   tierView,
   trustCapInputs,
+  trustTitle,
 } from "../trust.ts";
 import { useLiveFeed } from "../useLiveFeed.ts";
 import { useResource } from "../useResource.ts";
@@ -48,12 +50,12 @@ function TrustRow({
 
   return (
     <li className="trust-card">
-      <div className="trust-head">
-        <div className="trust-title">
+      <div className="card-head">
+        <div className="card-title">
           <p className="eyebrow mono" title={trust.errandType}>
-            {errandTypeLabel(trust.errandType)}
+            {trustTitle(trust)}
           </p>
-          <p className="receipt-summary">{runs.label}</p>
+          <p className="card-heading">{runs.label}</p>
         </div>
         <span className={`badge ${tier.tone}`}>{tier.label}</span>
       </div>
@@ -70,73 +72,70 @@ function TrustRow({
             : `${runs.remaining} more clean ${runs.remaining === 1 ? "run" : "runs"} before a license can be offered.`}
       </p>
 
-      {canSetCaps && (
-        <form className="trust-form" onSubmit={save}>
-          <div className="grid-3">
-            <label className="field">
-              <span>Calls</span>
-              <input
-                type="number"
-                inputMode="numeric"
-                min={1}
-                max={AGENT_LIMITS.calls}
-                step={1}
-                value={edits.calls}
-                disabled={busy}
-                onChange={(event) => setEdits({ ...edits, calls: event.target.value })}
-              />
-            </label>
-            <label className="field">
-              <span>Spend cap (USD)</span>
-              <input
-                type="number"
-                inputMode="decimal"
-                min={0}
-                max={AGENT_LIMITS.spendCents / 100}
-                step="0.01"
-                value={edits.spendDollars}
-                disabled={busy}
-                onChange={(event) => setEdits({ ...edits, spendDollars: event.target.value })}
-              />
-            </label>
-            <label className="field">
-              <span>Minutes</span>
-              <input
-                type="number"
-                inputMode="numeric"
-                min={1}
-                max={AGENT_LIMITS.minutes}
-                step={1}
-                value={edits.minutes}
-                disabled={busy}
-                onChange={(event) => setEdits({ ...edits, minutes: event.target.value })}
-              />
-            </label>
-          </div>
-          <p className="hint">
-            Server maxima: {AGENT_LIMITS.calls} calls, {formatMoney(AGENT_LIMITS.spendCents)} and{" "}
-            {AGENT_LIMITS.minutes} minutes per errand.
-          </p>
-          {error !== null && (
-            <p className="alert" role="alert">
-              {error}
-            </p>
-          )}
-          <button type="submit" className="button primary" disabled={busy}>
-            {busy
-              ? "Saving…"
-              : trust.tier === "license"
-                ? "Update caps"
-                : "Accept license with these caps"}
-          </button>
-        </form>
-      )}
-
-      {!canSetCaps && error !== null && (
-        <p className="alert" role="alert">
-          {error}
+      <form className="trust-form" onSubmit={save}>
+        <div className="grid-3">
+          <label className="field">
+            <span>Calls</span>
+            <input
+              type="number"
+              inputMode="numeric"
+              min={1}
+              max={AGENT_LIMITS.calls}
+              step={1}
+              value={edits.calls}
+              disabled={busy || !canSetCaps}
+              onChange={(event) => setEdits({ ...edits, calls: event.target.value })}
+            />
+          </label>
+          <label className="field">
+            <span>Spend cap (USD)</span>
+            <input
+              type="number"
+              inputMode="decimal"
+              min={0}
+              max={AGENT_LIMITS.spendCents / 100}
+              step="0.01"
+              value={edits.spendDollars}
+              disabled={busy || !canSetCaps}
+              onChange={(event) => setEdits({ ...edits, spendDollars: event.target.value })}
+            />
+          </label>
+          <label className="field">
+            <span>Minutes</span>
+            <input
+              type="number"
+              inputMode="numeric"
+              min={1}
+              max={AGENT_LIMITS.minutes}
+              step={1}
+              value={edits.minutes}
+              disabled={busy || !canSetCaps}
+              onChange={(event) => setEdits({ ...edits, minutes: event.target.value })}
+            />
+          </label>
+        </div>
+        <p className="hint">
+          Server maxima: {AGENT_LIMITS.calls} calls, {formatMoney(AGENT_LIMITS.spendCents)} and{" "}
+          {AGENT_LIMITS.minutes} minutes per errand.
         </p>
-      )}
+        {error !== null && (
+          <p className="alert" role="alert">
+            {error}
+          </p>
+        )}
+        <button type="submit" className="button primary" disabled={busy || !canSetCaps}>
+          {busy
+            ? "Saving…"
+            : trust.tier === "license"
+              ? "Update caps"
+              : "Accept license with these caps"}
+        </button>
+        {!canSetCaps && (
+          <p className="hint">
+            Caps unlock when the clean runs are done; until then this type stays a learner.
+          </p>
+        )}
+      </form>
 
       <p className="hint">Updated {formatTimestamp(trust.updatedAt)}</p>
     </li>
@@ -159,8 +158,10 @@ export function Trust() {
       current === null
         ? current
         : {
-            trust: current.trust.map((row) =>
-              row.errandType === view.errandType ? view : row,
+            trust: replaceRow(
+              current.trust,
+              (row) => row.errandType === view.errandType,
+              view,
             ),
           },
     );
@@ -180,32 +181,15 @@ export function Trust() {
         </p>
       </header>
 
-      {loading && rows.length === 0 && (
-        <p className="panel hint" aria-busy="true">
-          Reading the trust ledger…
-        </p>
-      )}
-
-      {error !== null && (
-        <div className="panel stack">
-          <p className="alert" role="alert">
-            {error}
-          </p>
-          <button type="button" className="button secondary" onClick={() => void reload()}>
-            Try again
-          </button>
-        </div>
-      )}
-
-      {!loading && error === null && rows.length === 0 && (
-        <div className="panel stack empty">
-          <h2>No errand types have run yet</h2>
-          <p className="lede">
-            A type appears the first time an agent asks for that combination of tools. It starts as
-            a learner with no clean runs.
-          </p>
-        </div>
-      )}
+      <ResourceState
+        loading={loading}
+        error={error}
+        isEmpty={rows.length === 0}
+        loadingCopy="Reading the trust ledger…"
+        emptyTitle="No errand types have run yet"
+        emptyCopy="A type appears the first time an agent asks for that combination of tools. It starts as a learner with no clean runs."
+        onRetry={() => void reload()}
+      />
 
       {rows.length > 0 && (
         <ul className="trust-list">

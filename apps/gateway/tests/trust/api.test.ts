@@ -193,6 +193,7 @@ describe("trust ledger", () => {
     expect(views).toHaveLength(1);
     expect(views[0]).toMatchObject({
       errandType: slip?.errandType,
+      tools: ["calendar__list_events"],
       tier: "learner",
       cleanRuns: 0,
       licenseOffered: false,

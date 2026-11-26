@@ -7,6 +7,7 @@ describe("journal verdict", () => {
       tone: "ok",
       title: "Chain intact",
       detail: "12 entries recomputed; every hash matches.",
+      checked: 12,
       brokenSeq: null,
     });
     expect(journalVerdict({ ok: true, checked: 1 }).detail).toBe(
@@ -22,6 +23,7 @@ describe("journal verdict", () => {
       tone: "danger",
       title: "Chain broken at sequence 4",
       detail: "3 entries before it are intact. The journal was altered or an entry is missing.",
+      checked: 3,
       brokenSeq: 4,
     });
   });

@@ -1,11 +1,12 @@
 import { createMcpHandler, McpServer, type CallToolResult, type McpHttpHandler } from "@modelcontextprotocol/server";
+import { AGENT_LIMITS } from "@errand/shared";
 import { z } from "zod";
 import gatewayPackage from "../../package.json" with { type: "json" };
 import type { Db } from "../db/client.ts";
 import { agentCatalog } from "./catalog.ts";
 import { submitCall } from "./call.ts";
 import type { Forwarder } from "./forward.ts";
-import { AGENT_LIMITS, type RequestedLimits } from "./limits.ts";
+import type { RequestedLimits } from "./limits.ts";
 import { ErrandRequestError, requestErrand } from "./request.ts";
 import { errandStatus } from "./status.ts";
 

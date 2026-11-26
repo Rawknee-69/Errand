@@ -1,7 +1,7 @@
 import type { ReceiptView, VerificationOutcome } from "@errand/shared";
 import type { BadgeTone } from "./tone.ts";
 
-export type VerificationView = {
+type VerificationView = {
   label: string;
   tone: BadgeTone;
   detail: string;
@@ -29,7 +29,7 @@ export function verificationView(outcome: VerificationOutcome): VerificationView
   };
 }
 
-export type UndoView = {
+type UndoView = {
   state: "none" | "available" | "applied" | "failed";
   label: string;
   detail: string;
@@ -71,14 +71,10 @@ export function undoView(receipt: ReceiptView): UndoView {
   };
 }
 
-export type VerificationTally = Record<VerificationOutcome, number>;
+type VerificationTally = Record<VerificationOutcome, number>;
 
 export function summariseVerifications(receipts: readonly ReceiptView[]): VerificationTally {
   const tally: VerificationTally = { matched: 0, mismatched: 0, unverified: 0 };
   for (const receipt of receipts) tally[receipt.verification] += 1;
   return tally;
-}
-
-export function errandTypeLabel(errandType: string): string {
-  return errandType.length <= 12 ? errandType : `${errandType.slice(0, 8)}…${errandType.slice(-4)}`;
 }

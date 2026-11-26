@@ -8,7 +8,8 @@ import { isDecoyToolName } from "../policy/decoys.ts";
 import { errandTypeFor } from "../policy/errand-type.ts";
 import { ensureLearnerTrust, parseTrustCaps, settleRuns } from "../policy/trust.ts";
 import { approveSlip } from "../slips/approval.ts";
-import { AGENT_LIMITS, resolveLimits, type ClampedLimit, type RequestedLimits } from "./limits.ts";
+import { AGENT_LIMITS } from "@errand/shared";
+import { resolveLimits, type ClampedLimit, type RequestedLimits } from "./limits.ts";
 import type { SlipTool } from "./slip-tools.ts";
 
 export type RequestErrandInput = {

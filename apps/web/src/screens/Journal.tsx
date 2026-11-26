@@ -17,6 +17,8 @@ export function Journal() {
       setResult(await api.verifyJournal());
       setCheckedAt(new Date().toISOString());
     } catch (caught) {
+      setResult(null);
+      setCheckedAt(null);
       setError(errorMessage(caught));
     } finally {
       setBusy(false);
@@ -24,6 +26,7 @@ export function Journal() {
   }
 
   const verdict = result === null ? null : journalVerdict(result);
+  const ok = verdict?.tone === "ok";
 
   return (
     <section className="screen">
@@ -60,17 +63,15 @@ export function Journal() {
           </p>
         ) : (
           <div
-            className={verdict.tone === "ok" ? "journal-verdict is-ok" : "journal-verdict is-broken"}
+            className={ok ? "journal-verdict is-ok" : "journal-verdict is-broken"}
             role="status"
           >
-            <div className="receipt-head">
-              <div className="receipt-title">
-                <p className="eyebrow">{verdict.tone === "ok" ? "Clean result" : "Broken record"}</p>
+            <div className="card-head">
+              <div className="card-title">
+                <p className="eyebrow">{ok ? "Clean result" : "Broken record"}</p>
                 <h2>{verdict.title}</h2>
               </div>
-              <span className={`badge ${verdict.tone}`}>
-                {verdict.tone === "ok" ? "Verified" : "Failed"}
-              </span>
+              <span className={`badge ${verdict.tone}`}>{ok ? "Verified" : "Failed"}</span>
             </div>
             <p className="hint">{verdict.detail}</p>
             {verdict.brokenSeq !== null && (
@@ -78,9 +79,9 @@ export function Journal() {
                 First broken sequence: <span className="mono">{verdict.brokenSeq}</span>
               </p>
             )}
-            {result !== null && result.ok && (
+            {ok && (
               <p className="journal-seq">
-                Entries checked: <span className="mono">{result.checked}</span>
+                Entries checked: <span className="mono">{verdict.checked}</span>
               </p>
             )}
           </div>

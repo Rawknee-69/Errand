@@ -31,6 +31,10 @@ export function timeLeftFromIso(iso: string, now = Date.now()): number {
   return Math.max(0, Math.floor((Date.parse(iso) - now) / 1_000));
 }
 
+export function errandTypeLabel(errandType: string): string {
+  return errandType.length <= 12 ? errandType : `${errandType.slice(0, 8)}…${errandType.slice(-4)}`;
+}
+
 export function formatClock(iso: string): string {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return "--:--";
