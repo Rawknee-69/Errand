@@ -1,0 +1,15 @@
+HTTP/1.1 200 OK
+Alt-Svc: h3=":8443"; ma=2592000
+Cache-Control: no-cache
+Content-Length: 532
+Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'
+Content-Type: text/html;charset=utf-8
+Permissions-Policy: camera=(), microphone=(), geolocation=()
+Referrer-Policy: strict-origin-when-cross-origin
+Strict-Transport-Security: max-age=31536000; includeSubDomains
+Vary: Accept-Encoding
+Via: 1.1 Caddy
+X-Content-Type-Options: nosniff
+X-Frame-Options: DENY
+Date: Thu, 26 Nov 2026 16:47:27 GMT
+

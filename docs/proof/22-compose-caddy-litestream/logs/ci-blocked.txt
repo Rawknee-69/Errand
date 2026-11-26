@@ -1,0 +1,13 @@
+# CI is blocked before any step runs
+
+run: https://github.com/Rawknee-69/Errand/actions/runs/45840746748
+run: https://github.com/Rawknee-69/Errand/actions/runs/45842062865
+run: https://github.com/Rawknee-69/Errand/actions/runs/45842127898 (attempt 3, re-run 2026-11-26)
+run: https://github.com/Rawknee-69/Errand/actions/runs/45862504538 (second review push, 2026-11-26)
+annotation: The job was not started because your account is locked due to a billing issue.
+job: checks/compose (runner_id 0, no steps, completed in ~1-3s)
+
+2026-11-27: GitHub Actions dropped. The pipeline now lives in
+.circleci/config.yml (typecheck/test job plus a clean-machine
+'compose up --build' job that runs scripts/verify-stack.sh). It has not run
+because the CircleCI project is not connected to the repository yet.

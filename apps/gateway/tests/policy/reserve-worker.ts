@@ -1,4 +1,4 @@
-import { createMigratedDatabase } from "../../src/db/client.ts";
+import { openDatabase } from "../../src/db/client.ts";
 import { reserveCall, type ReservationResult } from "../../src/policy/reservation.ts";
 
 const [databasePath, slipId, attempts] = process.argv.slice(2);
@@ -6,7 +6,7 @@ if (databasePath === undefined || slipId === undefined || attempts === undefined
   throw new Error("usage: reserve-worker.ts <database> <slip> <attempts>");
 }
 
-const db = createMigratedDatabase(databasePath);
+const db = openDatabase(databasePath);
 db.$client.exec("PRAGMA busy_timeout = 5000;");
 
 function reserve(slip: string): ReservationResult {

@@ -1,0 +1,98 @@
+name: errand
+
+services:
+  gateway:
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile.gateway
+    env_file: .env
+    environment:
+      PORT: "8787"
+      DATABASE_PATH: /data/errand.db
+      SESSION_COOKIE_SECURE: "true"
+      # Public URLs follow the one hostname Caddy terminates TLS for.
+      OAUTH_REDIRECT_URI: https://${SITE_ADDRESS:-localhost}/api/oauth/callback
+      WEB_ORIGIN: https://${SITE_ADDRESS:-localhost}
+    volumes:
+      - errand-data:/data
+    expose:
+      - "8787"
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+  web:
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile.web
+    environment:
+      WEB_PORT: "3000"
+      WEB_ROOT: /srv/dist
+    expose:
+      - "3000"
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+  litestream:
+    image: litestream/litestream:0.5.18
+    command:
+      - replicate
+      - -config
+      - /etc/litestream.yml
+    environment:
+      LITESTREAM_DATABASE_PATH: /data/errand.db
+      LITESTREAM_META_PATH: /var/lib/litestream/errand.db
+      LITESTREAM_REPLICA_PATH: /replica/errand.db
+    volumes:
+      - errand-data:/data
+      - errand-replica:/replica
+      - litestream-state:/var/lib/litestream
+      - ./deploy/litestream.yml:/etc/litestream.yml:ro
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "litestream", "databases", "-config", "/etc/litestream.yml"]
+      interval: 15s
+      timeout: 5s
+      start_period: 30s
+      retries: 5
+    security_opt:
+      - no-new-privileges:true
+
+  caddy:
+    image: caddy:2.11.9
+    depends_on:
+      gateway:
+        condition: service_healthy
+      web:
+        condition: service_healthy
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:-localhost}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  errand-data:
+  errand-replica:
+  litestream-state:
+  caddy-data:
+  caddy-config:

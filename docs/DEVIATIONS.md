@@ -12,6 +12,7 @@ allowed.
 | 4 | Single-owner login behind a passphrase | Production login stays single-owner; a demo-only user picker can be enabled so seeded friends approve their own slips from separate browser profiles | Needed to demo three friends approving in one run. Off unless explicitly enabled, journaled whenever used. | Accepted |
 | 5 | Drizzle ORM | `drizzle-orm` 0.45.4 | `latest` is 0.45.4; the 1.0 line is RC only, so it is not a stable dependency. Revisit when 1.0 ships as `latest`. | Accepted |
 | 6 | Upstream results over 256 KB are truncated and flagged | Truncated up to the 10 MB egress response ceiling; a response over that ceiling is refused, not truncated | The egress guard must bound memory before the result reaches the forwarder; the ceiling is configurable with `EGRESS_MAX_RESPONSE_BYTES`. | Accepted |
+| 7 | The replica contains only ciphertext | Every credential row in the replica is ciphertext; operational rows (journal events, connector URLs, tool catalog) are plaintext | The Vault seals credentials before SQLite sees them and Litestream replicates bytes, so the backup inherits exactly the at-rest encryption. Whole-database encryption (SQLCipher) is not in the brief's stack, and the KEK never reaches the volume. | Accepted |
 
 ## P0 notes
 

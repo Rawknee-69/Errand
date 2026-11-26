@@ -1,0 +1,18 @@
+{"level":"info","ts":1795711639.1578562,"msg":"maxprocs: Leaving GOMAXPROCS=16: CPU quota undefined"}
+{"level":"info","ts":1795711639.1578562,"msg":"GOMEMLIMIT is updated","GOMEMLIMIT":30610442649,"previous":9223372036854775807}
+{"level":"info","ts":1795711639.1578562,"msg":"using config from file","file":"deploy/Caddyfile"}
+{"level":"info","ts":1795711639.1578562,"msg":"adapted config to JSON","adapter":"caddyfile"}
+{"level":"warn","ts":1795711639.1578562,"logger":"admin","msg":"admin endpoint disabled"}
+{"level":"info","ts":1795711639.1578562,"logger":"http.auto_https","msg":"enabling automatic HTTP->HTTPS redirects","server_name":"srv0"}
+{"level":"info","ts":1795711639.1578562,"logger":"tls.cache.maintenance","msg":"started background certificate maintenance","cache":"0x2db5ed781c00"}
+{"level":"info","ts":1795711639.1639268,"logger":"http","msg":"enabling HTTP/3 listener","addr":":8443"}
+{"level":"info","ts":1795711639.1645005,"logger":"http.log","msg":"server running","name":"srv0","protocols":["h1","h2","h3"]}
+{"level":"warn","ts":1795711639.1650462,"logger":"http","msg":"HTTP/2 skipped because it requires TLS","network":"tcp","addr":":80"}
+{"level":"warn","ts":1795711639.1650462,"logger":"http","msg":"HTTP/3 skipped because it requires TLS","network":"tcp","addr":":80"}
+{"level":"info","ts":1795711639.1650462,"logger":"http.log","msg":"server running","name":"remaining_auto_https_redirects","protocols":["h1","h2","h3"]}
+{"level":"info","ts":1795711639.1650462,"logger":"http","msg":"enabling automatic TLS certificate management","domains":["localhost"]}
+{"level":"info","ts":1795711639.16671,"logger":"tls","msg":"storage cleaning happened too recently; skipping for now","storage":"FileStorage:C:\\Users\\Rem\\AppData\\Roaming\\Caddy","instance":"a5e0aae9-b110-449a-9fc1-182aa34b4315","try_again":1795798039.16671,"try_again_in":86400}
+{"level":"info","ts":1795711639.16671,"logger":"tls","msg":"finished cleaning storage units"}
+{"level":"info","ts":1795711639.1917384,"logger":"pki.ca.local","msg":"root certificate is already trusted by system","path":"storage:pki/authorities/local/root.crt"}
+{"level":"info","ts":1795711639.1922455,"msg":"autosaved config (load with --resume flag)","file":"C:\\Users\\Rem\\AppData\\Roaming\\Caddy\\autosave.json"}
+{"level":"info","ts":1795711639.1922455,"msg":"serving initial configuration"}

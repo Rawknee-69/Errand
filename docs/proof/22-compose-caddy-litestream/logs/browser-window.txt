@@ -1,0 +1,7 @@
+{
+  "base": "http://localhost:8088",
+  "desktop": "1440x900",
+  "phone": "390x844",
+  "consoleLines": 0,
+  "failedOrErrorResponses": 1
+}

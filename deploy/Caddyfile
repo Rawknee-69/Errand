@@ -1,0 +1,38 @@
+{
+	admin off
+}
+
+{$SITE_ADDRESS:localhost} {
+	encode zstd gzip
+
+	header {
+		-Server
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'"
+	}
+
+	@secure protocol https
+	header @secure Strict-Transport-Security "max-age=31536000; includeSubDomains"
+
+	# The API includes the OAuth callback and the agent endpoint is /mcp. The
+	# web app owns everything else, including /health.
+	@gateway path /api /api/* /mcp /mcp/*
+
+	# The event feed is server-sent; buffering it would delay every frame.
+	handle /api/events* {
+		reverse_proxy {$GATEWAY_UPSTREAM:gateway:8787} {
+			flush_interval -1
+		}
+	}
+
+	handle @gateway {
+		reverse_proxy {$GATEWAY_UPSTREAM:gateway:8787}
+	}
+
+	handle {
+		reverse_proxy {$WEB_UPSTREAM:web:3000}
+	}
+}

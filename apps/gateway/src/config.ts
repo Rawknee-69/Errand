@@ -35,6 +35,10 @@ export const webOriginSchema = z
   }, { message: "must be an absolute http(s) origin without a path" })
   .transform((value) => parseHttpUrl(value)?.origin ?? value);
 
+// An empty variable in a compose env_file is present but blank; treat it as
+// unset so an unused optional value does not have to be deleted from .env.
+const blankAsAbsent = (value: unknown) => (value === "" ? undefined : value);
+
 // SSE feeds are long-lived; Bun's 10-second default would cut an idle one.
 export const GATEWAY_IDLE_TIMEOUT_SECONDS = 120;
 
@@ -46,7 +50,7 @@ const booleanish = (fallback: boolean) =>
 
 const configSchema = z.object({
   VAULT_KEY: secret,
-  VAULT_KEY_PREVIOUS: z.string().optional(),
+  VAULT_KEY_PREVIOUS: z.preprocess(blankAsAbsent, z.string().optional()),
   HMAC_KEY: secret,
   JWT_SECRET: secret,
   OWNER_PASSPHRASE: z.string().min(12, "must be at least 12 characters"),
@@ -62,8 +66,8 @@ const configSchema = z.object({
   CONNECTOR_CONCURRENCY: z.coerce.number().int().positive().default(DEFAULT_CONNECTOR_CONCURRENCY),
   MAX_CONNECTORS_PER_USER: z.coerce.number().int().positive().default(DEFAULT_MAX_CONNECTORS_PER_USER),
   // Must match the public callback URL registered with each authorization server.
-  OAUTH_REDIRECT_URI: httpUrlSchema.optional(),
-  WEB_ORIGIN: webOriginSchema.optional(),
+  OAUTH_REDIRECT_URI: z.preprocess(blankAsAbsent, httpUrlSchema.optional()),
+  WEB_ORIGIN: z.preprocess(blankAsAbsent, webOriginSchema.optional()),
 });
 
 export type GatewayConfig = z.infer<typeof configSchema>;

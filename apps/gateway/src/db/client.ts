@@ -19,6 +19,11 @@ export function runMigrations(db: Db): void {
   migrate(db, { migrationsFolder: defaultMigrationsFolder });
 }
 
+// A worker opening a file another process already migrated must not race the migrator.
+export function openDatabase(path: string): Db {
+  return createDatabase(path);
+}
+
 // Fresh migrated database; `:memory:` for tests, a file path for production.
 export function createMigratedDatabase(path: string): Db {
   const db = createDatabase(path);
