@@ -32,21 +32,25 @@
    send, spend), the call and spend caps, `timeLeftSeconds: 1799` and
    `tier: "learner"`.
 7. `POST /api/slips/:id/approve` with `callCap: 4`, `spendCapCents: 1000` —
-   both caps applied; the response returns two trims, each with
-   `reason: "human_trim"`, and the card now says “Make more than 4 calls”.
-8. `errand_status` — `approved`, remaining caps 4 / 1000, and a capability
+   both caps applied; the response returns two trims (`50 → 4`, `20000 → 1000`),
+   each with `reason: "human_trim"`, and the card now says “Make more than 4
+   calls”.
+8. `GET /api/slips/:id` again — the card still carries both trims with their
+   reasons after reload, so the decision is not only visible in the one-shot
+   approval response.
+9. `errand_status` — `approved`, remaining caps 4 / 1000, and a capability
    (`cap_…`, redacted in the transcript).
-9. Verification through the running system: the stored signature verifies; the
-   capability verifies for its own slip and is refused when checked against
-   another slip id (audience binding).
-10. Second slip requested, then `POST /api/slips/:id/deny` with a reason —
+10. Verification through the running system: the stored signature verifies; the
+    capability verifies for its own slip and is refused when checked against
+    another slip id (audience binding).
+11. Second slip requested, then `POST /api/slips/:id/deny` with a reason —
     state `denied`, card shows denied, `errand_status` returns `denied` and
     `capability: null`.
-11. A pending slip was seeded to expire in four seconds, approved, and read at
+12. A pending slip was seeded to expire in four seconds, approved, and read at
     once — `approved` with a capability and `timeLeftSeconds: 3`. After 4.5
     seconds: `expired`, `capability: null`. The unit suite also pins the
     millisecond boundary (valid at `12:29:59.999Z`, invalid at `12:30:00.000Z`).
-12. The approved slip's goal was changed in the database, leaving its signature
+13. The approved slip's goal was changed in the database, leaving its signature
     untouched — `verifySlipSignature` returns `false`, and `errand_status`
     still reports the stored state but returns `capability: null`. The byte
     alteration fails verification.

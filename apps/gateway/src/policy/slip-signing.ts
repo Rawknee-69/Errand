@@ -1,24 +1,26 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
-import type { SlipState, Tier } from "@errand/shared";
+import type { Tier } from "@errand/shared";
 import { canonicalJson } from "../db/journal.ts";
 import { parseSlipTools, type SlipTool } from "../agent/slip-tools.ts";
+import type { SlipRow } from "../slips/row.ts";
 
-export type SlipRecord = {
-  id: string;
-  userId: string;
-  errandType: string;
-  goal: string;
-  state: SlipState;
-  tier: Tier;
-  tools: string;
-  constraints: string;
-  callCap: number;
-  spendCapCents: number;
-  expiresAt: string;
-  approvedAt: string | null;
-  signature: string | null;
-  capabilityHash: string | null;
-};
+export type SlipRecord = Pick<
+  SlipRow,
+  | "id"
+  | "userId"
+  | "errandType"
+  | "goal"
+  | "state"
+  | "tier"
+  | "tools"
+  | "constraints"
+  | "callCap"
+  | "spendCapCents"
+  | "expiresAt"
+  | "approvedAt"
+  | "signature"
+  | "capabilityHash"
+>;
 
 export type SlipDocument = {
   slip_id: string;

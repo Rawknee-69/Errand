@@ -60,31 +60,36 @@ function hashJournalEvent(event: {
 }
 
 // Append one event in a transaction: chain seq + prev_hash from the last event.
-export function appendJournalEvent(db: Db, event: JournalEventInput): JournalEvent {
-  return db.transaction((tx) => {
-    const last = tx.select().from(journal).orderBy(desc(journal.id)).limit(1).all()[0];
-    const seq = (last?.seq ?? 0) + 1;
-    const prevHash = last?.hash ?? GENESIS_HASH;
-    const createdAt = new Date().toISOString();
-    const payload = canonicalJson(event.payload ?? {});
-    const row = {
+export type JournalWriter = Pick<Db, "select" | "insert">;
+
+// Runs inside a caller's transaction, so a decision and its audit entry commit together.
+export function appendJournalEventIn(db: JournalWriter, event: JournalEventInput): JournalEvent {
+  const last = db.select().from(journal).orderBy(desc(journal.id)).limit(1).all()[0];
+  const seq = (last?.seq ?? 0) + 1;
+  const prevHash = last?.hash ?? GENESIS_HASH;
+  const createdAt = new Date().toISOString();
+  const payload = canonicalJson(event.payload ?? {});
+  const row = {
+    seq,
+    userId: event.userId,
+    eventType: event.eventType,
+    payload,
+    prevHash,
+    hash: hashJournalEvent({
       seq,
       userId: event.userId,
       eventType: event.eventType,
       payload,
       prevHash,
-      hash: hashJournalEvent({
-        seq,
-        userId: event.userId,
-        eventType: event.eventType,
-        payload,
-        prevHash,
-        createdAt,
-      }),
       createdAt,
-    };
-    return tx.insert(journal).values(row).returning().all()[0]!;
-  });
+    }),
+    createdAt,
+  };
+  return db.insert(journal).values(row).returning().all()[0]!;
+}
+
+export function appendJournalEvent(db: Db, event: JournalEventInput): JournalEvent {
+  return db.transaction((tx) => appendJournalEventIn(tx, event));
 }
 
 // Recompute the whole chain; report the first broken sequence number, if any.

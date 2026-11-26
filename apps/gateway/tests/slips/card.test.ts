@@ -47,21 +47,27 @@ function seededSlip() {
 describe("approval card", () => {
   test("states the goal, services and what the agent can and cannot do", () => {
     const db = seededSlip();
-    const card = buildApprovalCard(db, "user-a", {
-      id: "slip-1",
-      state: "pending",
-      tier: "learner",
-      goal: "Book a dinner",
-      tools: JSON.stringify([
-        { name: "calendar__list_events", connectorId: "conn-cal", class: "read" },
-        { name: "notion__create_page", connectorId: "conn-notion", class: "write" },
-      ]),
-      callCap: 8,
-      callsUsed: 0,
-      spendCapCents: 1250,
-      spendUsedCents: 0,
-      expiresAt: "2026-04-01T12:30:00.000Z",
-    }, NOW);
+    const card = buildApprovalCard(
+      db,
+      "user-a",
+      {
+        id: "slip-1",
+        state: "pending",
+        tier: "learner",
+        goal: "Book a dinner",
+        trims: "[]",
+        tools: JSON.stringify([
+          { name: "calendar__list_events", connectorId: "conn-cal", class: "read" },
+          { name: "notion__create_page", connectorId: "conn-notion", class: "write" },
+        ]),
+        callCap: 8,
+        callsUsed: 0,
+        spendCapCents: 1250,
+        spendUsedCents: 0,
+        expiresAt: "2026-04-01T12:30:00.000Z",
+      },
+      NOW,
+    );
 
     expect(card).toMatchObject({
       slipId: "slip-1",
@@ -81,6 +87,7 @@ describe("approval card", () => {
       spendCapCents: 1250,
       spendRemainingCents: 1250,
       timeLeftSeconds: 1800,
+      trims: [],
     });
 
     expect(card.cannot).toEqual(
@@ -106,18 +113,24 @@ describe("approval card", () => {
       agentName: "shop__buy_item",
       class: "spend",
     });
-    const card = buildApprovalCard(db, "user-a", {
-      id: "slip-1",
-      state: "pending",
-      tier: "learner",
-      goal: "Buy one thing",
-      tools: JSON.stringify([{ name: "shop__buy_item", connectorId: "conn-shop", class: "spend" }]),
-      callCap: 1,
-      callsUsed: 0,
-      spendCapCents: 2500,
-      spendUsedCents: 0,
-      expiresAt: "2026-04-01T12:30:00.000Z",
-    }, NOW);
+    const card = buildApprovalCard(
+      db,
+      "user-a",
+      {
+        id: "slip-1",
+        state: "pending",
+        tier: "learner",
+        goal: "Buy one thing",
+        trims: "[]",
+        tools: JSON.stringify([{ name: "shop__buy_item", connectorId: "conn-shop", class: "spend" }]),
+        callCap: 1,
+        callsUsed: 0,
+        spendCapCents: 2500,
+        spendUsedCents: 0,
+        expiresAt: "2026-04-01T12:30:00.000Z",
+      },
+      NOW,
+    );
 
     expect(card.cannot).toContain("Make more than 1 call");
     expect(card.cannot).toContain("Spend more than $25.00");

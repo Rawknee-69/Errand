@@ -1,6 +1,8 @@
 import {
   escapeHtml,
   slipApprovalInputSchema,
+  slipApprovedSchema,
+  slipDetailSchema,
   type CatalogToolView,
   type ConnectorDetail,
   type GatewayHealth,
@@ -57,10 +59,12 @@ const agentKeyCreateSchema = z.object({ name: z.string().trim().min(1).max(64) }
 const slipDenySchema = z.object({ reason: z.string().max(500).optional() }).strict();
 
 async function optionalJson(c: Context<GatewayEnv>): Promise<unknown> {
+  const text = await c.req.text();
+  if (text.trim() === "") return {};
   try {
-    return await c.req.json();
+    return JSON.parse(text);
   } catch {
-    return {};
+    throw new SlipError("invalid_json", "The request body is not valid JSON");
   }
 }
 
@@ -127,6 +131,9 @@ export function createGatewayApp(
   }
   const discoverOptions = options.discoverOptions ?? {};
   const keyring = options.keyring;
+  if (options.hmacKey !== undefined && Buffer.byteLength(options.hmacKey, "utf8") < 32) {
+    throw new Error("Slip signing requires an HMAC key of at least 32 bytes");
+  }
   const agentHandler = createAgentHandler(db, options.hmacKey);
   const oauthRedirectUri = options.oauthRedirectUri ?? DEFAULT_OAUTH_REDIRECT_URI;
 
@@ -235,20 +242,20 @@ export function createGatewayApp(
     const userId = userIdFor(c);
     const detail = getSlipDetail(db, userId, c.req.param("id"));
     if (detail === undefined) return c.json({ error: "not_found" }, 404);
-    return c.json(detail);
+    return c.json(slipDetailSchema.parse(detail));
   });
 
   app.post("/api/slips/:id/approve", async (c) => {
     const userId = userIdFor(c);
     const body = slipApprovalInputSchema.parse(await optionalJson(c));
     const result = approveSlip(db, userId, c.req.param("id"), body, { hmacKey: options.hmacKey });
-    return c.json({ ...result.detail, trims: result.trims });
+    return c.json(slipApprovedSchema.parse({ ...result.detail, trims: result.trims }));
   });
 
   app.post("/api/slips/:id/deny", async (c) => {
     const userId = userIdFor(c);
     const body = slipDenySchema.parse(await optionalJson(c));
-    return c.json(denySlip(db, userId, c.req.param("id"), body.reason));
+    return c.json(slipDetailSchema.parse(denySlip(db, userId, c.req.param("id"), body.reason)));
   });
 
   app.post("/api/connectors/probe", async (c) => {
@@ -327,7 +334,7 @@ export function createGatewayApp(
       const status =
         error.code === "not_found"
           ? 404
-          : error.code === "cap_above_request"
+          : error.code === "cap_above_request" || error.code === "invalid_json"
             ? 400
             : error.code === "signing_unavailable"
               ? 500

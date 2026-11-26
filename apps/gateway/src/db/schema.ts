@@ -140,6 +140,7 @@ export const slips = sqliteTable(
     tier: text("tier").notNull().$type<Tier>(),
     tools: text("tools").notNull().default("[]"),
     constraints: text("constraints").notNull().default("{}"),
+    trims: text("trims").notNull().default("[]"),
     callCap: integer("call_cap").notNull().default(0),
     callsUsed: integer("calls_used").notNull().default(0),
     spendCapCents: integer("spend_cap_cents").notNull().default(0),

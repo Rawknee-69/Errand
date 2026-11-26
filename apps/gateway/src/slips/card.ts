@@ -1,23 +1,27 @@
-import type { ApprovalCard, SlipState, Tier, ToolClass } from "@errand/shared";
+import { capTrimSchema, type ApprovalCard, type ToolClass } from "@errand/shared";
 import type { Db } from "../db/client.ts";
 import { listCatalog } from "../connectors/catalog.ts";
 import { labelFor } from "../connectors/labels.ts";
 import { listConnectors } from "../db/scoped-reads.ts";
 import { parseSlipTools } from "../agent/slip-tools.ts";
+import { remainingAllowance } from "./caps.ts";
+import type { SlipRow } from "./row.ts";
 import { effectiveSlipState } from "./state.ts";
 
-type CardSlip = {
-  id: string;
-  state: SlipState;
-  tier: Tier;
-  goal: string;
-  tools: string;
-  callCap: number;
-  callsUsed: number;
-  spendCapCents: number;
-  spendUsedCents: number;
-  expiresAt: string;
-};
+type CardSlip = Pick<
+  SlipRow,
+  | "id"
+  | "state"
+  | "tier"
+  | "goal"
+  | "tools"
+  | "trims"
+  | "callCap"
+  | "callsUsed"
+  | "spendCapCents"
+  | "spendUsedCents"
+  | "expiresAt"
+>;
 
 function money(cents: number): string {
   return `$${(cents / 100).toFixed(2)}`;
@@ -67,7 +71,7 @@ export function buildApprovalCard(db: Db, userId: string, slip: CardSlip, now = 
     };
   });
 
-  const expiresAt = Date.parse(slip.expiresAt);
+  const allowance = remainingAllowance(slip, now);
   return {
     slipId: slip.id,
     state: effectiveSlipState(slip, now),
@@ -78,11 +82,12 @@ export function buildApprovalCard(db: Db, userId: string, slip: CardSlip, now = 
     cannot: cannotFor(new Set(tools.map((tool) => tool.class)), slip.callCap, slip.spendCapCents),
     callCap: slip.callCap,
     callsUsed: slip.callsUsed,
-    callsRemaining: Math.max(0, slip.callCap - slip.callsUsed),
+    callsRemaining: allowance.callsRemaining,
     spendCapCents: slip.spendCapCents,
     spendUsedCents: slip.spendUsedCents,
-    spendRemainingCents: Math.max(0, slip.spendCapCents - slip.spendUsedCents),
+    spendRemainingCents: allowance.spendRemainingCents,
+    trims: capTrimSchema.array().parse(JSON.parse(slip.trims)),
     expiresAt: slip.expiresAt,
-    timeLeftSeconds: Math.max(0, Math.floor((expiresAt - now.getTime()) / 1000)),
+    timeLeftSeconds: allowance.timeLeftSeconds,
   };
 }

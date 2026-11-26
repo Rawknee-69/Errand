@@ -1,11 +1,10 @@
 import assert from "node:assert/strict";
 import { z } from "zod";
 import {
-  approvalCardSchema,
   catalogToolViewSchema,
   connectorDetailSchema,
   slipApprovedSchema,
-  slipSummarySchema,
+  slipDetailSchema,
 } from "@errand/shared";
 import { and, eq } from "drizzle-orm";
 import { createMigratedDatabase } from "../../src/db/client.ts";
@@ -98,7 +97,7 @@ const requested = await callTool(owner, "request_errand", {
   limits: { calls: 900, spend_cents: 12_345_678 },
 });
 console.log(JSON.stringify(requested.body, null, 2));
-const slipId = (requested.body as { slipId: string }).slipId;
+const slipId = z.object({ slipId: z.string() }).parse(requested.body).slipId;
 
 const before = await callTool(owner, "errand_status", { slip_id: slipId });
 printStatus(before.body);
@@ -106,10 +105,7 @@ assert.equal(statusSchema.parse(before.body).capability, null);
 assert.equal(statusSchema.parse(before.body).state, "pending");
 
 step("the human reads the approval card");
-const cardBody = await parse(
-  await human(`/api/slips/${slipId}`),
-  z.object({ slip: slipSummarySchema, card: approvalCardSchema }),
-);
+const cardBody = await parse(await human(`/api/slips/${slipId}`), slipDetailSchema);
 console.log(JSON.stringify(cardBody, null, 2));
 
 step("the human approves with trimmed caps");
@@ -125,10 +121,15 @@ assert.equal(approved.slip.state, "approved");
 assert.equal(approved.trims.length, 2);
 assert.ok(approved.trims.every((trim) => trim.reason === "human_trim"));
 
+step("reloading the card keeps the trimmed caps and their reasons");
+const reloaded = await parse(await human(`/api/slips/${slipId}`), slipDetailSchema);
+console.log(JSON.stringify(reloaded.card.trims, null, 2));
+assert.deepEqual(reloaded.card.trims, approved.trims);
+
 step("errand_status now returns a capability and the remaining caps");
 const after = await callTool(owner, "errand_status", { slip_id: slipId });
 printStatus(after.body);
-const capability = (after.body as { capability: string }).capability;
+const capability = z.object({ capability: z.string() }).parse(after.body).capability;
 assert.match(capability, /^cap_/);
 
 const db = createMigratedDatabase(databasePath);
@@ -145,13 +146,13 @@ const deniedRequest = await callTool(owner, "request_errand", {
   goal: "Tidy the calendar",
   tools: [readTool.agentName],
 });
-const deniedId = (deniedRequest.body as { slipId: string }).slipId;
+const deniedId = z.object({ slipId: z.string() }).parse(deniedRequest.body).slipId;
 const denied = await parse(
   await human(`/api/slips/${deniedId}/deny`, {
     method: "POST",
     body: JSON.stringify({ reason: "Not this week" }),
   }),
-  z.object({ slip: slipSummarySchema, card: approvalCardSchema }),
+  slipDetailSchema,
 );
 console.log(JSON.stringify(denied, null, 2));
 const deniedStatus = await callTool(owner, "errand_status", { slip_id: deniedId });
@@ -188,7 +189,7 @@ console.log(`approved with expiry ${expiryApproved.slip.expiresAt}`);
 const expiryLive = await callTool(owner, "errand_status", { slip_id: "proof-expiry" });
 printStatus(expiryLive.body);
 assert.equal(statusSchema.parse(expiryLive.body).state, "approved");
-assert.match((expiryLive.body as { capability: string }).capability, /^cap_/);
+assert.match(z.object({ capability: z.string() }).parse(expiryLive.body).capability, /^cap_/);
 
 await Bun.sleep(4_500);
 const expiryDead = await callTool(owner, "errand_status", { slip_id: "proof-expiry" });

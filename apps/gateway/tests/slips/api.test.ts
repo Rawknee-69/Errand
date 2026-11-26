@@ -1,4 +1,10 @@
 import { describe, expect, test } from "bun:test";
+import {
+  slipApprovedSchema,
+  slipDetailSchema,
+  slipSummarySchema,
+} from "@errand/shared";
+import { z } from "zod";
 import { createGatewayApp } from "../../src/app.ts";
 import { requestErrand } from "../../src/agent/request.ts";
 import { verifyCapability } from "../../src/policy/capability.ts";
@@ -7,6 +13,7 @@ import { seedConnector, seedTool, userDb } from "../agent/support.ts";
 import { SLIP_KEY } from "../support/fixtures.ts";
 
 const NOW = new Date("2026-04-01T12:00:00.000Z");
+const slipListSchema = z.object({ slips: z.array(slipSummarySchema) });
 
 function setup() {
   const db = userDb();
@@ -33,15 +40,12 @@ describe("slip API", () => {
 
     const list = await app.request("/api/slips");
     expect(list.status).toBe(200);
-    const listBody = (await list.json()) as { slips: { slipId: string }[] };
+    const listBody = slipListSchema.parse(await list.json());
     expect(listBody.slips.map((slip) => slip.slipId)).toEqual([slipId]);
 
     const detail = await app.request(`/api/slips/${slipId}`);
     expect(detail.status).toBe(200);
-    const body = (await detail.json()) as {
-      slip: { state: string };
-      card: { goal: string; services: unknown[]; cannot: string[] };
-    };
+    const body = slipDetailSchema.parse(await detail.json());
     expect(body.slip.state).toBe("pending");
     expect(body.card).toMatchObject({
       goal: "Book a dinner",
@@ -59,15 +63,13 @@ describe("slip API", () => {
       body: JSON.stringify({ callCap: 4, spendCapCents: 1000 }),
     });
     expect(response.status).toBe(200);
-    const body = (await response.json()) as {
-      slip: { state: string; callCap: number; spendCapCents: number };
-      trims: { field: string; requested: number; applied: number; reason: string }[];
-    };
+    const body = slipApprovedSchema.parse(await response.json());
     expect(body.slip).toMatchObject({ state: "approved", callCap: 4, spendCapCents: 1000 });
     expect(body.trims).toEqual([
-      { field: "call_cap", requested: 4, applied: 10, reason: "human_trim" },
-      { field: "spend_cap_cents", requested: 1000, applied: 5000, reason: "human_trim" },
+      { field: "call_cap", requested: 10, applied: 4, reason: "human_trim" },
+      { field: "spend_cap_cents", requested: 5000, applied: 1000, reason: "human_trim" },
     ]);
+    expect(body.card.trims).toEqual(body.trims);
 
     const row = getSlip(db, "user-a", slipId);
     expect(row === undefined ? false : row.signature !== null).toBe(true);
@@ -82,7 +84,7 @@ describe("slip API", () => {
       body: JSON.stringify({ reason: "Not this week" }),
     });
     expect(response.status).toBe(200);
-    expect(await response.json()).toMatchObject({ slip: { state: "denied" } });
+    expect(slipDetailSchema.parse(await response.json())).toMatchObject({ slip: { state: "denied" } });
 
     const row = getSlip(db, "user-a", slipId);
     expect(row?.capabilityHash).toBeNull();
@@ -106,5 +108,25 @@ describe("slip API", () => {
     const { app } = setup();
     expect((await app.request("/api/slips/nope")).status).toBe(404);
     expect((await app.request("/api/slips/nope/approve", { method: "POST" })).status).toBe(404);
+  });
+
+  test("a malformed approval body is refused instead of approving at full caps", async () => {
+    const { app, db, slipId } = setup();
+
+    const response = await app.request(`/api/slips/${slipId}/approve`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: "{not json",
+    });
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({ error: "invalid_json" });
+    expect(getSlip(db, "user-a", slipId)?.state).toBe("pending");
+  });
+
+  test("a signing key shorter than 32 bytes is refused at construction", () => {
+    const db = userDb();
+    expect(() =>
+      createGatewayApp(db, { userId: "user-a", auth: "disabled", hmacKey: "short" }),
+    ).toThrow(/32 bytes/);
   });
 });

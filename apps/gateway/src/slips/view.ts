@@ -1,11 +1,9 @@
-import type { SlipDetail, SlipSummary } from "@errand/shared";
+import { capTrimSchema, type SlipDetail, type SlipSummary } from "@errand/shared";
 import type { Db } from "../db/client.ts";
-import type { slips } from "../db/schema.ts";
 import { getSlip, listSlips } from "../db/scoped-reads.ts";
 import { buildApprovalCard } from "./card.ts";
+import type { SlipRow } from "./row.ts";
 import { effectiveSlipState } from "./state.ts";
-
-export type SlipRow = typeof slips.$inferSelect;
 
 export function slipSummary(row: SlipRow, now = new Date()): SlipSummary {
   return {
@@ -18,6 +16,7 @@ export function slipSummary(row: SlipRow, now = new Date()): SlipSummary {
     callsUsed: row.callsUsed,
     spendCapCents: row.spendCapCents,
     spendUsedCents: row.spendUsedCents,
+    trims: capTrimSchema.array().parse(JSON.parse(row.trims)),
     expiresAt: row.expiresAt,
     createdAt: row.createdAt,
     approvedAt: row.approvedAt,

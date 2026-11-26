@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { hashCapability, issueCapability, verifyCapability } from "../../src/policy/capability.ts";
-import type { SlipRecord } from "../../src/policy/slip-signing.ts";
+import { hashCapability, issueCapability, issueValidCapability, verifyCapability } from "../../src/policy/capability.ts";
+import { signSlip, type SlipRecord } from "../../src/policy/slip-signing.ts";
 import { SLIP_KEY } from "../support/fixtures.ts";
 
 const NOW = new Date("2026-04-01T12:00:00.000Z");
@@ -68,5 +68,12 @@ describe("capability", () => {
   test("a non-approved slip has no valid capability", () => {
     const { row, token } = issued();
     expect(verifyCapability({ ...row, state: "denied" }, token, SLIP_KEY, NOW)).toBe(false);
+  });
+
+  test("an issue-and-check path withholds the token from a tampered slip", () => {
+    const { row } = issued();
+    const signed = { ...row, signature: signSlip(row, SLIP_KEY) };
+    expect(issueValidCapability(signed, SLIP_KEY, NOW)).toBe(issueCapability(signed, SLIP_KEY));
+    expect(issueValidCapability({ ...signed, goal: "tampered" }, SLIP_KEY, NOW)).toBeNull();
   });
 });

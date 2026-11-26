@@ -1,7 +1,7 @@
 import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 import { z } from "zod";
 import { canonicalJson } from "../db/journal.ts";
-import { purposeKey, type SlipRecord } from "./slip-signing.ts";
+import { purposeKey, verifySlipSignature, type SlipRecord } from "./slip-signing.ts";
 
 const TOKEN_PREFIX = "cap_";
 const CAPABILITY_PURPOSE = "errand/capability/v1";
@@ -38,12 +38,7 @@ export function hashCapability(token: string): string {
 }
 
 function signatureMatches(master: string, payload: string, presented: string): boolean {
-  let given: Buffer;
-  try {
-    given = Buffer.from(presented, "base64url");
-  } catch {
-    return false;
-  }
+  const given = Buffer.from(presented, "base64url");
   const expected = capabilitySignature(master, payload);
   return expected.length === given.length && timingSafeEqual(expected, given);
 }
@@ -80,4 +75,14 @@ export function verifyCapability(
     Number.isFinite(expiresAt) &&
     now.getTime() < expiresAt
   );
+}
+
+export function issueValidCapability(
+  slip: SlipRecord,
+  master: string,
+  now: Date,
+): string | null {
+  if (!verifySlipSignature(slip, master)) return null;
+  const token = issueCapability(slip, master);
+  return verifyCapability(slip, token, master, now) ? token : null;
 }

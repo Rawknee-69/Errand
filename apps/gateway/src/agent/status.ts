@@ -1,8 +1,8 @@
 import type { SlipState, SlipTool, Tier } from "@errand/shared";
 import type { Db } from "../db/client.ts";
 import { getSlip } from "../db/scoped-reads.ts";
-import { issueCapability, verifyCapability } from "../policy/capability.ts";
-import { verifySlipSignature } from "../policy/slip-signing.ts";
+import { issueValidCapability } from "../policy/capability.ts";
+import { remainingAllowance } from "../slips/caps.ts";
 import { parseSlipTools } from "./slip-tools.ts";
 import { effectiveSlipState } from "../slips/state.ts";
 
@@ -41,13 +41,11 @@ export function errandStatus(
   const state = effectiveSlipState(slip, now);
 
   const capability =
-    state === "approved" && options.hmacKey !== undefined && verifySlipSignature(slip, options.hmacKey)
-      ? (() => {
-          const token = issueCapability(slip, options.hmacKey);
-          return verifyCapability(slip, token, options.hmacKey, now) ? token : null;
-        })()
+    state === "approved" && options.hmacKey !== undefined
+      ? issueValidCapability(slip, options.hmacKey, now)
       : null;
 
+  const allowance = remainingAllowance(slip, now);
   return {
     slipId: slip.id,
     state,
@@ -56,12 +54,12 @@ export function errandStatus(
     tools: parseSlipTools(slip.tools),
     callCap: slip.callCap,
     callsUsed: slip.callsUsed,
-    callsRemaining: Math.max(0, slip.callCap - slip.callsUsed),
+    callsRemaining: allowance.callsRemaining,
     spendCapCents: slip.spendCapCents,
     spendUsedCents: slip.spendUsedCents,
-    spendRemainingCents: Math.max(0, slip.spendCapCents - slip.spendUsedCents),
+    spendRemainingCents: allowance.spendRemainingCents,
     expiresAt: slip.expiresAt,
-    timeLeftSeconds: Math.max(0, Math.floor((Date.parse(slip.expiresAt) - now.getTime()) / 1000)),
+    timeLeftSeconds: allowance.timeLeftSeconds,
     createdAt: slip.createdAt,
     capability,
   };

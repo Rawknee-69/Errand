@@ -31,6 +31,14 @@ export const slipToolSchema = z.object({
 });
 export type SlipTool = z.infer<typeof slipToolSchema>;
 
+export const capTrimSchema = z.object({
+  field: z.enum(["call_cap", "spend_cap_cents"]),
+  requested: z.number().int(),
+  applied: z.number().int(),
+  reason: z.literal("human_trim"),
+});
+export type CapTrim = z.infer<typeof capTrimSchema>;
+
 export const slipSummarySchema = z.object({
   slipId: z.string(),
   state: slipStateSchema,
@@ -41,6 +49,7 @@ export const slipSummarySchema = z.object({
   callsUsed: z.number().int(),
   spendCapCents: z.number().int(),
   spendUsedCents: z.number().int(),
+  trims: z.array(capTrimSchema),
   expiresAt: z.string(),
   createdAt: z.string(),
   approvedAt: z.string().nullable(),
@@ -76,18 +85,11 @@ export const approvalCardSchema = z.object({
   spendCapCents: z.number().int(),
   spendUsedCents: z.number().int(),
   spendRemainingCents: z.number().int(),
+  trims: z.array(capTrimSchema),
   expiresAt: z.string(),
   timeLeftSeconds: z.number().int(),
 });
 export type ApprovalCard = z.infer<typeof approvalCardSchema>;
-
-export const capTrimSchema = z.object({
-  field: z.enum(["call_cap", "spend_cap_cents"]),
-  requested: z.number().int(),
-  applied: z.number().int(),
-  reason: z.literal("human_trim"),
-});
-export type CapTrim = z.infer<typeof capTrimSchema>;
 
 export const slipApprovalInputSchema = z
   .object({

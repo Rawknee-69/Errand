@@ -1,4 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
+import { agentKeyCreatedSchema } from "@errand/shared";
+import { z } from "zod";
 import { createGatewayApp } from "../../src/app.ts";
 import type { Db } from "../../src/db/client.ts";
 import { issueAgentKey } from "../../src/vault/agent-keys.ts";
@@ -24,7 +26,7 @@ async function createKey(): Promise<{ key: string; id: string }> {
     body: JSON.stringify({ name: "test agent" }),
   });
   expect(response.status).toBe(201);
-  const body = (await response.json()) as { key: string; agentKey: { id: string } };
+  const body = agentKeyCreatedSchema.parse(await response.json());
   return { key: body.key, id: body.agentKey.id };
 }
 
@@ -135,7 +137,7 @@ describe("agent MCP endpoint", () => {
         ],
       });
 
-      const slipId = (requested.body as { slipId: string }).slipId;
+      const slipId = z.object({ slipId: z.string() }).parse(requested.body).slipId;
       const status = await callTool(client, "errand_status", { slip_id: slipId });
       expect(status.body).toMatchObject({ slipId, state: "pending", callsUsed: 0, spendUsedCents: 0 });
 
@@ -179,7 +181,7 @@ describe("agent MCP endpoint", () => {
         goal: "Find a dinner slot",
         tools: ["calendar__list_events"],
       });
-      const slipId = (requested.body as { slipId: string }).slipId;
+      const slipId = z.object({ slipId: z.string() }).parse(requested.body).slipId;
 
       const before = await callTool(client, "errand_status", { slip_id: slipId });
       expect(before.body).toMatchObject({ state: "pending", capability: null });
@@ -192,13 +194,20 @@ describe("agent MCP endpoint", () => {
       expect(approved.status).toBe(200);
 
       const after = await callTool(client, "errand_status", { slip_id: slipId });
-      expect(after.body).toMatchObject({
+      const afterBody = z
+        .object({
+          state: z.string(),
+          callCap: z.number(),
+          callsRemaining: z.number(),
+          capability: z.string(),
+        })
+        .parse(after.body);
+      expect(afterBody).toMatchObject({
         state: "approved",
         callCap: 3,
         callsRemaining: 3,
       });
-      const capability = (after.body as { capability: string | null }).capability;
-      expect(capability).toMatch(/^cap_/);
+      expect(afterBody.capability).toMatch(/^cap_/);
     } finally {
       await client.close();
     }

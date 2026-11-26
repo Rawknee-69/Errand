@@ -64,11 +64,12 @@ describe("approving a slip", () => {
     );
 
     expect(result.trims).toEqual([
-      { field: "call_cap", requested: 4, applied: 10, reason: "human_trim" },
-      { field: "spend_cap_cents", requested: 1000, applied: 5000, reason: "human_trim" },
+      { field: "call_cap", requested: 10, applied: 4, reason: "human_trim" },
+      { field: "spend_cap_cents", requested: 5000, applied: 1000, reason: "human_trim" },
     ]);
     expect(result.detail.slip).toMatchObject({ callCap: 4, spendCapCents: 1000 });
     expect(result.detail.card).toMatchObject({ callCap: 4, spendCapCents: 1000 });
+    expect(result.detail.card.trims).toEqual(result.trims);
 
     const row = getSlip(db, "user-a", slipId);
     expect(row === undefined ? false : verifySlipSignature(row, SLIP_KEY)).toBe(true);
