@@ -1,0 +1,17 @@
+﻿GET http://localhost:8799/health
+
+HTTP/1.1 200 OK
+Content-Type: application/json
+Date: Thu, 26 Nov 2026 05:22:27 GMT
+Content-Length: 53
+
+{"service":"gateway","status":"ok","version":"0.1.0"}
+
+GET http://localhost:8799/api/journal/verify
+
+HTTP/1.1 200 OK
+Content-Type: application/json
+Date: Thu, 26 Nov 2026 05:22:27 GMT
+Content-Length: 23
+
+{"ok":true,"checked":0}
