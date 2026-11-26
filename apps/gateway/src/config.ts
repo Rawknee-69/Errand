@@ -8,6 +8,32 @@ const secret = z
     message: "must be at least 32 bytes",
   });
 
+function parseHttpUrl(value: string): URL | undefined {
+  if (value !== value.trim()) return undefined;
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    return undefined;
+  }
+  const http = url.protocol === "http:" || url.protocol === "https:";
+  return http && url.username === "" && url.password === "" ? url : undefined;
+}
+
+const httpUrlSchema = z
+  .string()
+  .refine((value) => parseHttpUrl(value) !== undefined, {
+    message: "must be an absolute http(s) URL",
+  });
+
+export const webOriginSchema = z
+  .string()
+  .refine((value) => {
+    const url = parseHttpUrl(value);
+    return url !== undefined && url.pathname === "/" && url.search === "" && url.hash === "";
+  }, { message: "must be an absolute http(s) origin without a path" })
+  .transform((value) => parseHttpUrl(value)?.origin ?? value);
+
 const booleanish = (fallback: boolean) =>
   z
     .union([z.boolean(), z.enum(["true", "false", "1", "0"])])
@@ -30,7 +56,8 @@ const configSchema = z.object({
   EGRESS_MAX_RESPONSE_BYTES: z.coerce.number().int().positive().default(DEFAULT_MAX_RESPONSE_BYTES),
   MAX_CONNECTORS_PER_USER: z.coerce.number().int().positive().default(DEFAULT_MAX_CONNECTORS_PER_USER),
   // Must match the public callback URL registered with each authorization server.
-  OAUTH_REDIRECT_URI: z.string().url().optional(),
+  OAUTH_REDIRECT_URI: httpUrlSchema.optional(),
+  WEB_ORIGIN: webOriginSchema.optional(),
 });
 
 export type GatewayConfig = z.infer<typeof configSchema>;

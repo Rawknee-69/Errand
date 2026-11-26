@@ -93,4 +93,39 @@ describe("loadConfig", () => {
       /MAX_CONNECTORS_PER_USER/,
     );
   });
+
+  test("accepts an absent or absolute WEB_ORIGIN", () => {
+    expect(loadConfig({ ...keys }).WEB_ORIGIN).toBeUndefined();
+    expect(loadConfig({ ...keys, WEB_ORIGIN: "https://app.example" }).WEB_ORIGIN).toBe(
+      "https://app.example",
+    );
+    expect(loadConfig({ ...keys, WEB_ORIGIN: "https://app.example/" }).WEB_ORIGIN).toBe(
+      "https://app.example",
+    );
+  });
+
+  test.each([
+    "app.example",
+    "/connectors",
+    "ftp://app.example",
+    "javascript:alert(1)",
+    "https://app.example/path",
+    "https://user:secret@app.example",
+    " https://app.example ",
+  ])("rejects WEB_ORIGIN=%s", (value) => {
+    expect(() => loadConfig({ ...keys, WEB_ORIGIN: value })).toThrow(/WEB_ORIGIN/);
+  });
+
+  test("accepts an http(s) redirect URI and rejects other shapes", () => {
+    expect(
+      loadConfig({ ...keys, OAUTH_REDIRECT_URI: "https://gw.example/api/oauth/callback" })
+        .OAUTH_REDIRECT_URI,
+    ).toBe("https://gw.example/api/oauth/callback");
+    expect(() =>
+      loadConfig({ ...keys, OAUTH_REDIRECT_URI: "ftp://gw.example/callback" }),
+    ).toThrow(/OAUTH_REDIRECT_URI/);
+    expect(() =>
+      loadConfig({ ...keys, OAUTH_REDIRECT_URI: "/api/oauth/callback" }),
+    ).toThrow(/OAUTH_REDIRECT_URI/);
+  });
 });

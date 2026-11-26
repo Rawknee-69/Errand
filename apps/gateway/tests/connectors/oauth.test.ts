@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { startMockServices } from "@errand/mock-services";
 import { z } from "zod";
-import { createGatewayApp } from "../../src/app.ts";
+import { createGatewayApp, type GatewayAppOptions } from "../../src/app.ts";
 import { createMigratedDatabase, type Db } from "../../src/db/client.ts";
 import { connectors, credentials, journal, oauthAttempts, users } from "../../src/db/schema.ts";
 import { verifyJournal } from "../../src/db/journal.ts";
@@ -112,6 +112,19 @@ function callbackPath(callback: URL): string {
   return `/api/oauth/callback${callback.search}`;
 }
 
+function createTestApp(
+  overrides: Pick<GatewayAppOptions, "webOrigin" | "oauthRedirectUri"> = {},
+): ReturnType<typeof createGatewayApp> {
+  return createGatewayApp(db, {
+    userId: USER,
+    keyring,
+    discoverOptions: { allowLocalhostDev: true, timeoutMs: 5_000 },
+    oauthRedirectUri: overrides.oauthRedirectUri ?? REDIRECT_URI,
+    ...(overrides.webOrigin === undefined ? {} : { webOrigin: overrides.webOrigin }),
+    auth: "disabled",
+  });
+}
+
 async function authorizeFlow(name?: string) {
   const started = await startFlow(name);
   const callback = await approve(started.authorizationUrl);
@@ -132,13 +145,7 @@ beforeEach(async () => {
   db = createMigratedDatabase(":memory:");
   db.insert(users).values({ id: USER, name: "A", createdAt: TS }).run();
   keyring = new VaultKeyring(KEK);
-  app = createGatewayApp(db, {
-    userId: USER,
-    keyring,
-    discoverOptions: { allowLocalhostDev: true, timeoutMs: 5_000 },
-    oauthRedirectUri: REDIRECT_URI,
-    auth: "disabled",
-  });
+  app = createTestApp();
 });
 
 describe("OAuth 2.1 + PKCE via the SDK", () => {
@@ -226,6 +233,57 @@ describe("OAuth 2.1 + PKCE via the SDK", () => {
     expect(html).toContain("&lt;img src=x onerror=&quot;alert(1)&quot;&gt;");
   });
 
+  test("redirects a browser to the configured web origin after a successful callback", async () => {
+    const started = await startFlow();
+    const callback = await approve(started.authorizationUrl);
+    const response = await createTestApp({ webOrigin: "https://app.example" }).request(
+      callbackPath(callback),
+      { headers: { accept: "text/html" } },
+    );
+
+    expect(response.status).toBe(302);
+    expect(response.headers.get("location")).toBe("https://app.example/connectors");
+    expect((await mockState()).authorizationCodeGrants).toBe(1);
+  });
+
+  test("normalizes a trailing slash on the web origin", async () => {
+    const started = await startFlow();
+    const callback = await approve(started.authorizationUrl);
+    const response = await createTestApp({ webOrigin: "https://app.example/" }).request(
+      callbackPath(callback),
+      { headers: { accept: "text/html" } },
+    );
+
+    expect(response.headers.get("location")).toBe("https://app.example/connectors");
+  });
+
+  test("ignores callback query parameters when building the redirect target", async () => {
+    const started = await startFlow();
+    const callback = await approve(started.authorizationUrl);
+    callback.searchParams.set("webOrigin", "https://evil.example");
+    callback.searchParams.set("next", "https://evil.example");
+    const response = await createTestApp({ webOrigin: "https://app.example" }).request(
+      callbackPath(callback),
+      { headers: { accept: "text/html" } },
+    );
+
+    expect(response.status).toBe(302);
+    expect(response.headers.get("location")).toBe("https://app.example/connectors");
+  });
+
+  test("keeps the JSON connector detail for non-HTML callers when a web origin is set", async () => {
+    const started = await startFlow();
+    const callback = await approve(started.authorizationUrl);
+    const response = await createTestApp({ webOrigin: "https://app.example" }).request(
+      callbackPath(callback),
+    );
+
+    expect(response.status).toBe(200);
+    const body = await readJson(response, connectResponseSchema);
+    expect(body.connector.id).toBe(started.connector.id);
+    expect(body.connector.authStatus).toBe("active");
+  });
+
   test("rejects a callback whose issuer is not the discovered authorization server", async () => {
     const started = await startFlow();
     const callback = await approve(started.authorizationUrl);
@@ -240,13 +298,7 @@ describe("OAuth 2.1 + PKCE via the SDK", () => {
   test("rejects a callback delivered to a different redirect URI than the attempt", async () => {
     const started = await startFlow();
     const callback = await approve(started.authorizationUrl);
-    const otherApp = createGatewayApp(db, {
-      userId: USER,
-      keyring,
-      discoverOptions: { allowLocalhostDev: true, timeoutMs: 5_000 },
-      oauthRedirectUri: "http://127.0.0.1:8787/api/oauth/other",
-      auth: "disabled",
-    });
+    const otherApp = createTestApp({ oauthRedirectUri: "http://127.0.0.1:8787/api/oauth/other" });
 
     const response = await otherApp.request(callbackPath(callback));
     expect(response.status).toBe(400);

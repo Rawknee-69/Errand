@@ -1,0 +1,2 @@
+GET http://127.0.0.1:5173/favicon.ico -> 404
+The browser console reported the same 404 while the control panel loaded (see browser-window.txt).

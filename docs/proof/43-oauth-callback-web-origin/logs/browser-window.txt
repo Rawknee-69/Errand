@@ -1,0 +1,102 @@
+01 login screen: url=http://127.0.0.1:5173/
+02 signed in, connect screen: url=http://127.0.0.1:5173/connect
+03 empty connectors screen: url=http://127.0.0.1:5173/connectors text="CONNECTORS What Errand is connected to Status, the last successful read, and a way back in when the upstream stops accepting the stored credential. Nothing connected Paste an MCP server URL and Errand"
+04 OAuth start via control-panel origin: status=201 connector=18566254-7a77-4a26-ac88-c96685fab3a9
+05 consent page: url=http://127.0.0.1:4002/oauth/authorize?response_type=code&client_id=client_7e498452-b07a-42fa-a50c-681e7d48c759&code_challenge=ZXD7FP9JNYcOsYaikxavmn8XJEZG2_ItzjFqYEV1PvA&code_challenge_method=S256&redirect_uri=http%3A%2F%2F127.0.0.1%3A8788%2Fapi%2Foauth%2Fcallback&state=<redacted>&scope=calendar.read&resource=http%3A%2F%2F127.0.0.1%3A4002%2Foauth%2Fmcp heading=Authorize Errand
+06 redirect landed on: http://127.0.0.1:5173/connectors
+07 connectors screen: cards=1 text="Errand owner Sign out CONTROL PANEL Connect Connectors Catalog Slips Receipts Trust Journal Keys CONNECTORS What Errand is connected to Status, the last successful read, and a way back in when the upstream stops accepting the stored credential. Mock calendar (browser) ACTIVE 127.0.0.1:4002/oauth/mcp TOOLS 3 LAST SUCCESS 26 Nov 2026, 2:18 pm TRANSPORT Streamable HTTP AUTH oauth Refresh catalog"
+08 refresh button driven; first card: "Mock calendar (browser) ACTIVE 127.0.0.1:4002/oauth/mcp TOOLS 3 LAST SUCCESS 26 Nov 2026, 2:18 pm TRANSPORT Streamable HTTP AUTH oauth Refresh catalog"
+09 catalog screen: url=http://127.0.0.1:5173/catalog
+10 phone viewport: scrollWidth=390 innerWidth=390
+11 secret words visible in page: none
+12 before page (no WEB_ORIGIN): url=http://127.0.0.1:8789/api/oauth/callback?code=<redacted>&state=<redacted>&iss=http%3A%2F%2F127.0.0.1%3A4002 heading=Connected links=[{"text":"Open the catalog","href":"/api/catalog"}]
+console [debug] [vite] connecting...
+console [info] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+console [debug] [vite] connected.
+console [error] Failed to load resource: the server responded with a status of 404 (Not Found)
+console [verbose] [DOM] Password forms should have (optionally hidden) username fields for accessibility: (More info: https://www.chromium.org/developers/design-documents/create-amazing-password-forms) %o
+console [error] Failed to load resource: the server responded with a status of 404 (Not Found)
+console [debug] [vite] connecting...
+console [debug] [vite] connected.
+console [info] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+network 200 GET http://127.0.0.1:5173/
+network 200 GET http://127.0.0.1:5173/src/main.tsx
+network 200 GET http://127.0.0.1:5173/node_modules/.vite/deps/react.js?v=726fc185
+network 200 GET http://127.0.0.1:5173/@react-refresh
+network 200 GET http://127.0.0.1:5173/src/App.tsx
+network 200 GET http://127.0.0.1:5173/src/styles.css
+network 200 GET http://127.0.0.1:5173/node_modules/.vite/deps/react_jsx-dev-runtime.js?v=726fc185
+network 200 GET http://127.0.0.1:5173/node_modules/.vite/deps/react-Be94A2NN.js?v=726fc185
+network 200 GET http://127.0.0.1:5173/node_modules/.vite/deps/react-dom_client.js?v=726fc185
+network 200 GET http://127.0.0.1:5173/src/api.ts
+network 200 GET http://127.0.0.1:5173/src/navigation.ts
+network 200 GET http://127.0.0.1:5173/src/useScreen.ts
+network 200 GET http://127.0.0.1:5173/src/screens/Shell.tsx
+network 200 GET http://127.0.0.1:5173/src/screens/Login.tsx
+network 200 GET http://127.0.0.1:5173/src/screens/Placeholder.tsx
+network 200 GET http://127.0.0.1:5173/src/screens/Connect.tsx
+network 200 GET http://127.0.0.1:5173/src/screens/Catalog.tsx
+network 200 GET http://127.0.0.1:5173/src/screens/Connectors.tsx
+network 200 GET http://127.0.0.1:5173/node_modules/.vite/deps/rolldown-runtime-C-UrYobY.js?v=726fc185
+network 200 GET http://127.0.0.1:5173/node_modules/.vite/deps/react-dom-DDRCQeYh.js?v=726fc185
+network 200 GET http://127.0.0.1:5173/src/components/AgentKeyPanel.tsx
+network 200 GET http://127.0.0.1:5173/@fs/D:/errand-43/packages/shared/src/index.ts
+network 200 GET http://127.0.0.1:5173/src/catalog.ts
+network 200 GET http://127.0.0.1:5173/src/format.ts
+network 200 GET http://127.0.0.1:5173/src/useCatalog.ts
+network 200 GET http://127.0.0.1:5173/src/agentSnippets.ts
+network 200 GET http://127.0.0.1:5173/@vite/client
+network 200 GET http://127.0.0.1:5173/src/components/CopyButton.tsx
+network 200 GET http://127.0.0.1:5173/@fs/D:/errand-43/packages/shared/src/html.ts
+network 200 GET http://127.0.0.1:5173/@fs/D:/errand-43/node_modules/.bun/vite@8.3.8+bee90c5078c4a020/node_modules/vite/dist/client/env.mjs
+network 200 GET http://127.0.0.1:5173/node_modules/.vite/deps/zod.js?v=726fc185
+network 200 GET http://127.0.0.1:5173/api/auth/session
+network 200 GET http://127.0.0.1:5173/api/auth/session
+network 200 POST http://127.0.0.1:5173/api/auth/login
+network 200 GET http://127.0.0.1:5173/api/catalog
+network 200 GET http://127.0.0.1:5173/api/catalog
+network 201 POST http://127.0.0.1:5173/api/connectors/oauth/start
+network 200 GET http://127.0.0.1:4002/oauth/authorize?response_type=code&client_id=client_7e498452-b07a-42fa-a50c-681e7d48c759&code_challenge=ZXD7FP9JNYcOsYaikxavmn8XJEZG2_ItzjFqYEV1PvA&code_challenge_method=S256&redirect_uri=http%3A%2F%2F127.0.0.1%3A8788%2Fapi%2Foauth%2Fcallback&state=<redacted>&scope=calendar.read&resource=http%3A%2F%2F127.0.0.1%3A4002%2Foauth%2Fmcp
+network 302 POST http://127.0.0.1:4002/oauth/authorize
+network 302 GET http://127.0.0.1:8788/api/oauth/callback?code=<redacted>&state=<redacted>&iss=http%3A%2F%2F127.0.0.1%3A4002
+network 200 GET http://127.0.0.1:5173/connectors
+network 304 GET http://127.0.0.1:5173/@vite/client
+network 304 GET http://127.0.0.1:5173/src/main.tsx
+network 304 GET http://127.0.0.1:5173/@react-refresh
+network 200 GET http://127.0.0.1:5173/node_modules/.vite/deps/react.js?v=726fc185
+network 200 GET http://127.0.0.1:5173/node_modules/.vite/deps/react-dom_client.js?v=726fc185
+network 200 GET http://127.0.0.1:5173/node_modules/.vite/deps/react_jsx-dev-runtime.js?v=726fc185
+network 304 GET http://127.0.0.1:5173/@fs/D:/errand-43/node_modules/.bun/vite@8.3.8+bee90c5078c4a020/node_modules/vite/dist/client/env.mjs
+network 200 GET http://127.0.0.1:5173/node_modules/.vite/deps/react-Be94A2NN.js?v=726fc185
+network 200 GET http://127.0.0.1:5173/node_modules/.vite/deps/rolldown-runtime-C-UrYobY.js?v=726fc185
+network 200 GET http://127.0.0.1:5173/node_modules/.vite/deps/react-dom-DDRCQeYh.js?v=726fc185
+network 304 GET http://127.0.0.1:5173/src/App.tsx
+network 304 GET http://127.0.0.1:5173/src/styles.css
+network 304 GET http://127.0.0.1:5173/src/api.ts
+network 304 GET http://127.0.0.1:5173/src/navigation.ts
+network 304 GET http://127.0.0.1:5173/src/useScreen.ts
+network 200 GET http://127.0.0.1:5173/node_modules/.vite/deps/zod.js?v=726fc185
+network 304 GET http://127.0.0.1:5173/src/screens/Login.tsx
+network 304 GET http://127.0.0.1:5173/src/screens/Shell.tsx
+network 304 GET http://127.0.0.1:5173/src/screens/Connect.tsx
+network 304 GET http://127.0.0.1:5173/src/screens/Catalog.tsx
+network 304 GET http://127.0.0.1:5173/src/screens/Connectors.tsx
+network 304 GET http://127.0.0.1:5173/src/screens/Placeholder.tsx
+network 304 GET http://127.0.0.1:5173/@fs/D:/errand-43/packages/shared/src/index.ts
+network 304 GET http://127.0.0.1:5173/src/components/AgentKeyPanel.tsx
+network 304 GET http://127.0.0.1:5173/src/catalog.ts
+network 304 GET http://127.0.0.1:5173/src/useCatalog.ts
+network 304 GET http://127.0.0.1:5173/src/format.ts
+network 304 GET http://127.0.0.1:5173/@fs/D:/errand-43/packages/shared/src/html.ts
+network 304 GET http://127.0.0.1:5173/src/agentSnippets.ts
+network 304 GET http://127.0.0.1:5173/src/components/CopyButton.tsx
+network 200 GET http://127.0.0.1:5173/api/auth/session
+network 200 GET http://127.0.0.1:5173/api/auth/session
+network 200 GET http://127.0.0.1:5173/api/catalog
+network 200 GET http://127.0.0.1:5173/api/catalog
+network 200 POST http://127.0.0.1:5173/api/connectors/18566254-7a77-4a26-ac88-c96685fab3a9/refresh
+network 200 GET http://127.0.0.1:5173/api/catalog
+network 200 GET http://127.0.0.1:5173/api/catalog
+network 200 GET http://127.0.0.1:5173/api/catalog
+network 200 GET http://127.0.0.1:5173/api/catalog
+network 200 GET http://127.0.0.1:5173/api/catalog
