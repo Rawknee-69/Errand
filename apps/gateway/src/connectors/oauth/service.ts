@@ -1,5 +1,5 @@
 import { randomBytes, randomUUID } from "node:crypto";
-import { and, eq, isNull, lte } from "drizzle-orm";
+import { and, eq, gt, isNull, lte } from "drizzle-orm";
 import {
   AuthorizationServerMismatchError,
   OAuthError,
@@ -31,6 +31,7 @@ import {
 import type { McpTransportKind } from "@errand/shared";
 import type { DiscoveredTool, IngestSummary } from "../catalog.ts";
 import type { CredentialStore } from "../../vault/credentials.ts";
+import { VaultError } from "../../vault/common.ts";
 import type { Vault } from "../../vault/vault.ts";
 import { ReauthRequiredError } from "./errors.ts";
 import { withConnectorLock } from "./lock.ts";
@@ -135,7 +136,59 @@ function deleteAttempt(store: OAuthStore, deps: OAuthServiceDeps, attemptId: str
   deps.db.delete(oauthAttempts).where(eq(oauthAttempts.id, attemptId)).run();
 }
 
-function pruneExpiredAttempts(deps: OAuthServiceDeps): void {
+function hasLiveAttempt(deps: OAuthServiceDeps, connectorId: string): boolean {
+  return (
+    deps.db
+      .select({ id: oauthAttempts.id })
+      .from(oauthAttempts)
+      .where(
+        and(
+          eq(oauthAttempts.userId, deps.userId),
+          eq(oauthAttempts.connectorId, connectorId),
+          isNull(oauthAttempts.consumedAt),
+          gt(oauthAttempts.expiresAt, new Date().toISOString()),
+        ),
+      )
+      .all().length > 0
+  );
+}
+
+function attemptIdsFor(deps: OAuthServiceDeps, connectorId: string): string[] {
+  return deps.db
+    .select({ id: oauthAttempts.id })
+    .from(oauthAttempts)
+    .where(and(eq(oauthAttempts.userId, deps.userId), eq(oauthAttempts.connectorId, connectorId)))
+    .all()
+    .map((attempt) => attempt.id);
+}
+
+async function connectorIsDiscardable(
+  deps: OAuthServiceDeps,
+  store: OAuthStore,
+  connectorId: string,
+  keepConnectorId?: string,
+): Promise<boolean> {
+  if (connectorId === keepConnectorId) return false;
+  const connector = deps.db
+    .select()
+    .from(connectors)
+    .where(and(eq(connectors.userId, deps.userId), eq(connectors.id, connectorId)))
+    .all()[0];
+  if (connector?.authType !== "oauth" || connector.authStatus !== "pending") return false;
+  try {
+    if ((await store.connectorState(connectorId)).tokens !== undefined) return false;
+  } catch (error) {
+    // An unreadable credential is not proof the flow never finished; keep the connector.
+    if (error instanceof VaultError) return false;
+    throw error;
+  }
+  return !hasLiveAttempt(deps, connectorId);
+}
+
+async function pruneExpiredAttempts(
+  deps: OAuthServiceDeps,
+  keepConnectorId?: string,
+): Promise<void> {
   const rows = deps.db
     .select()
     .from(oauthAttempts)
@@ -147,8 +200,23 @@ function pruneExpiredAttempts(deps: OAuthServiceDeps): void {
       ),
     )
     .all();
+  if (rows.length === 0) return;
+
+  const attemptIdsByConnector = new Map<string, string[]>();
+  for (const row of rows) {
+    const attemptIds = attemptIdsByConnector.get(row.connectorId);
+    if (attemptIds === undefined) attemptIdsByConnector.set(row.connectorId, [row.id]);
+    else attemptIds.push(row.id);
+  }
+
   const store = new OAuthStore(deps.vault, deps.store);
-  for (const row of rows) deleteAttempt(store, deps, row.id);
+  for (const [connectorId, attemptIds] of attemptIdsByConnector) {
+    if (await connectorIsDiscardable(deps, store, connectorId, keepConnectorId)) {
+      discardConnector(deps, connectorId, attemptIdsFor(deps, connectorId));
+    } else {
+      for (const attemptId of attemptIds) deleteAttempt(store, deps, attemptId);
+    }
+  }
 }
 
 function discardConnector(deps: OAuthServiceDeps, connectorId: string, attemptIds: string[]): void {
@@ -159,6 +227,38 @@ function discardConnector(deps: OAuthServiceDeps, connectorId: string, attemptId
     .delete(connectors)
     .where(and(eq(connectors.userId, deps.userId), eq(connectors.id, connectorId)))
     .run();
+}
+
+async function sweepPendingConnectors(
+  deps: OAuthServiceDeps,
+  keepConnectorId?: string,
+): Promise<void> {
+  const rows = deps.db
+    .select()
+    .from(connectors)
+    .where(
+      and(
+        eq(connectors.userId, deps.userId),
+        eq(connectors.authType, "oauth"),
+        eq(connectors.authStatus, "pending"),
+      ),
+    )
+    .all();
+  const store = new OAuthStore(deps.vault, deps.store);
+  for (const row of rows) {
+    if (!(await connectorIsDiscardable(deps, store, row.id, keepConnectorId))) continue;
+    discardConnector(deps, row.id, attemptIdsFor(deps, row.id));
+  }
+}
+
+// Both a new flow and a re-auth start by clearing attempts and connectors that
+// can no longer complete, except the connector the human is explicitly re-authorizing.
+async function cleanupDeadConnectors(
+  deps: OAuthServiceDeps,
+  keepConnectorId?: string,
+): Promise<void> {
+  await pruneExpiredAttempts(deps, keepConnectorId);
+  await sweepPendingConnectors(deps, keepConnectorId);
 }
 
 function pruneAttempts(deps: OAuthServiceDeps, connectorId: string): void {
@@ -272,7 +372,7 @@ export async function startOAuthFlow(
   deps: OAuthServiceDeps,
   input: { name: string; url: string },
 ): Promise<OAuthStartResult> {
-  pruneExpiredAttempts(deps);
+  await cleanupDeadConnectors(deps);
   assertConnectorQuota(deps.db, deps.userId, deps.maxConnectors);
   const normalized = (await assertFetchableUrl(input.url, deps.discoverOptions)).href;
   const now = new Date();
@@ -318,7 +418,7 @@ export async function startOAuthReauth(
   deps: OAuthServiceDeps,
   connectorId: string,
 ): Promise<OAuthStartResult> {
-  pruneExpiredAttempts(deps);
+  await cleanupDeadConnectors(deps, connectorId);
   const row = connectorRow(deps, connectorId);
   if (row.authType !== "oauth") {
     throw new ConnectorError("reauth", "Only an OAuth connector can be re-authorized in a browser");
@@ -354,7 +454,7 @@ export async function completeOAuthFlow(
   deps: OAuthServiceDeps,
   input: { state: string; code: string; iss?: string },
 ): Promise<OAuthCompleteResult> {
-  pruneExpiredAttempts(deps);
+  await pruneExpiredAttempts(deps);
   const attempt = scopedGet(
     deps.db,
     oauthAttempts,
