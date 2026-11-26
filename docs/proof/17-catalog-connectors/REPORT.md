@@ -7,8 +7,8 @@ Gateway
 - `apps/gateway/src/db/schema.ts` — `connectors.last_success_at` and
   `tools.class_override`. The override records a human-set class so a refresh
   or re-approval cannot silently restore the classifier's class.
-- `apps/gateway/drizzle/0004_skinny_ozymandias.sql` (plus snapshot/journal) —
-  the two additive columns.
+- `apps/gateway/drizzle/0005_loose_mystique.sql` (plus snapshot/journal) —
+  the two additive columns, rebased after ticket #9 claimed `0004`.
 - `apps/gateway/src/connectors/catalog.ts` — `setToolClass` and
   `setToolRequestable`, the single home for both controls. Tightening applies
   immediately; loosening throws `confirmation_required` unless confirmed; both
@@ -69,7 +69,8 @@ Tests and docs
 
 ```
 bun install
-bunx drizzle-kit generate                     # apps/gateway
+bunx drizzle-kit generate                     # apps/gateway (0005 after rebase)
+git fetch origin && git rebase origin/integration
 bun run typecheck
 bun test
 bun run --cwd apps/web build
@@ -94,17 +95,17 @@ $ bun run typecheck
 ✓ 4 checks passed: comments, installed, no-any, oauth-verifier
 
 $ bun test
- 262 pass
+ 305 pass
  0 fail
- 742 expect() calls
-Ran 262 tests across 35 files.
+ 836 expect() calls
+Ran 305 tests across 40 files.
 
 $ bun run --cwd apps/web build
 ✓ 127 modules transformed.
 dist/index.html                   0.49 kB │ gzip:   0.30 kB
 dist/assets/index-C1YmPilq.css   12.27 kB │ gzip:   3.36 kB
-dist/assets/index-DqSRyeP6.js   337.37 kB │ gzip: 101.52 kB
-✓ built in 143ms
+dist/assets/index-C5388oxu.js   338.41 kB │ gzip: 101.84 kB
+✓ built in 116ms
 ```
 
 Raw captures: `logs/typecheck.txt`, `logs/test-output.txt`,
