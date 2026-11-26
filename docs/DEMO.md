@@ -15,6 +15,9 @@ bun run demo:up      # gateway :8787, web :5173, mock services :4001
 bun run demo:seed    # offline fallback data + one agent key
 ```
 
+`bun run demo:start` is the same stack. `bun run demo:stop` stops it and
+clears any orphan listener left on 8787, 5173 or 4001.
+
 `demo:up` writes secrets, the SQLite file and logs under `.demo/` (gitignored).
 It prints the owner passphrase: `errand-demo-passphrase`.
 
