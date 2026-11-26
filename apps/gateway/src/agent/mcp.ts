@@ -3,7 +3,7 @@ import { z } from "zod";
 import gatewayPackage from "../../package.json" with { type: "json" };
 import type { Db } from "../db/client.ts";
 import { agentCatalog } from "./catalog.ts";
-import { acknowledgeCall } from "./call.ts";
+import { submitCall } from "./call.ts";
 import { AGENT_LIMITS, type RequestedLimits } from "./limits.ts";
 import { ErrandRequestError, requestErrand } from "./request.ts";
 import { errandStatus } from "./status.ts";
@@ -116,20 +116,35 @@ function agentServer(db: Db, userId: string, hmacKey: string | undefined): McpSe
     "errand_call",
     {
       description:
-        "Submit one call for an approved slip. Until the policy pipeline is installed this returns not_forwarded and never contacts a service.",
+        "Submit one call for an approved slip, with the capability from errand_status. The call is checked against the signed slip and the spend, call and rate caps before anything runs; until the forwarder ships an admitted call returns not_forwarded.",
       inputSchema: z.object({
         slip_id: z.string().min(1),
         tool: z.string().min(1),
+        capability: z.string().min(1),
+        arguments: z.record(z.string(), z.unknown()).optional(),
       }),
       annotations: { readOnlyHint: false },
     },
-    async ({ slip_id, tool }) => {
-      const result = acknowledgeCall(db, userId, slip_id, tool);
-      if (result === undefined) return errorResult("not_found", `No slip ${slip_id} for this key`);
-      if (result.state === "out_of_scope") {
-        return errorResult("out_of_scope", `${tool} is not in slip ${slip_id}`, { tool });
+    async ({ slip_id, tool, capability, arguments: args }) => {
+      const decision = submitCall(
+        db,
+        userId,
+        { slipId: slip_id, tool, capability, arguments: args ?? {} },
+        { hmacKey },
+      );
+      if (decision.outcome === "denied") {
+        return errorResult(decision.reason, decision.message, { tool });
       }
-      return textResult(result);
+      return textResult({
+        state: "not_forwarded",
+        slipId: decision.slipId,
+        tool: decision.tool,
+        reason: "forwarder_not_installed",
+        remaining: {
+          calls: decision.callsRemaining,
+          spendCents: decision.spendRemainingCents,
+        },
+      });
     },
   );
 

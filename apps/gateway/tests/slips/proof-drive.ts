@@ -12,6 +12,7 @@ import { slips } from "../../src/db/schema.ts";
 import { verifyCapability } from "../../src/policy/capability.ts";
 import { verifySlipSignature } from "../../src/policy/slip-signing.ts";
 import { callTool, connectAgent } from "../agent/mcp-client.ts";
+import { humanRequests, parse, step } from "../support/proof-drive.ts";
 
 const base = process.argv[2] ?? "http://127.0.0.1:8831";
 const databasePath = process.argv[3] ?? "docs/proof/09-approval-signing/proof.db";
@@ -39,16 +40,6 @@ function printStatus(body: unknown): void {
   console.log(JSON.stringify(view, null, 2));
 }
 
-function step(name: string): void {
-  console.log(`\n== ${name}`);
-}
-
-async function parse<T>(response: Response, schema: z.ZodType<T>): Promise<T> {
-  const text = await response.text();
-  assert.ok(response.ok, `${response.url} returned ${response.status}: ${text}`);
-  return schema.parse(JSON.parse(text));
-}
-
 step("log in as the owner");
 const login = await fetch(`${base}/api/auth/login`, {
   method: "POST",
@@ -60,13 +51,7 @@ assert.ok(cookie, "login did not set a session cookie");
 const sessionCookie: string = cookie;
 const session = await parse(login, sessionSchema);
 console.log(JSON.stringify(session, null, 2));
-
-function human(path: string, init: RequestInit = {}): Promise<Response> {
-  return fetch(`${base}${path}`, {
-    ...init,
-    headers: { "content-type": "application/json", cookie: sessionCookie, ...(init.headers ?? {}) },
-  });
-}
+const human = humanRequests(base, sessionCookie);
 
 step("create an agent key");
 const created = await parse(

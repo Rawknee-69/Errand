@@ -1,4 +1,5 @@
 import { index, integer, primaryKey, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { DEFAULT_CALL_RATE_PER_MINUTE } from "../policy/rate.ts";
 import {
   CONNECTOR_AUTH_STATUSES,
   type ConnectorAuthStatus,
@@ -146,6 +147,10 @@ export const slips = sqliteTable(
     trims: text("trims").notNull().default("[]"),
     callCap: integer("call_cap").notNull().default(0),
     callsUsed: integer("calls_used").notNull().default(0),
+    // Server ceiling on calls per rolling minute; not agent-adjustable.
+    rateCap: integer("rate_cap").notNull().default(DEFAULT_CALL_RATE_PER_MINUTE),
+    rateWindowStartedAt: text("rate_window_started_at"),
+    rateWindowCalls: integer("rate_window_calls").notNull().default(0),
     spendCapCents: integer("spend_cap_cents").notNull().default(0),
     spendUsedCents: integer("spend_used_cents").notNull().default(0),
     capabilityHash: text("capability_hash"),

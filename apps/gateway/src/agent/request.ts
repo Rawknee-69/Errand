@@ -6,7 +6,7 @@ import { listCatalog } from "../connectors/catalog.ts";
 import { isRequestableTool } from "./catalog.ts";
 import { isDecoyToolName } from "../policy/decoys.ts";
 import { errandTypeFor } from "../policy/errand-type.ts";
-import { resolveLimits, type ClampedLimit, type RequestedLimits } from "./limits.ts";
+import { AGENT_LIMITS, resolveLimits, type ClampedLimit, type RequestedLimits } from "./limits.ts";
 import type { SlipTool } from "./slip-tools.ts";
 
 export type RequestErrandInput = {
@@ -81,6 +81,7 @@ export function requestErrand(
       tools: JSON.stringify(tools),
       constraints: "{}",
       callCap: limits.callCap,
+      rateCap: AGENT_LIMITS.callsPerMinute,
       spendCapCents: limits.spendCapCents,
       expiresAt,
       createdAt: now.toISOString(),
