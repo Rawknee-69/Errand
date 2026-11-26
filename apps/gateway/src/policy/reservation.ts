@@ -1,7 +1,7 @@
 import { and, eq, lt, sql } from "drizzle-orm";
 import type { Db } from "../db/client.ts";
 import { slips } from "../db/schema.ts";
-import { remainingAllowance } from "../slips/caps.ts";
+import { rateCallsRemaining, remainingAllowance } from "../slips/caps.ts";
 import { RATE_WINDOW_MS } from "./rate.ts";
 
 export type ReservationFailure =
@@ -35,10 +35,11 @@ function readSlip(
     .all()[0];
 }
 
-function failureReason(slip: SlipRow, amountCents: number): ReservationFailure {
-  if (slip.callsUsed >= slip.callCap) return "call_cap_reached";
-  if (slip.spendUsedCents + amountCents > slip.spendCapCents) return "spend_cap_exceeded";
-  if (slip.rateWindowCalls >= slip.rateCap) return "rate_limited";
+function failureReason(slip: SlipRow, amountCents: number, now: Date): ReservationFailure {
+  const allowance = remainingAllowance(slip, now);
+  if (allowance.callsRemaining === 0) return "call_cap_reached";
+  if (amountCents > allowance.spendRemainingCents) return "spend_cap_exceeded";
+  if (rateCallsRemaining(slip) === 0) return "rate_limited";
   if (slip.state !== "approved") return "not_approved";
   throw new Error(`Reservation for slip ${slip.id} failed without a cap reason`);
 }
@@ -101,7 +102,7 @@ export function reserveCall(db: Db, input: ReserveCallInput): ReservationResult 
     if (after === undefined) {
       const current = readSlip(tx, input.userId, input.slipId);
       if (current === undefined) throw new Error(`Slip ${input.slipId} vanished during reservation`);
-      return { ok: false, reason: failureReason(current, input.amountCents) };
+      return { ok: false, reason: failureReason(current, input.amountCents, input.now) };
     }
 
     const allowance = remainingAllowance(after, input.now);

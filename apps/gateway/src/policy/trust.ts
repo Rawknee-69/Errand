@@ -17,7 +17,6 @@ import {
   listTrust,
 } from "../db/scoped-reads.ts";
 import { parseSlipTools } from "../agent/slip-tools.ts";
-import { AGENT_LIMITS } from "@errand/shared";
 import type { SlipRow } from "../slips/row.ts";
 
 type TrustRow = typeof trust.$inferSelect;
@@ -248,7 +247,7 @@ export function listTrustViews(db: Db, userId: string, now = new Date()): TrustV
     .sort((left, right) => left.errandType.localeCompare(right.errandType));
 }
 
-export type TrustErrorCode = "unknown_errand_type" | "license_not_offered" | "invalid_caps";
+export type TrustErrorCode = "unknown_errand_type" | "license_not_offered";
 export class TrustError extends Error {
   constructor(
     readonly code: TrustErrorCode,
@@ -278,14 +277,6 @@ export function acceptLicense(
       `A license needs ${CLEAN_RUNS_FOR_LICENSE} clean runs; ${errandType} has ${row.cleanRuns}`,
     );
   }
-  if (
-    caps.callCap > AGENT_LIMITS.calls ||
-    caps.spendCapCents > AGENT_LIMITS.spendCents ||
-    caps.minutes > AGENT_LIMITS.minutes
-  ) {
-    throw new TrustError("invalid_caps", "Those caps are above the server maximum");
-  }
-
   const at = now.toISOString();
   db.transaction((tx) => {
     tx.update(trust)

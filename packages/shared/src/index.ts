@@ -210,10 +210,12 @@ export const AGENT_LIMITS = {
 // Five consecutive clean runs earn a license offer; trust is lost faster than it is gained.
 export const CLEAN_RUNS_FOR_LICENSE = 5;
 
+// The maxima live in the schema, so a license above the server ceiling cannot be
+// constructed, let alone stored.
 export const trustCapsSchema = z.object({
-  callCap: z.number().int().positive(),
-  spendCapCents: z.number().int().nonnegative(),
-  minutes: z.number().int().positive(),
+  callCap: z.number().int().positive().max(AGENT_LIMITS.calls),
+  spendCapCents: z.number().int().nonnegative().max(AGENT_LIMITS.spendCents),
+  minutes: z.number().int().positive().max(AGENT_LIMITS.minutes),
 });
 export type TrustCaps = z.infer<typeof trustCapsSchema>;
 
