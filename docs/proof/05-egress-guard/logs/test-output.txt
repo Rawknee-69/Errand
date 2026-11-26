@@ -1,0 +1,12 @@
+﻿bun test v1.4.4 (38afee6c8)
+cmd : 
+At line:1 char:236
++ ... of\05-egress-guard\logs\typecheck.txt; cmd /c "bun test" 2>&1 | Out-F ...
++                                            ~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+ 113 pass
+ 0 fail
+ 178 expect() calls
+Ran 113 tests across 12 files. [365.00ms]

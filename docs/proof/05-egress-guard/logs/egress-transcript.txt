@@ -1,0 +1,36 @@
+﻿== address and host validation ==
+literal https://127.0.0.1/: REFUSED [blocked-address] 127.0.0.1: loopback addresses cannot be fetched
+literal https://10.1.2.3/: REFUSED [blocked-address] 10.1.2.3: private addresses cannot be fetched
+literal https://172.16.0.1/: REFUSED [blocked-address] 172.16.0.1: private addresses cannot be fetched
+literal https://192.168.1.1/: REFUSED [blocked-address] 192.168.1.1: private addresses cannot be fetched
+literal https://169.254.1.1/: REFUSED [blocked-address] 169.254.1.1: link-local addresses cannot be fetched
+literal https://169.254.169.254/latest/meta-data: REFUSED [blocked-address] 169.254.169.254: cloud metadata addresses cannot be fetched
+literal https://100.64.0.1/: REFUSED [blocked-address] 100.64.0.1: carrier-grade NAT addresses cannot be fetched
+literal https://0.0.0.0/: REFUSED [blocked-address] 0.0.0.0: unspecified addresses cannot be fetched
+literal https://224.0.0.1/: REFUSED [blocked-address] 224.0.0.1: multicast addresses cannot be fetched
+literal https://[::1]/: REFUSED [blocked-address] ::1: loopback addresses cannot be fetched
+literal https://[fe80::1]/: REFUSED [blocked-address] fe80::1: link-local addresses cannot be fetched
+literal https://[fd00:ec2::254]/: REFUSED [blocked-address] fd00:ec2::254: cloud metadata addresses cannot be fetched
+literal https://[ff02::1]/: REFUSED [blocked-address] ff02::1: multicast addresses cannot be fetched
+literal https://[::ffff:127.0.0.1]/: REFUSED [blocked-address] ::ffff:7f00:1: loopback addresses cannot be fetched
+literal https://[::10.0.0.1]/: REFUSED [blocked-address] ::a00:1: reserved addresses cannot be fetched
+literal https://[fec0::1]/: REFUSED [blocked-address] fec0::1: private addresses cannot be fetched
+public 93.184.216.34: ALLOWED 
+hostname -> 10.1.2.3: REFUSED [blocked-address] internal.example.com resolves to 10.1.2.3: private addresses cannot be fetched
+hostname -> public + metadata: REFUSED [blocked-address] mixed.example.com resolves to 169.254.169.254: cloud metadata addresses cannot be fetched
+http public: REFUSED [scheme] Only https is allowed, got http://example.com
+http localhost with dev flag: ALLOWED 
+http 127.0.0.2 with dev flag: REFUSED [scheme] Only https is allowed, got http://127.0.0.2
+== guarded fetch ==
+GET local /ok: ALLOWED 200 upstream ok
+GET local /ok without dev flag: REFUSED [scheme] Only https is allowed, got http://127.0.0.1
+GET localhost pinned to resolved 127.0.0.1: ALLOWED 200 upstream ok
+3 redirects to /ok: ALLOWED 200 upstream ok
+4 redirects: REFUSED [redirect-limit] http://127.0.0.1:55241/far/3 exceeded 3 redirects
+redirect to metadata: REFUSED [blocked-address] 169.254.169.254: cloud metadata addresses cannot be fetched
+redirect to private: REFUSED [blocked-address] 192.168.1.10: private addresses cannot be fetched
+stream over 4096 bytes: REFUSED [response-too-large] http://127.0.0.1:55241/large-stream exceeded the 4096 byte limit
+timeout 50ms: REFUSED [timeout] http://127.0.0.1:55241/slow did not answer within 50ms
+== connector quota ==
+3rd connector, limit 2: REFUSED [connector-limit] Connector limit reached: 2 of 2 connectors in use
+3rd connector, limit 3: ALLOWED 

@@ -1,4 +1,6 @@
 import { describe, expect, test } from "bun:test";
+import { DEFAULT_MAX_CONNECTORS_PER_USER } from "../src/connectors/quota.ts";
+import { DEFAULT_MAX_RESPONSE_BYTES, DEFAULT_TIMEOUT_MS } from "../src/egress/guard.ts";
 import { loadConfig } from "../src/config.ts";
 
 const keys = {
@@ -47,5 +49,37 @@ describe("loadConfig", () => {
 
   test("reads a custom port", () => {
     expect(loadConfig({ ...keys, PORT: "9999" }).PORT).toBe(9999);
+  });
+
+  test("defaults the dev egress flag off and limits the fetch surface", () => {
+    expect(loadConfig({ ...keys })).toMatchObject({
+      ALLOW_LOCALHOST_DEV: false,
+      EGRESS_TIMEOUT_MS: DEFAULT_TIMEOUT_MS,
+      EGRESS_MAX_RESPONSE_BYTES: DEFAULT_MAX_RESPONSE_BYTES,
+      MAX_CONNECTORS_PER_USER: DEFAULT_MAX_CONNECTORS_PER_USER,
+    });
+  });
+
+  test.each([
+    ["true", true],
+    ["1", true],
+    ["false", false],
+    ["0", false],
+  ])("parses ALLOW_LOCALHOST_DEV=%s as %s", (value, expected) => {
+    expect(loadConfig({ ...keys, ALLOW_LOCALHOST_DEV: value }).ALLOW_LOCALHOST_DEV).toBe(expected);
+  });
+
+  test("rejects a non-boolean dev flag", () => {
+    expect(() => loadConfig({ ...keys, ALLOW_LOCALHOST_DEV: "yes" })).toThrow(/ALLOW_LOCALHOST_DEV/);
+  });
+
+  test("rejects a zero egress timeout", () => {
+    expect(() => loadConfig({ ...keys, EGRESS_TIMEOUT_MS: "0" })).toThrow(/EGRESS_TIMEOUT_MS/);
+  });
+
+  test("rejects a zero connector limit", () => {
+    expect(() => loadConfig({ ...keys, MAX_CONNECTORS_PER_USER: "0" })).toThrow(
+      /MAX_CONNECTORS_PER_USER/,
+    );
   });
 });
