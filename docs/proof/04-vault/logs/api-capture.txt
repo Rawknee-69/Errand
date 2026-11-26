@@ -1,0 +1,15 @@
+GET /health
+HTTP/1.1 200 OK
+Content-Type: application/json
+Date: Thu, 26 Nov 2026 05:43:02 GMT
+Content-Length: 53
+
+{"service":"gateway","status":"ok","version":"0.1.0"}
+
+GET /api/journal/verify
+HTTP/1.1 200 OK
+Content-Type: application/json
+Date: Thu, 26 Nov 2026 05:43:02 GMT
+Content-Length: 23
+
+{"ok":true,"checked":1}

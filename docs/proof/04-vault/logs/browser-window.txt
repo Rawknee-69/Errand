@@ -1,0 +1,6 @@
+window: http://127.0.0.1:8790
+GET /health -> 200, console errors: none, failed requests: none
+GET /api/journal/verify -> 200, console errors: none, failed requests: none
+network: GET /api/journal/verify (200)
+SSE: no SSE endpoint exists in this phase (the live feed arrives in P7), so no frames were produced.
+server stdout: gateway listening on http://localhost:8790/
