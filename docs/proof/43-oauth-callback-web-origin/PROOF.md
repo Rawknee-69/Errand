@@ -62,8 +62,9 @@
      `oauth_state` (lines 14–18).
    - An unknown state with `Accept: text/html` → `400 application/json`
      `oauth_state`, not a redirect (lines 19–21).
-   - Refreshing the consent page mid-flow, then approving → `302` to
-     `/connectors` (lines 22–32).
+   - Requesting the consent page a second time mid-flow (the driver labels it
+     `refresh mid-flow`), then approving → `302` to `/connectors`
+     (lines 22–32).
    - No HTML accept → `200 application/json`, existing connector detail
      (lines 39–43).
    - Callback with `webOrigin=https://evil.example&next=https://evil.example`
@@ -74,14 +75,14 @@
     `/api/catalog` (`screens/09-before-deadend-desktop.png`, lines 9–13); an
     unknown state still answered `400 application/json` (lines 14–16).
 11. Suite and typecheck run from the final tree; output committed as
-    `logs/test-output.txt` and `logs/typecheck.txt` (334 pass, 0 fail;
+    `logs/test-output.txt` and `logs/typecheck.txt` (335 pass, 0 fail;
     four typecheck targets and four checks green).
 
 ## Findings
 
 | # | Severity | What happened | Artifact | Status |
 |---|---|---|---|---|
-| 1 | low | The Vite dev server answers `GET /favicon.ico` with 404, so the browser console logs “Failed to load resource: … 404” twice. Pre-existing: `apps/web/index.html` declares no icon and this ticket does not touch the web app. | `logs/browser-window.txt` (`console [error]` lines); reproduced directly with `GET /favicon.ico` → 404 | noted, out of scope |
+| 1 | low | The Vite dev server answers `GET /favicon.ico` with 404, so the browser console logs “Failed to load resource: … 404” twice. Pre-existing: `apps/web/index.html` declares no icon and this ticket does not touch the web app. | `logs/browser-window.txt` (`console [error]` lines) and `logs/favicon-404.txt` (`GET /favicon.ico` → 404) | noted, out of scope |
 
 Observations, not defects:
 
@@ -92,6 +93,8 @@ Observations, not defects:
 - The browser console also carries the dev-only Vite connection logs and one
   verbose Chromium accessibility note about password forms. No runtime error
   or failed API request occurs during the flow.
+- The committed transcripts and browser window redact the one-shot `code` and
+  `state` query values; the paths, statuses and `iss` are unchanged.
 - The Connect screen has no OAuth option of its own; the flow was started
   through `POST /api/connectors/oauth/start` from the control-panel origin, the
   same API the paste-a-URL flow uses. Starting OAuth from the UI is outside

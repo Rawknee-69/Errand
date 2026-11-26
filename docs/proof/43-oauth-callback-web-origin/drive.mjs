@@ -38,7 +38,7 @@ async function startFlow(cookie, name) {
 
 async function consent(authorizationUrl) {
   const authorize = new URL(authorizationUrl);
-  for (const attempt of ["open", "refresh mid-flow"]) {
+  for (const attempt of ["open", "second request mid-flow"]) {
     const page = await fetch(authorize);
     await log(`GET ${authorize.pathname} (${attempt}) -> ${page.status}`);
     if (page.status !== 200) throw new Error("consent page unavailable");
@@ -72,7 +72,6 @@ async function callback(cookie, location, note, extra = {}, acceptHtml = true) {
   await log(`  Location: ${response.headers.get("location")}`);
   await log(`  Content-Type: ${response.headers.get("content-type")}`);
   await log(`  body: ${body.replace(/\s+/g, " ").slice(0, 300)}`);
-  return { status: response.status, body };
 }
 
 if (logPath !== undefined) await writeFile(logPath, "");

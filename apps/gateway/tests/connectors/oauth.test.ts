@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { startMockServices } from "@errand/mock-services";
 import { z } from "zod";
-import { createGatewayApp } from "../../src/app.ts";
+import { createGatewayApp, type GatewayAppOptions } from "../../src/app.ts";
 import { createMigratedDatabase, type Db } from "../../src/db/client.ts";
 import { connectors, credentials, journal, oauthAttempts, users } from "../../src/db/schema.ts";
 import { verifyJournal } from "../../src/db/journal.ts";
@@ -113,7 +113,7 @@ function callbackPath(callback: URL): string {
 }
 
 function createTestApp(
-  overrides: { webOrigin?: string; oauthRedirectUri?: string } = {},
+  overrides: Pick<GatewayAppOptions, "webOrigin" | "oauthRedirectUri"> = {},
 ): ReturnType<typeof createGatewayApp> {
   return createGatewayApp(db, {
     userId: USER,

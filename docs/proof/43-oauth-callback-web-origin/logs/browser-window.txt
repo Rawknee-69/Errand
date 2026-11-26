@@ -2,14 +2,14 @@
 02 signed in, connect screen: url=http://127.0.0.1:5173/connect
 03 empty connectors screen: url=http://127.0.0.1:5173/connectors text="CONNECTORS What Errand is connected to Status, the last successful read, and a way back in when the upstream stops accepting the stored credential. Nothing connected Paste an MCP server URL and Errand"
 04 OAuth start via control-panel origin: status=201 connector=18566254-7a77-4a26-ac88-c96685fab3a9
-05 consent page: url=http://127.0.0.1:4002/oauth/authorize?response_type=code&client_id=client_7e498452-b07a-42fa-a50c-681e7d48c759&code_challenge=ZXD7FP9JNYcOsYaikxavmn8XJEZG2_ItzjFqYEV1PvA&code_challenge_method=S256&redirect_uri=http%3A%2F%2F127.0.0.1%3A8788%2Fapi%2Foauth%2Fcallback&state=MwI8m0AnflqgEGJiP50jm-w5F6mJipLrx3V0qMxfE08&scope=calendar.read&resource=http%3A%2F%2F127.0.0.1%3A4002%2Foauth%2Fmcp heading=Authorize Errand
+05 consent page: url=http://127.0.0.1:4002/oauth/authorize?response_type=code&client_id=client_7e498452-b07a-42fa-a50c-681e7d48c759&code_challenge=ZXD7FP9JNYcOsYaikxavmn8XJEZG2_ItzjFqYEV1PvA&code_challenge_method=S256&redirect_uri=http%3A%2F%2F127.0.0.1%3A8788%2Fapi%2Foauth%2Fcallback&state=<redacted>&scope=calendar.read&resource=http%3A%2F%2F127.0.0.1%3A4002%2Foauth%2Fmcp heading=Authorize Errand
 06 redirect landed on: http://127.0.0.1:5173/connectors
 07 connectors screen: cards=1 text="Errand owner Sign out CONTROL PANEL Connect Connectors Catalog Slips Receipts Trust Journal Keys CONNECTORS What Errand is connected to Status, the last successful read, and a way back in when the upstream stops accepting the stored credential. Mock calendar (browser) ACTIVE 127.0.0.1:4002/oauth/mcp TOOLS 3 LAST SUCCESS 26 Nov 2026, 2:18 pm TRANSPORT Streamable HTTP AUTH oauth Refresh catalog"
 08 refresh button driven; first card: "Mock calendar (browser) ACTIVE 127.0.0.1:4002/oauth/mcp TOOLS 3 LAST SUCCESS 26 Nov 2026, 2:18 pm TRANSPORT Streamable HTTP AUTH oauth Refresh catalog"
 09 catalog screen: url=http://127.0.0.1:5173/catalog
 10 phone viewport: scrollWidth=390 innerWidth=390
 11 secret words visible in page: none
-12 before page (no WEB_ORIGIN): url=http://127.0.0.1:8789/api/oauth/callback?code=9ZCDORpKRTxPc8aP2vJ2XGFjRs7OPiHH&state=IAnqFUq-MJdbjkuM68ehAa-dLm7-ABkJAHpw4ZWGQSo&iss=http%3A%2F%2F127.0.0.1%3A4002 heading=Connected links=[{"text":"Open the catalog","href":"/api/catalog"}]
+12 before page (no WEB_ORIGIN): url=http://127.0.0.1:8789/api/oauth/callback?code=<redacted>&state=<redacted>&iss=http%3A%2F%2F127.0.0.1%3A4002 heading=Connected links=[{"text":"Open the catalog","href":"/api/catalog"}]
 console [debug] [vite] connecting...
 console [info] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
 console [debug] [vite] connected.
@@ -56,9 +56,9 @@ network 200 POST http://127.0.0.1:5173/api/auth/login
 network 200 GET http://127.0.0.1:5173/api/catalog
 network 200 GET http://127.0.0.1:5173/api/catalog
 network 201 POST http://127.0.0.1:5173/api/connectors/oauth/start
-network 200 GET http://127.0.0.1:4002/oauth/authorize?response_type=code&client_id=client_7e498452-b07a-42fa-a50c-681e7d48c759&code_challenge=ZXD7FP9JNYcOsYaikxavmn8XJEZG2_ItzjFqYEV1PvA&code_challenge_method=S256&redirect_uri=http%3A%2F%2F127.0.0.1%3A8788%2Fapi%2Foauth%2Fcallback&state=MwI8m0AnflqgEGJiP50jm-w5F6mJipLrx3V0qMxfE08&scope=calendar.read&resource=http%3A%2F%2F127.0.0.1%3A4002%2Foauth%2Fmcp
+network 200 GET http://127.0.0.1:4002/oauth/authorize?response_type=code&client_id=client_7e498452-b07a-42fa-a50c-681e7d48c759&code_challenge=ZXD7FP9JNYcOsYaikxavmn8XJEZG2_ItzjFqYEV1PvA&code_challenge_method=S256&redirect_uri=http%3A%2F%2F127.0.0.1%3A8788%2Fapi%2Foauth%2Fcallback&state=<redacted>&scope=calendar.read&resource=http%3A%2F%2F127.0.0.1%3A4002%2Foauth%2Fmcp
 network 302 POST http://127.0.0.1:4002/oauth/authorize
-network 302 GET http://127.0.0.1:8788/api/oauth/callback?code=i995ZfmoxMH_PF-_hCPMK4qhtFJEb5A0&state=MwI8m0AnflqgEGJiP50jm-w5F6mJipLrx3V0qMxfE08&iss=http%3A%2F%2F127.0.0.1%3A4002
+network 302 GET http://127.0.0.1:8788/api/oauth/callback?code=<redacted>&state=<redacted>&iss=http%3A%2F%2F127.0.0.1%3A4002
 network 200 GET http://127.0.0.1:5173/connectors
 network 304 GET http://127.0.0.1:5173/@vite/client
 network 304 GET http://127.0.0.1:5173/src/main.tsx

@@ -5,9 +5,10 @@
 - `apps/gateway/src/app.ts` — `GatewayAppOptions.webOrigin`; the OAuth callback
   answers `302 Location: ${WEB_ORIGIN}/connectors` for an HTML caller when a web
   origin is configured, and keeps `oauthCallbackPage` otherwise.
-- `apps/gateway/src/config.ts` — exported `webOriginSchema`: an absolute
-  http(s) origin with no credentials, path, query or fragment, normalized to
-  `URL.origin`; `WEB_ORIGIN` is optional.
+- `apps/gateway/src/config.ts` — exported `webOriginSchema` (backed by an
+  internal `httpUrlSchema`): an absolute http(s) origin with no credentials,
+  path, query or fragment, normalized to `URL.origin`; `WEB_ORIGIN` is optional
+  and `OAUTH_REDIRECT_URI` now uses the same http(s) requirement.
 - `apps/gateway/src/index.ts` — passes `config.WEB_ORIGIN` into the app only
   when set.
 - `packages/shared/src/index.ts` — `CONNECTORS_PATH`, the one home for
@@ -15,8 +16,9 @@
 - `apps/web/src/navigation.ts` — the Connectors route uses `CONNECTORS_PATH`.
 - `.env.example` — documents `WEB_ORIGIN` beside `OAUTH_REDIRECT_URI`.
 - `apps/gateway/tests/config.test.ts` — absent, trailing-slash normalization,
-  and rejection of relative, non-http, path-bearing, credentialed and
-  whitespace-padded values.
+  rejection of relative, non-http, path-bearing, credentialed and
+  whitespace-padded `WEB_ORIGIN` values, and the same http(s) check for
+  `OAUTH_REDIRECT_URI`.
 - `apps/gateway/tests/connectors/oauth.test.ts` — one `createTestApp` helper
   replaces three copies of the app setup; tests for the configured redirect,
   the unset HTML fallback (already escaped), the ignored query parameters, the
@@ -56,10 +58,10 @@ apps\gateway\tests\connectors\oauth.test.ts:
 [mcp-sdk] OAuth "invalid_grant" — invalidating the stored tokens and retrying authorization. Cause: "refresh token is invalid, rotated or revoked"
 [mcp-sdk] OAuth "invalid_grant" — invalidating the stored tokens and retrying authorization. Cause: "refresh token is invalid, rotated or revoked"
 
- 334 pass
+ 335 pass
  0 fail
- 990 expect() calls
-Ran 334 tests across 41 files. [2.18s]
+ 993 expect() calls
+Ran 335 tests across 41 files. [2.13s]
 ```
 
 Full output: `docs/proof/43-oauth-callback-web-origin/logs/typecheck.txt` and
@@ -80,6 +82,7 @@ Full output: `docs/proof/43-oauth-callback-web-origin/logs/typecheck.txt` and
   failure response.
 - `logs/browser-window.txt` — console and network for the driven window,
   including `302 GET :8788/api/oauth/callback` → `200 GET :5173/connectors`.
+- `logs/favicon-404.txt` — the pre-existing dev-server 404 cited by finding 1.
 
 ## Versions changed
 
@@ -97,13 +100,21 @@ Standards:
   origin only, no credentials, path, query, fragment or surrounding whitespace,
   normalized to `URL.origin`. The schema is the type-level fix ADR 0002 asks
   for, and `test.each` records each rejected shape.
+- Applied the same http(s) requirement to `OAUTH_REDIRECT_URI` through
+  `httpUrlSchema`, so the class of permissive URL-valued config is closed, not
+  just the one field.
 - Moved the trailing-slash normalization out of the route and into that schema,
   and had the route parse through it.
 - Expanded the proof beyond the happy path: consumed-state replay, unknown
-  state, mid-flow consent refresh, first and non-HTML callers, and an attempted
-  open redirect; regenerated every log in UTF-8 and cited it.
+  state, a second mid-flow consent request, first and non-HTML callers, and an
+  attempted open redirect; regenerated every log in UTF-8 and cited it.
+- Redacted the one-shot `code` and `state` values from the committed
+  transcripts and browser window; added `logs/favicon-404.txt` so finding 1's
+  artifact shows the 404 request.
 - The gateway has no per-request logging; `PROOF.md` says so and points the
   request window at the browser network log and the driver transcripts.
+- Typed the test helper's overrides as `Pick<GatewayAppOptions, …>` and removed
+  the driver's unused return value.
 
 Spec:
 

@@ -115,4 +115,17 @@ describe("loadConfig", () => {
   ])("rejects WEB_ORIGIN=%s", (value) => {
     expect(() => loadConfig({ ...keys, WEB_ORIGIN: value })).toThrow(/WEB_ORIGIN/);
   });
+
+  test("accepts an http(s) redirect URI and rejects other shapes", () => {
+    expect(
+      loadConfig({ ...keys, OAUTH_REDIRECT_URI: "https://gw.example/api/oauth/callback" })
+        .OAUTH_REDIRECT_URI,
+    ).toBe("https://gw.example/api/oauth/callback");
+    expect(() =>
+      loadConfig({ ...keys, OAUTH_REDIRECT_URI: "ftp://gw.example/callback" }),
+    ).toThrow(/OAUTH_REDIRECT_URI/);
+    expect(() =>
+      loadConfig({ ...keys, OAUTH_REDIRECT_URI: "/api/oauth/callback" }),
+    ).toThrow(/OAUTH_REDIRECT_URI/);
+  });
 });

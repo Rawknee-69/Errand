@@ -5,18 +5,18 @@ POST /api/connectors/oauth/start -> 201
 GET /oauth/authorize (open) -> 200
 GET /oauth/authorize (refresh mid-flow) -> 200
 POST /oauth/authorize (Approve) -> 302
-  Location: http://127.0.0.1:8788/api/oauth/callback?code=d2zUWJ7yL0HicQ07aFWNkMFDS9yZjt9e&state=Nd_W_eanSxc1Wq03lWxYOn4pW276Ge8p8xa7xvT2wa0&iss=http%3A%2F%2F127.0.0.1%3A4002
-GET /api/oauth/callback?code=d2zUWJ7yL0HicQ07aFWNkMFDS9yZjt9e&state=Nd_W_eanSxc1Wq03lWxYOn4pW276Ge8p8xa7xvT2wa0&iss=http%3A%2F%2F127.0.0.1%3A4002 (success, Accept: text/html)
+  Location: http://127.0.0.1:8788/api/oauth/callback?code=<redacted>&state=<redacted>&iss=http%3A%2F%2F127.0.0.1%3A4002
+GET /api/oauth/callback?code=<redacted>&state=<redacted>&iss=http%3A%2F%2F127.0.0.1%3A4002 (success, Accept: text/html)
   status: 302
   Location: http://127.0.0.1:5173/connectors
   Content-Type: null
   body: 
-GET /api/oauth/callback?code=d2zUWJ7yL0HicQ07aFWNkMFDS9yZjt9e&state=Nd_W_eanSxc1Wq03lWxYOn4pW276Ge8p8xa7xvT2wa0&iss=http%3A%2F%2F127.0.0.1%3A4002 (replay of the consumed state, Accept: text/html)
+GET /api/oauth/callback?code=<redacted>&state=<redacted>&iss=http%3A%2F%2F127.0.0.1%3A4002 (replay of the consumed state, Accept: text/html)
   status: 400
   Location: null
   Content-Type: application/json
   body: {"error":"oauth_state","message":"The authorization state is unknown or already used"}
-GET /api/oauth/callback?state=nope&code=x (unknown state, Accept: text/html)
+GET /api/oauth/callback?state=<redacted>&code=<redacted> (unknown state, Accept: text/html)
   status: 400
   body: {"error":"oauth_state","message":"The authorization state is unknown or already used"}
 POST /api/connectors/oauth/start -> 201
@@ -24,8 +24,8 @@ POST /api/connectors/oauth/start -> 201
 GET /oauth/authorize (open) -> 200
 GET /oauth/authorize (refresh mid-flow) -> 200
 POST /oauth/authorize (Approve) -> 302
-  Location: http://127.0.0.1:8788/api/oauth/callback?code=q434phqcVhZRh-1PdswL1Z7xUUIru3fg&state=dsOqcPT9pY3kGJmsgz7Z-3J3euoSPtjB3m2kdWCz2cs&iss=http%3A%2F%2F127.0.0.1%3A4002
-GET /api/oauth/callback?code=q434phqcVhZRh-1PdswL1Z7xUUIru3fg&state=dsOqcPT9pY3kGJmsgz7Z-3J3euoSPtjB3m2kdWCz2cs&iss=http%3A%2F%2F127.0.0.1%3A4002 (success after a mid-flow consent refresh)
+  Location: http://127.0.0.1:8788/api/oauth/callback?code=<redacted>&state=<redacted>&iss=http%3A%2F%2F127.0.0.1%3A4002
+GET /api/oauth/callback?code=<redacted>&state=<redacted>&iss=http%3A%2F%2F127.0.0.1%3A4002 (success after a mid-flow consent refresh)
   status: 302
   Location: http://127.0.0.1:5173/connectors
   Content-Type: null
@@ -35,8 +35,8 @@ POST /api/connectors/oauth/start -> 201
 GET /oauth/authorize (open) -> 200
 GET /oauth/authorize (refresh mid-flow) -> 200
 POST /oauth/authorize (Approve) -> 302
-  Location: http://127.0.0.1:8788/api/oauth/callback?code=i_5nFVu1zZXnIoZZAIe9JUayUx3AwLd_&state=YSGbmVk7U6VQDh_dz00oQi_b9L9_j-vp6HrbD16r2Nw&iss=http%3A%2F%2F127.0.0.1%3A4002
-GET /api/oauth/callback?code=i_5nFVu1zZXnIoZZAIe9JUayUx3AwLd_&state=YSGbmVk7U6VQDh_dz00oQi_b9L9_j-vp6HrbD16r2Nw&iss=http%3A%2F%2F127.0.0.1%3A4002 (non-HTML caller)
+  Location: http://127.0.0.1:8788/api/oauth/callback?code=<redacted>&state=<redacted>&iss=http%3A%2F%2F127.0.0.1%3A4002
+GET /api/oauth/callback?code=<redacted>&state=<redacted>&iss=http%3A%2F%2F127.0.0.1%3A4002 (non-HTML caller)
   status: 200
   Location: null
   Content-Type: application/json
@@ -46,8 +46,8 @@ POST /api/connectors/oauth/start -> 201
 GET /oauth/authorize (open) -> 200
 GET /oauth/authorize (refresh mid-flow) -> 200
 POST /oauth/authorize (Approve) -> 302
-  Location: http://127.0.0.1:8788/api/oauth/callback?code=KjpipKsAjUEEyrQqGvKSzt2JOm2Qwnzh&state=85Uzg5t17tElBfGFFMUM9dTd2jRxo25NkHjodQ4HUqE&iss=http%3A%2F%2F127.0.0.1%3A4002
-GET /api/oauth/callback?code=KjpipKsAjUEEyrQqGvKSzt2JOm2Qwnzh&state=85Uzg5t17tElBfGFFMUM9dTd2jRxo25NkHjodQ4HUqE&iss=http%3A%2F%2F127.0.0.1%3A4002&webOrigin=https%3A%2F%2Fevil.example&next=https%3A%2F%2Fevil.example (attempted open redirect)
+  Location: http://127.0.0.1:8788/api/oauth/callback?code=<redacted>&state=<redacted>&iss=http%3A%2F%2F127.0.0.1%3A4002
+GET /api/oauth/callback?code=<redacted>&state=<redacted>&iss=http%3A%2F%2F127.0.0.1%3A4002&webOrigin=https%3A%2F%2Fevil.example&next=https%3A%2F%2Fevil.example (attempted open redirect)
   status: 302
   Location: http://127.0.0.1:5173/connectors
   Content-Type: null
