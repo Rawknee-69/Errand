@@ -9,6 +9,9 @@ export type Tier = "learner" | "license";
 // Vault auth schemes for a connector; stdio is excluded (spec).
 export type ConnectorAuthType = "none" | "bearer" | "header" | "basic" | "oauth";
 
+// OAuth connector lifecycle: pending until the first authorization completes.
+export type ConnectorAuthStatus = "active" | "pending" | "needs_reauth";
+
 // Verifier outcomes per change; `unverified` never implies success (GLOSSARY.md).
 export type VerificationOutcome = "matched" | "mismatched" | "unverified";
 
@@ -47,6 +50,9 @@ export const connectors = sqliteTable(
     url: text("url").notNull(),
     transport: text("transport").notNull(),
     authType: text("auth_type").notNull().$type<ConnectorAuthType>(),
+    authStatus: text("auth_status").notNull().default("active").$type<ConnectorAuthStatus>(),
+    // Short, secret-free reason for the last authorization failure.
+    lastAuthError: text("last_auth_error"),
     createdAt: text("created_at").notNull(),
     updatedAt: text("updated_at").notNull(),
   },
@@ -74,7 +80,8 @@ export const credentials = sqliteTable(
   (t) => [index("credentials_user_id_idx").on(t.userId), index("credentials_service_id_idx").on(t.serviceId)],
 );
 
-// OAuth 2.1 + PKCE in-flight attempts (spec: ticket P2).
+// OAuth 2.1 + PKCE in-flight attempts (spec: ticket P2). The verifier and
+// discovery state live in the Vault under `oauth_attempt:<id>`, never here.
 export const oauthAttempts = sqliteTable(
   "oauth_attempts",
   {
@@ -82,7 +89,6 @@ export const oauthAttempts = sqliteTable(
     userId: text("user_id").notNull().references(() => users.id),
     connectorId: text("connector_id").notNull().references(() => connectors.id),
     state: text("state").notNull().unique(),
-    codeVerifier: text("code_verifier").notNull(),
     redirectUri: text("redirect_uri").notNull(),
     createdAt: text("created_at").notNull(),
     expiresAt: text("expires_at").notNull(),

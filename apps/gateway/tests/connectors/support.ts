@@ -9,6 +9,8 @@ export const connectorSchema = z.object({
   url: z.string(),
   transport: z.string(),
   authType: z.string(),
+  authStatus: z.enum(["active", "pending", "needs_reauth"]),
+  lastAuthError: z.string().nullable(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });
@@ -49,6 +51,12 @@ export const connectResponseSchema = z.object({
   transport: z.string(),
   summary: summarySchema,
   tools: z.array(catalogToolSchema),
+});
+
+export const oauthStartResponseSchema = z.object({
+  connector: connectorSchema,
+  authorizationUrl: z.string(),
+  attemptId: z.string(),
 });
 
 export const catalogResponseSchema = z.object({

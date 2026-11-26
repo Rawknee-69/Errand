@@ -1,0 +1,2 @@
+gateway listening on http://localhost:8788/
+[mcp-sdk] OAuth "invalid_grant" — invalidating the stored tokens and retrying authorization. Cause: "refresh token is invalid, rotated or revoked"

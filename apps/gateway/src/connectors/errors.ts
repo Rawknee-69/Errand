@@ -1,4 +1,4 @@
-export type ConnectorErrorCode = "not_found" | "credential";
+export type ConnectorErrorCode = "not_found" | "credential" | "oauth_state" | "oauth_issuer" | "reauth";
 
 export class ConnectorError extends Error {
   constructor(
