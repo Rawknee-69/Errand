@@ -1,6 +1,6 @@
 import { index, integer, primaryKey, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
-// Tool classes, increasing danger; `unknown` is never allowed (GLOSSARY.md).
+// Tool classes, increasing danger; `unknown` is a class but is never allowed to run (GLOSSARY.md).
 export type ToolClass = "read" | "write" | "send" | "delete" | "spend" | "unknown";
 
 // Trust tiers (GLOSSARY.md): `learner` needs a human tap; `license` auto-approves within caps.
@@ -199,10 +199,13 @@ export const trust = sqliteTable(
 
 // Append-only, hash-chained log of every decision and event (GLOSSARY.md).
 // prev_hash of the first event is 64 zeros; seq is contiguous from 1.
+// `id` is insertion order and never changes; `seq` is the chain number.
+// Ordering uses `id`, not `seq`, so verify can't be tricked by tampering seq.
 export const journal = sqliteTable(
   "journal",
   {
-    seq: integer("seq").primaryKey(),
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    seq: integer("seq").notNull().unique(),
     userId: text("user_id").notNull().references(() => users.id),
     eventType: text("event_type").notNull(),
     payload: text("payload").notNull().default("{}"),

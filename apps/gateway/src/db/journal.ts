@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
-import { and, desc, eq } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import type { Db } from "./client.ts";
+import { scopedGet } from "./scope.ts";
 import { journal } from "./schema.ts";
 
 // Append-only, hash-chained journal (GLOSSARY.md). The first event's
@@ -62,7 +63,7 @@ function hashJournalEvent(event: {
 // Append one event in a transaction: chain seq + prev_hash from the last event.
 export function appendJournalEvent(db: Db, event: JournalEventInput): JournalEvent {
   return db.transaction((tx) => {
-    const last = tx.select().from(journal).orderBy(desc(journal.seq)).limit(1).all()[0];
+    const last = tx.select().from(journal).orderBy(desc(journal.id)).limit(1).all()[0];
     const seq = (last?.seq ?? 0) + 1;
     const prevHash = last?.hash ?? GENESIS_HASH;
     const createdAt = new Date().toISOString();
@@ -83,14 +84,13 @@ export function appendJournalEvent(db: Db, event: JournalEventInput): JournalEve
       }),
       createdAt,
     };
-    tx.insert(journal).values(row).run();
-    return row;
+    return tx.insert(journal).values(row).returning().all()[0]!;
   });
 }
 
 // Recompute the whole chain; report the first broken sequence number, if any.
 export function verifyJournal(db: Db): JournalVerifyResult {
-  const rows = db.select().from(journal).orderBy(journal.seq).all();
+  const rows = db.select().from(journal).orderBy(journal.id).all();
   let prevHash = GENESIS_HASH;
   let expectedSeq = 1;
   let checked = 0;
@@ -107,7 +107,7 @@ export function verifyJournal(db: Db): JournalVerifyResult {
           prevHash: row.prevHash,
           createdAt: row.createdAt,
         });
-    if (!intact) return { ok: false, checked, firstBrokenSeq: row.seq };
+    if (!intact) return { ok: false, checked, firstBrokenSeq: expectedSeq };
     prevHash = row.hash;
     expectedSeq = row.seq + 1;
     checked++;
@@ -117,13 +117,9 @@ export function verifyJournal(db: Db): JournalVerifyResult {
 
 // Per-user read, scoped by user id at the query layer.
 export function listJournalEvents(db: Db, userId: string): JournalEvent[] {
-  return db.select().from(journal).where(eq(journal.userId, userId)).orderBy(journal.seq).all();
+  return db.select().from(journal).where(eq(journal.userId, userId)).orderBy(journal.id).all();
 }
 
 export function getJournalEvent(db: Db, userId: string, seq: number): JournalEvent | undefined {
-  return db
-    .select()
-    .from(journal)
-    .where(and(eq(journal.userId, userId), eq(journal.seq, seq)))
-    .all()[0];
+  return scopedGet(db, journal, journal.userId, userId, journal.seq, seq);
 }

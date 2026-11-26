@@ -93,8 +93,18 @@ describe("hash-chained journal", () => {
 
     db.$client.query("DELETE FROM journal WHERE seq = ?").run(2);
 
-    const result = verifyJournal(db);
-    expect(result.ok).toBe(false);
+    expect(verifyJournal(db)).toEqual({ ok: false, checked: 1, firstBrokenSeq: 2 });
+  });
+
+  test("tampering with the seq column itself cannot reorder or hide a break", () => {
+    const db = freshDb();
+    appendJournalEvent(db, { userId: "user-a", eventType: "a", payload: {} });
+    appendJournalEvent(db, { userId: "user-a", eventType: "b", payload: {} });
+    appendJournalEvent(db, { userId: "user-a", eventType: "c", payload: {} });
+
+    db.$client.query("UPDATE journal SET seq = ? WHERE seq = ?").run(99, 2);
+
+    expect(verifyJournal(db)).toEqual({ ok: false, checked: 1, firstBrokenSeq: 2 });
   });
 
   test("journal reads are scoped by user id at the query layer", () => {

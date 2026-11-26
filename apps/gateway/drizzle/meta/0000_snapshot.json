@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "bbfcbefc-6d3b-46e3-a6fd-61e290d29ad9",
+  "id": "5efbe613-83c1-4dd4-be7d-a456d0161ec2",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "agent_keys": {
@@ -441,10 +441,17 @@
     "journal": {
       "name": "journal",
       "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": true
+        },
         "seq": {
           "name": "seq",
           "type": "integer",
-          "primaryKey": true,
+          "primaryKey": false,
           "notNull": true,
           "autoincrement": false
         },
@@ -493,6 +500,13 @@
         }
       },
       "indexes": {
+        "journal_seq_unique": {
+          "name": "journal_seq_unique",
+          "columns": [
+            "seq"
+          ],
+          "isUnique": true
+        },
         "journal_user_id_idx": {
           "name": "journal_user_id_idx",
           "columns": [

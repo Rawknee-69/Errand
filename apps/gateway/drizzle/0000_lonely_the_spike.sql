@@ -60,7 +60,8 @@ CREATE TABLE `credentials` (
 CREATE INDEX `credentials_user_id_idx` ON `credentials` (`user_id`);--> statement-breakpoint
 CREATE INDEX `credentials_service_id_idx` ON `credentials` (`service_id`);--> statement-breakpoint
 CREATE TABLE `journal` (
-	`seq` integer PRIMARY KEY NOT NULL,
+	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
+	`seq` integer NOT NULL,
 	`user_id` text NOT NULL,
 	`event_type` text NOT NULL,
 	`payload` text DEFAULT '{}' NOT NULL,
@@ -70,6 +71,7 @@ CREATE TABLE `journal` (
 	FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE no action
 );
 --> statement-breakpoint
+CREATE UNIQUE INDEX `journal_seq_unique` ON `journal` (`seq`);--> statement-breakpoint
 CREATE INDEX `journal_user_id_idx` ON `journal` (`user_id`);--> statement-breakpoint
 CREATE TABLE `oauth_attempts` (
 	`id` text PRIMARY KEY NOT NULL,
