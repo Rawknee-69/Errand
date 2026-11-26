@@ -27,6 +27,8 @@ Runtime on the same machine: `bun 1.4.4`, `node v26.13.1`.
 | `@types/react` | web (dev) | 19.3.3 | `latest` | `latest => 19.3.3` |
 | `@types/react-dom` | web (dev) | 19.3.0 | `latest` | `latest => 19.3.0` |
 | `@errand/shared` | gateway | 0.1.0 | n/a | Local workspace (`workspace:*`), no registry version |
+| `drizzle-orm` | gateway | 0.45.4 | `latest` | `latest => 0.45.4` |
+| `drizzle-kit` | gateway (dev) | 0.31.11 | `latest` | `latest => 0.31.11` |
 
 Captured output of the checks above, one line per package:
 
@@ -41,6 +43,8 @@ vite => latest 8.3.8
 @vitejs/plugin-react => latest 6.3.0
 @types/react => latest 19.3.3
 @types/react-dom => latest 19.3.0
+drizzle-orm => latest 0.45.4
+drizzle-kit => latest 0.31.11
 ```
 
 ## Verified but not installed yet
@@ -54,12 +58,13 @@ entry here is a bug.
 | `@modelcontextprotocol/server` | 2.4.0 | `latest => 2.4.0` |
 | `@modelcontextprotocol/client` | 2.4.0 | `latest => 2.4.0` |
 | `@modelcontextprotocol/hono` | 2.0.2 | `latest => 2.0.2` |
-| `drizzle-orm` | 0.45.4 | `latest => 0.45.4` |
 | `jose` | 6.2.18 | `latest => 6.2.18` |
 | `ajv` | 8.20.0 | `latest => 8.20.0` |
 
 `drizzle-orm` is still pre-1.0: its `latest` is 0.45.4 and the 1.0 line is RC
-only, so 0.45.4 is the stable choice. See `docs/DEVIATIONS.md`.
+only, so 0.45.4 is the stable choice. See `docs/DEVIATIONS.md`. The database is
+SQLite via `bun:sqlite` (Postgres deployment is out of scope; P10 pairs SQLite
+with Litestream).
 
 ## How a bump is made
 
