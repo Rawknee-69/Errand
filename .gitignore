@@ -1,0 +1,18 @@
+node_modules/
+dist/
+coverage/
+
+# Local skill junction into .agents/; committing it would duplicate the skills.
+.claude/
+
+.env
+.env.*
+!.env.example
+
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+
+*.log
+.DS_Store
