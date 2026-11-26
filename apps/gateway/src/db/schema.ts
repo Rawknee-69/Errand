@@ -98,12 +98,17 @@ export const tools = sqliteTable(
     name: text("name").notNull(),
     // What the agent sees: `<connector>__<tool>`, sanitised and unique per user.
     agentName: text("agent_name").notNull().default(""),
+    // Pinned definition: exactly what the human saw and approved.
     description: text("description").notNull().default(""),
     inputSchema: text("input_schema").notNull().default("{}"),
     annotations: text("annotations").notNull().default("{}"),
     class: text("class").notNull().default("unknown").$type<ToolClass>(),
     // The hash the human saw and approved; observedHash follows the upstream definition.
     definitionHash: text("definition_hash").notNull(),
+    observedDescription: text("observed_description").notNull().default(""),
+    observedInputSchema: text("observed_input_schema").notNull().default("{}"),
+    observedAnnotations: text("observed_annotations").notNull().default("{}"),
+    observedClass: text("observed_class").notNull().default("unknown").$type<ToolClass>(),
     observedHash: text("observed_hash").notNull().default(""),
     state: text("state").notNull().default("new").$type<ToolState>(),
     requestable: integer("requestable", { mode: "boolean" }).notNull().default(false),

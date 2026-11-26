@@ -160,6 +160,8 @@ describe("ingestTools", () => {
       now: "2026-01-02T00:00:00.000Z",
     });
     const changed = listCatalog(db, "user-a")[0]!;
+    expect(changed.description).toBe("List events");
+    expect(changed.observedDescription).toBe("Changed");
 
     const approved = approveTool(db, "user-a", changed.id, "2026-01-03T00:00:00.000Z");
 
@@ -167,6 +169,38 @@ describe("ingestTools", () => {
     expect(approved.requestable).toBe(true);
     expect(approved.changedAt).toBeNull();
     expect(approved.definitionHash).toBe(changed.observedHash);
+    expect(approved.description).toBe("Changed");
+  });
+
+  test("keeps the pinned class until the changed definition is approved", () => {
+    ingestTools(db, {
+      userId: "user-a",
+      connectorId: "conn-1",
+      connectorName: "Calendar",
+      tools: [{ name: "zeta", annotations: { destructiveHint: true } }],
+      now: TS,
+    });
+    ingestTools(db, {
+      userId: "user-a",
+      connectorId: "conn-1",
+      connectorName: "Calendar",
+      tools: [
+        {
+          name: "zeta",
+          description: "Now claims to be harmless",
+          annotations: { readOnlyHint: true },
+        },
+      ],
+      now: "2026-01-02T00:00:00.000Z",
+    });
+    const changed = listCatalog(db, "user-a")[0]!;
+    expect(changed.class).toBe("delete");
+    expect(changed.observedClass).toBe("read");
+    expect(changed.requestable).toBe(false);
+
+    const approved = approveTool(db, "user-a", changed.id);
+    expect(approved.class).toBe("read");
+    expect(approved.requestable).toBe(true);
   });
 
   test("marks a tool the server no longer lists as removed and blocks it", () => {

@@ -105,6 +105,10 @@ export function ingestTools(db: Db, options: IngestOptions): IngestSummary {
             annotations,
             class: toolClass,
             definitionHash: hash,
+            observedDescription: description,
+            observedInputSchema: inputSchema,
+            observedAnnotations: annotations,
+            observedClass: toolClass,
             observedHash: hash,
             state,
             requestable: requestableFor(state, toolClass),
@@ -133,13 +137,16 @@ export function ingestTools(db: Db, options: IngestOptions): IngestSummary {
                   previous.id,
                 )
               : previous.agentName,
-          description,
-          inputSchema,
-          annotations,
-          class: toolClass,
+          ...(changed
+            ? {}
+            : { description, inputSchema, annotations, class: toolClass }),
+          observedDescription: description,
+          observedInputSchema: inputSchema,
+          observedAnnotations: annotations,
+          observedClass: toolClass,
           observedHash: hash,
           state,
-          requestable: requestableFor(state, toolClass),
+          requestable: requestableFor(state, changed ? previous.class : toolClass),
           changedAt: changed ? (previous.changedAt ?? now) : null,
           removedAt: null,
           updatedAt: now,
@@ -168,20 +175,32 @@ export function ingestTools(db: Db, options: IngestOptions): IngestSummary {
   return summary;
 }
 
+export function pinToolDefinition(
+  db: Db,
+  userId: string,
+  row: CatalogTool,
+  now = new Date().toISOString(),
+): CatalogTool {
+  db.update(tools)
+    .set({
+      description: row.observedDescription,
+      inputSchema: row.observedInputSchema,
+      annotations: row.observedAnnotations,
+      class: row.observedClass,
+      definitionHash: row.observedHash,
+      state: "active",
+      requestable: defaultRequestable(row.observedClass),
+      changedAt: null,
+      updatedAt: now,
+    })
+    .where(and(eq(tools.userId, userId), eq(tools.id, row.id)))
+    .run();
+  return getCatalogTool(db, userId, row.id)!;
+}
+
 export function approveTool(db: Db, userId: string, toolId: string, now = new Date().toISOString()): CatalogTool {
   const row = getCatalogTool(db, userId, toolId);
   if (row === undefined) throw new Error(`Tool ${toolId} not found`);
   if (row.state === "removed") throw new Error(`Cannot approve a removed tool: ${row.name}`);
-
-  db.update(tools)
-    .set({
-      definitionHash: row.observedHash,
-      state: "active",
-      requestable: defaultRequestable(row.class),
-      changedAt: null,
-      updatedAt: now,
-    })
-    .where(and(eq(tools.userId, userId), eq(tools.id, toolId)))
-    .run();
-  return getCatalogTool(db, userId, toolId)!;
+  return pinToolDefinition(db, userId, row, now);
 }

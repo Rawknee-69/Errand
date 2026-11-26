@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { canonicalJson } from "../db/journal.ts";
-import type { ToolAnnotations } from "./classifier.ts";
+import type { DiscoveredTool } from "./catalog.ts";
 
 const MAX_AGENT_NAME = 64;
 export const MAX_DESCRIPTION = 500;
@@ -40,15 +40,7 @@ export function sanitiseDescription(raw: string, max = MAX_DESCRIPTION): string 
   return `${cleaned.slice(0, Math.max(0, max - 1))}…`;
 }
 
-export type ToolDefinition = {
-  name: string;
-  description?: string | undefined;
-  inputSchema?: unknown;
-  outputSchema?: unknown;
-  annotations?: ToolAnnotations | undefined;
-};
-
-export function hashToolDefinition(tool: ToolDefinition): string {
+export function hashToolDefinition(tool: DiscoveredTool): string {
   return createHash("sha256")
     .update(
       canonicalJson({

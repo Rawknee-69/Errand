@@ -9,74 +9,32 @@ import { getUser } from "./db/scoped-reads.ts";
 import { EgressRefusal } from "./egress/guard.ts";
 import { ConnectorLimitError } from "./connectors/quota.ts";
 import { listCatalog, type CatalogTool } from "./connectors/catalog.ts";
-import { McpConnectError, type ConnectorAuth, type DiscoverOptions } from "./connectors/mcp.ts";
+import { McpConnectError, type DiscoverOptions } from "./connectors/mcp.ts";
+import { connectorAuthInputSchema, toConnectorAuth } from "./connectors/auth.ts";
+import { ConnectorError } from "./connectors/errors.ts";
 import {
   approveCatalogTool,
-  ConnectorError,
   connectConnector,
   listConnectors,
   probeUrl,
   refreshConnector,
+  type ConnectResult,
   type ConnectorServiceDeps,
 } from "./connectors/service.ts";
 import { CredentialStore } from "./vault/credentials.ts";
 import { VaultKeyring } from "./vault/keyring.ts";
 import { Vault } from "./vault/vault.ts";
 
+export const DEFAULT_OWNER_ID = "owner";
+
 export type GatewayAppOptions = {
   userId?: string;
   keyring?: VaultKeyring;
-  discover?: DiscoverOptions;
+  discoverOptions?: DiscoverOptions;
   maxConnectors?: number;
 };
 
 const probeSchema = z.object({ url: z.string().min(1) });
-
-const headerName = z
-  .string()
-  .regex(/^[A-Za-z0-9-]+$/, "Header names may only contain letters, digits and hyphens")
-  .refine(
-    (name) =>
-      !["host", "content-length", "connection", "transfer-encoding", "authorization"].includes(
-        name.toLowerCase(),
-      ),
-    { message: "That header is managed by the gateway" },
-  );
-
-const connectorBase = {
-  name: z.string().min(1).max(120),
-  url: z.string().min(1),
-};
-
-const connectSchema = z.discriminatedUnion("authType", [
-  z.object({ ...connectorBase, authType: z.literal("none") }),
-  z.object({ ...connectorBase, authType: z.literal("bearer"), token: z.string().min(1) }),
-  z.object({
-    ...connectorBase,
-    authType: z.literal("header"),
-    headerName,
-    headerValue: z.string().min(1),
-  }),
-  z.object({
-    ...connectorBase,
-    authType: z.literal("basic"),
-    username: z.string().min(1),
-    password: z.string().min(1),
-  }),
-]);
-
-function toConnectorAuth(input: z.infer<typeof connectSchema>): ConnectorAuth {
-  switch (input.authType) {
-    case "none":
-      return { type: "none" };
-    case "bearer":
-      return { type: "bearer", token: input.token };
-    case "header":
-      return { type: "header", headerName: input.headerName, value: input.headerValue };
-    case "basic":
-      return { type: "basic", username: input.username, password: input.password };
-  }
-}
 
 export type CatalogToolView = {
   id: string;
@@ -88,6 +46,10 @@ export type CatalogToolView = {
   annotations: string;
   class: ToolClass;
   definitionHash: string;
+  observedDescription: string;
+  observedInputSchema: string;
+  observedAnnotations: string;
+  observedClass: ToolClass;
   observedHash: string;
   state: ToolState;
   requestable: boolean;
@@ -108,6 +70,10 @@ export function catalogToolView(row: CatalogTool): CatalogToolView {
     annotations: row.annotations,
     class: row.class,
     definitionHash: row.definitionHash,
+    observedDescription: row.observedDescription,
+    observedInputSchema: row.observedInputSchema,
+    observedAnnotations: row.observedAnnotations,
+    observedClass: row.observedClass,
     observedHash: row.observedHash,
     state: row.state,
     requestable: row.requestable,
@@ -123,11 +89,11 @@ export function createGatewayApp(
   options: GatewayAppOptions = {},
 ): Hono {
   const app = new Hono();
-  const userId = options.userId ?? "owner";
+  const userId = options.userId ?? DEFAULT_OWNER_ID;
   if (getUser(db, userId) === undefined) {
     db.insert(users).values({ id: userId, name: userId, createdAt: new Date().toISOString() }).run();
   }
-  const discover = options.discover ?? {};
+  const discoverOptions = options.discoverOptions ?? {};
   const keyring = options.keyring;
 
   function serviceDeps(): ConnectorServiceDeps {
@@ -139,8 +105,19 @@ export function createGatewayApp(
       userId,
       vault: new Vault(db, keyring, userId),
       store: new CredentialStore(db, keyring, userId),
-      discover,
+      discoverOptions,
       ...(options.maxConnectors === undefined ? {} : { maxConnectors: options.maxConnectors }),
+    };
+  }
+
+  function connectorDetail(result: ConnectResult) {
+    return {
+      connector: result.connector,
+      transport: result.transport,
+      summary: result.summary,
+      tools: listCatalog(db, userId)
+        .filter((tool) => tool.connectorId === result.connector.id)
+        .map(catalogToolView),
     };
   }
 
@@ -157,43 +134,24 @@ export function createGatewayApp(
 
   app.post("/api/connectors/probe", async (c) => {
     const body = probeSchema.parse(await c.req.json());
-    return c.json(await probeUrl(discover, body.url));
+    return c.json(await probeUrl(discoverOptions, body.url));
   });
 
   app.get("/api/connectors", (c) => c.json({ connectors: listConnectors(db, userId) }));
 
   app.post("/api/connectors", async (c) => {
-    const body = connectSchema.parse(await c.req.json());
+    const body = connectorAuthInputSchema.parse(await c.req.json());
     const result = await connectConnector(serviceDeps(), {
       name: body.name,
       url: body.url,
       auth: toConnectorAuth(body),
     });
-    const tools = listCatalog(db, userId)
-      .filter((tool) => tool.connectorId === result.connector.id)
-      .map(catalogToolView);
-    return c.json(
-      {
-        connector: result.connector,
-        transport: result.transport,
-        summary: result.summary,
-        tools,
-      },
-      201,
-    );
+    return c.json(connectorDetail(result), 201);
   });
 
   app.post("/api/connectors/:id/refresh", async (c) => {
     const result = await refreshConnector(serviceDeps(), c.req.param("id"));
-    const tools = listCatalog(db, userId)
-      .filter((tool) => tool.connectorId === result.connector.id)
-      .map(catalogToolView);
-    return c.json({
-      connector: result.connector,
-      transport: result.transport,
-      summary: result.summary,
-      tools,
-    });
+    return c.json(connectorDetail(result));
   });
 
   app.get("/api/catalog", (c) =>

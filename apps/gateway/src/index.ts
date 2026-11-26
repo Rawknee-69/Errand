@@ -1,4 +1,4 @@
-import { createGatewayApp } from "./app.ts";
+import { createGatewayApp, DEFAULT_OWNER_ID } from "./app.ts";
 import { loadConfig } from "./config.ts";
 import { createMigratedDatabase } from "./db/client.ts";
 import { VaultKeyring } from "./vault/keyring.ts";
@@ -10,9 +10,9 @@ const keyring = new VaultKeyring(
   config.VAULT_KEY_PREVIOUS === undefined ? [] : [config.VAULT_KEY_PREVIOUS],
 );
 const app = createGatewayApp(db, {
-  userId: "owner",
+  userId: DEFAULT_OWNER_ID,
   keyring,
-  discover: {
+  discoverOptions: {
     allowLocalhostDev: config.ALLOW_LOCALHOST_DEV,
     timeoutMs: config.EGRESS_TIMEOUT_MS,
     maxResponseBytes: config.EGRESS_MAX_RESPONSE_BYTES,

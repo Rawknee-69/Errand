@@ -19,7 +19,7 @@
 2. `POST /api/connectors/probe` for the open calendar — reports
    `streamable-http`, 3 tools, no auth.
 3. `POST /api/connectors/probe` for the secure calendar — reports
-   `requiresAuth: true`, no transport, no tool leak.
+   `requiresAuth: true` with `authHint: "bearer"`, no transport, no tool leak.
 4. `POST /api/connectors` for the calendar with `authType: none` — 201,
    Streamable HTTP, 3 tools: `calendar__list_events` read/requestable,
    `calendar__create_event` write/requestable,
@@ -37,9 +37,13 @@
 10. Mock server changes the `list_events` description (a rug pull).
 11. `POST /api/connectors/:id/refresh` — `changed: 1`; `list_events` has a new
     `observedHash`, its old `definitionHash` is still pinned, `state: changed`,
-    `requestable: false`, `changedAt` set.
-12. `POST /api/catalog/:id/approve` — re-pins the observed hash, `state:
-    active`, `requestable: true`, `changedAt: null`.
+    `requestable: false`, `changedAt` set. The pinned `description` is still
+    `List calendar events in a date range.` and `observedDescription` is the
+    new hostile text, so the human can see what they are being asked to
+    approve rather than a bare hash.
+12. `POST /api/catalog/:id/approve` — copies the observed definition over the
+    pinned one, sets `state: active`, `requestable: true`, `changedAt: null`,
+    and journals the previous and new class and hash.
 13. `GET /api/catalog`, `GET /api/connectors`, `GET /api/journal/verify` —
     catalog and connectors read back; journal verifies `{ok:true, checked:10}`.
 14. Database scan over `journal`, `connectors` and `credentials`: every stored

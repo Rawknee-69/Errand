@@ -55,6 +55,10 @@ describe("classifyTool", () => {
     expect(classifyTool({ name: "zeta" })).toBe("unknown");
   });
 
+  test("leaves a decoy-shaped export tool unknown and therefore blocked", () => {
+    expect(classifyTool({ name: "export_all_contacts" })).toBe("unknown");
+  });
+
   test("never lets an annotation loosen a heuristic past a dangerous verb", () => {
     expect(
       classifyTool({ name: "transfer_funds", annotations: { readOnlyHint: true } }),

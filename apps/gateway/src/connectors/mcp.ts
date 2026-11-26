@@ -6,14 +6,9 @@ import {
   type Transport,
 } from "@modelcontextprotocol/client";
 import { DEFAULT_TIMEOUT_MS, EgressRefusal, egressRequest, type EgressOptions } from "../egress/guard.ts";
+import { authHeaders, type ConnectorAuth } from "./auth.ts";
 import type { DiscoveredTool } from "./catalog.ts";
 import type { ToolAnnotations } from "./classifier.ts";
-
-export type ConnectorAuth =
-  | { type: "none" }
-  | { type: "bearer"; token: string }
-  | { type: "header"; headerName: string; value: string }
-  | { type: "basic"; username: string; password: string };
 
 export type McpTransportKind = "streamable-http" | "sse";
 
@@ -33,24 +28,10 @@ export class McpConnectError extends Error {
   constructor(
     readonly code: McpConnectErrorCode,
     message: string,
+    readonly challenge?: string,
   ) {
     super(message);
     this.name = "McpConnectError";
-  }
-}
-
-function authHeaders(auth: ConnectorAuth): Record<string, string> {
-  switch (auth.type) {
-    case "none":
-      return {};
-    case "bearer":
-      return { authorization: `Bearer ${auth.token}` };
-    case "header":
-      return { [auth.headerName]: auth.value };
-    case "basic":
-      return {
-        authorization: `Basic ${Buffer.from(`${auth.username}:${auth.password}`).toString("base64")}`,
-      };
   }
 }
 
@@ -93,6 +74,7 @@ async function connectOnce(
   auth: ConnectorAuth,
   options: DiscoverOptions,
   statuses: number[],
+  challenges: string[],
 ): Promise<Attempt> {
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const headers = authHeaders(auth);
@@ -101,6 +83,10 @@ async function connectOnce(
     const requestInit = input instanceof Request ? { ...init, method: init?.method ?? input.method } : init;
     return egressRequest(target, requestInit ?? {}, { ...options, timeoutMs }).then((response) => {
       statuses.push(response.status);
+      const challenge = response.headers.get("www-authenticate");
+      if (challenge !== null && (response.status === 401 || response.status === 403)) {
+        challenges.push(challenge);
+      }
       return response;
     });
   };
@@ -146,11 +132,12 @@ export async function discoverMcpTools(
   options: DiscoverOptions = {},
 ): Promise<McpConnection> {
   const statuses: number[] = [];
+  const challenges: string[] = [];
   const failures: string[] = [];
 
   for (const kind of ["streamable-http", "sse"] as const) {
     try {
-      const attempt = await connectOnce(kind, url, auth, options, statuses);
+      const attempt = await connectOnce(kind, url, auth, options, statuses, challenges);
       await attempt.client.close().catch(() => undefined);
       return attempt.connection;
     } catch (error) {
@@ -163,6 +150,14 @@ export async function discoverMcpTools(
   }
 
   if (statuses.some((status) => status === 401 || status === 403)) {
+    const challenge = challenges.at(0);
+    if (challenge !== undefined) {
+      throw new McpConnectError(
+        "auth",
+        `The server rejected the supplied credentials (${url})`,
+        challenge,
+      );
+    }
     throw new McpConnectError("auth", `The server rejected the supplied credentials (${url})`);
   }
   throw new McpConnectError("connect", `Could not connect to ${url} — ${failures.join("; ")}`);

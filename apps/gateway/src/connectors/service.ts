@@ -1,6 +1,5 @@
 import { randomUUID } from "node:crypto";
 import { and, eq } from "drizzle-orm";
-import { z } from "zod";
 import type { Db } from "../db/client.ts";
 import { appendJournalEvent } from "../db/journal.ts";
 import { scopedGet, scopedList } from "../db/scoped-reads.ts";
@@ -8,13 +7,21 @@ import { connectors, credentials, type ConnectorAuthType } from "../db/schema.ts
 import type { CredentialStore } from "../vault/credentials.ts";
 import type { Vault } from "../vault/vault.ts";
 import { assertFetchableUrl } from "../egress/guard.ts";
-import { approveTool, getCatalogTool, ingestTools, type IngestSummary, type DiscoveredTool } from "./catalog.ts";
+import { parseCredential, serialiseCredential, type ConnectorAuth } from "./auth.ts";
+import {
+  getCatalogTool,
+  ingestTools,
+  pinToolDefinition,
+  type DiscoveredTool,
+  type IngestSummary,
+} from "./catalog.ts";
+import { ConnectorError } from "./errors.ts";
 import { assertConnectorQuota } from "./quota.ts";
 import {
   discoverMcpTools,
   McpConnectError,
-  type ConnectorAuth,
   type DiscoverOptions,
+  type McpConnection,
   type McpTransportKind,
 } from "./mcp.ts";
 
@@ -23,7 +30,7 @@ export type ConnectorServiceDeps = {
   userId: string;
   vault: Vault;
   store: CredentialStore;
-  discover: DiscoverOptions;
+  discoverOptions: DiscoverOptions;
   maxConnectors?: number;
 };
 
@@ -37,10 +44,13 @@ export type ConnectorView = {
   updatedAt: string;
 };
 
+export type AuthHint = "bearer" | "basic" | "header";
+
 export type ProbeResult = {
   reachable: boolean;
   transport: McpTransportKind | null;
   requiresAuth: boolean;
+  authHint: AuthHint | null;
   toolCount: number;
 };
 
@@ -50,18 +60,6 @@ export type ConnectResult = {
   tools: DiscoveredTool[];
   summary: IngestSummary;
 };
-
-export type ConnectorErrorCode = "not_found" | "credential";
-
-export class ConnectorError extends Error {
-  constructor(
-    readonly code: ConnectorErrorCode,
-    message: string,
-  ) {
-    super(message);
-    this.name = "ConnectorError";
-  }
-}
 
 export function connectorView(row: typeof connectors.$inferSelect): ConnectorView {
   return {
@@ -79,72 +77,47 @@ export function listConnectors(db: Db, userId: string): ConnectorView[] {
   return scopedList(db, connectors, connectors.userId, userId).map(connectorView);
 }
 
-const bearerSecret = z.object({ token: z.string().min(1) });
-const headerSecret = z.object({ headerName: z.string().min(1), value: z.string().min(1) });
-const basicSecret = z.object({ username: z.string().min(1), password: z.string().min(1) });
-
-export function parseCredential(authType: ConnectorAuthType, secret: string): ConnectorAuth {
-  let raw: unknown;
-  try {
-    raw = JSON.parse(secret);
-  } catch {
-    throw new ConnectorError("credential", "The stored credential is not valid JSON");
-  }
-  if (authType === "bearer") {
-    const parsed = bearerSecret.safeParse(raw);
-    if (!parsed.success) throw new ConnectorError("credential", "The stored bearer token is invalid");
-    return { type: "bearer", token: parsed.data.token };
-  }
-  if (authType === "header") {
-    const parsed = headerSecret.safeParse(raw);
-    if (!parsed.success) throw new ConnectorError("credential", "The stored header credential is invalid");
-    return { type: "header", headerName: parsed.data.headerName, value: parsed.data.value };
-  }
-  if (authType === "basic") {
-    const parsed = basicSecret.safeParse(raw);
-    if (!parsed.success) throw new ConnectorError("credential", "The stored basic credential is invalid");
-    return { type: "basic", username: parsed.data.username, password: parsed.data.password };
-  }
-  throw new ConnectorError("credential", `Auth type ${authType} has no stored credential`);
-}
-
-function credentialSecret(auth: ConnectorAuth): string | undefined {
-  switch (auth.type) {
-    case "none":
-      return undefined;
-    case "bearer":
-      return JSON.stringify({ token: auth.token });
-    case "header":
-      return JSON.stringify({ headerName: auth.headerName, value: auth.value });
-    case "basic":
-      return JSON.stringify({ username: auth.username, password: auth.password });
-  }
-}
-
 function connectorHost(url: string): string {
-  try {
-    return new URL(url).host;
-  } catch {
-    return "invalid-url";
-  }
+  return new URL(url).host;
 }
 
-export async function probeUrl(discover: DiscoverOptions, url: string): Promise<ProbeResult> {
-  await assertFetchableUrl(url, discover);
+function authHint(challenge: string | undefined): AuthHint | null {
+  const scheme = challenge?.split(/\s+/)[0]?.toLowerCase();
+  if (scheme === "bearer") return "bearer";
+  if (scheme === "basic") return "basic";
+  if (scheme !== undefined && scheme !== "") return "header";
+  return null;
+}
+
+export async function probeUrl(discoverOptions: DiscoverOptions, url: string): Promise<ProbeResult> {
+  await assertFetchableUrl(url, discoverOptions);
   try {
-    const connection = await discoverMcpTools(url, { type: "none" }, discover);
+    const connection = await discoverMcpTools(url, { type: "none" }, discoverOptions);
     return {
       reachable: true,
       transport: connection.transport,
       requiresAuth: false,
+      authHint: null,
       toolCount: connection.tools.length,
     };
   } catch (error) {
     if (error instanceof McpConnectError && error.code === "auth") {
-      return { reachable: true, transport: null, requiresAuth: true, toolCount: 0 };
+      return {
+        reachable: true,
+        transport: null,
+        requiresAuth: true,
+        authHint: authHint(error.challenge),
+        toolCount: 0,
+      };
     }
     if (error instanceof McpConnectError && error.code === "connect") {
-      return { reachable: false, transport: null, requiresAuth: false, toolCount: 0 };
+      return {
+        reachable: false,
+        transport: null,
+        requiresAuth: false,
+        authHint: null,
+        toolCount: 0,
+      };
     }
     throw error;
   }
@@ -155,11 +128,43 @@ async function discoverWithStoredAuth(
   connectorId: string,
   authType: ConnectorAuthType,
   url: string,
-): Promise<Awaited<ReturnType<typeof discoverMcpTools>>> {
-  if (authType === "none") return discoverMcpTools(url, { type: "none" }, deps.discover);
+): Promise<McpConnection> {
+  if (authType === "none") return discoverMcpTools(url, { type: "none" }, deps.discoverOptions);
   return deps.vault.withCredential(connectorId, (secret) =>
-    discoverMcpTools(url, parseCredential(authType, secret), deps.discover),
+    discoverMcpTools(url, parseCredential(authType, secret), deps.discoverOptions),
   );
+}
+
+function applyDiscovery(
+  deps: ConnectorServiceDeps,
+  connectorId: string,
+  connectorName: string,
+  connection: McpConnection,
+  eventType: "catalog.ingested" | "catalog.refreshed",
+): IngestSummary {
+  deps.db
+    .update(connectors)
+    .set({ transport: connection.transport, updatedAt: new Date().toISOString() })
+    .where(and(eq(connectors.userId, deps.userId), eq(connectors.id, connectorId)))
+    .run();
+  const summary = ingestTools(deps.db, {
+    userId: deps.userId,
+    connectorId,
+    connectorName,
+    tools: connection.tools,
+  });
+  appendJournalEvent(deps.db, {
+    userId: deps.userId,
+    eventType,
+    payload: { connectorId, ...summary },
+  });
+  return summary;
+}
+
+function connectorRow(deps: ConnectorServiceDeps, connectorId: string) {
+  const row = scopedGet(deps.db, connectors, connectors.userId, deps.userId, connectors.id, connectorId);
+  if (row === undefined) throw new ConnectorError("not_found", `Connector ${connectorId} not found`);
+  return row;
 }
 
 export async function connectConnector(
@@ -167,7 +172,7 @@ export async function connectConnector(
   input: { name: string; url: string; auth: ConnectorAuth },
 ): Promise<ConnectResult> {
   assertConnectorQuota(deps.db, deps.userId, deps.maxConnectors);
-  const normalized = (await assertFetchableUrl(input.url, deps.discover)).href;
+  const normalized = (await assertFetchableUrl(input.url, deps.discoverOptions)).href;
   const now = new Date().toISOString();
   const id = randomUUID();
 
@@ -185,28 +190,12 @@ export async function connectConnector(
     })
     .run();
 
-  const secret = credentialSecret(input.auth);
+  const secret = serialiseCredential(input.auth);
   try {
     if (secret !== undefined) {
-      deps.store.store({
-        serviceId: id,
-        kind: input.auth.type,
-        secret,
-        connectorId: id,
-      });
+      deps.store.store({ serviceId: id, kind: input.auth.type, secret, connectorId: id });
     }
     const connection = await discoverWithStoredAuth(deps, id, input.auth.type, normalized);
-    deps.db
-      .update(connectors)
-      .set({ transport: connection.transport, updatedAt: new Date().toISOString() })
-      .where(and(eq(connectors.userId, deps.userId), eq(connectors.id, id)))
-      .run();
-    const summary = ingestTools(deps.db, {
-      userId: deps.userId,
-      connectorId: id,
-      connectorName: input.name,
-      tools: connection.tools,
-    });
     appendJournalEvent(deps.db, {
       userId: deps.userId,
       eventType: "connector.connected",
@@ -218,16 +207,9 @@ export async function connectConnector(
         toolCount: connection.tools.length,
       },
     });
-    appendJournalEvent(deps.db, {
-      userId: deps.userId,
-      eventType: "catalog.ingested",
-      payload: { connectorId: id, ...summary },
-    });
-
-    const row = scopedGet(deps.db, connectors, connectors.userId, deps.userId, connectors.id, id);
-    if (row === undefined) throw new ConnectorError("not_found", "The connector vanished after connecting");
+    const summary = applyDiscovery(deps, id, input.name, connection, "catalog.ingested");
     return {
-      connector: connectorView(row),
+      connector: connectorView(connectorRow(deps, id)),
       transport: connection.transport,
       tools: connection.tools,
       summary,
@@ -243,10 +225,9 @@ export async function refreshConnector(
   deps: ConnectorServiceDeps,
   connectorId: string,
 ): Promise<ConnectResult> {
-  const row = scopedGet(deps.db, connectors, connectors.userId, deps.userId, connectors.id, connectorId);
-  if (row === undefined) throw new ConnectorError("not_found", `Connector ${connectorId} not found`);
+  const row = connectorRow(deps, connectorId);
 
-  let connection: Awaited<ReturnType<typeof discoverMcpTools>>;
+  let connection: McpConnection;
   try {
     connection = await discoverWithStoredAuth(deps, row.id, row.authType, row.url);
   } catch (error) {
@@ -261,26 +242,9 @@ export async function refreshConnector(
     throw error;
   }
 
-  deps.db
-    .update(connectors)
-    .set({ transport: connection.transport, updatedAt: new Date().toISOString() })
-    .where(and(eq(connectors.userId, deps.userId), eq(connectors.id, row.id)))
-    .run();
-  const summary = ingestTools(deps.db, {
-    userId: deps.userId,
-    connectorId: row.id,
-    connectorName: row.name,
-    tools: connection.tools,
-  });
-  appendJournalEvent(deps.db, {
-    userId: deps.userId,
-    eventType: "catalog.refreshed",
-    payload: { connectorId: row.id, ...summary },
-  });
-  const refreshed = scopedGet(deps.db, connectors, connectors.userId, deps.userId, connectors.id, row.id);
-  if (refreshed === undefined) throw new ConnectorError("not_found", `Connector ${connectorId} not found`);
+  const summary = applyDiscovery(deps, row.id, row.name, connection, "catalog.refreshed");
   return {
-    connector: connectorView(refreshed),
+    connector: connectorView(connectorRow(deps, row.id)),
     transport: connection.transport,
     tools: connection.tools,
     summary,
@@ -288,15 +252,22 @@ export async function refreshConnector(
 }
 
 export function approveCatalogTool(db: Db, userId: string, toolId: string) {
-  if (getCatalogTool(db, userId, toolId) === undefined) {
-    throw new ConnectorError("not_found", `Tool ${toolId} not found`);
-  }
-  const tool = approveTool(db, userId, toolId);
+  const row = getCatalogTool(db, userId, toolId);
+  if (row === undefined) throw new ConnectorError("not_found", `Tool ${toolId} not found`);
+  if (row.state === "removed") throw new ConnectorError("not_found", `Tool ${row.name} was removed`);
+  const tool = pinToolDefinition(db, userId, row);
   appendJournalEvent(db, {
     userId,
     eventType: "catalog.tool_approved",
-    payload: { toolId: tool.id, connectorId: tool.connectorId, name: tool.name },
+    payload: {
+      toolId: tool.id,
+      connectorId: tool.connectorId,
+      name: tool.name,
+      previousClass: row.class,
+      class: tool.class,
+      previousHash: row.definitionHash,
+      hash: tool.definitionHash,
+    },
   });
   return tool;
 }
-

@@ -131,7 +131,6 @@ const verbs: Array<[ToolClass, readonly string[]]> = [
       "inspect",
       "status",
       "info",
-      "export",
     ],
   ],
 ];

@@ -4,11 +4,11 @@ Console (level: warning and above): none
 Page errors: none
 
 Network
-cc2b846a-378d-4854-8b09-d2c494708d65:6  GET  http://127.0.0.1:8787/api/catalog
+cc2b846a-378d-4854-8b09-d2c494708d65:8  GET  http://127.0.0.1:8787/api/catalog
   resourceType: document
   status: 200
   state: completed
-  durationMs: 4.48
+  durationMs: 7.05
 
 Screens
 - screens/01-health.png — live /health response.

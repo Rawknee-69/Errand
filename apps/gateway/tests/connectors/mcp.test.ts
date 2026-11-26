@@ -9,6 +9,13 @@ function url(path: string): string {
   return `http://127.0.0.1:${server.port}${path}`;
 }
 
+function connectError(value: unknown): McpConnectError {
+  if (!(value instanceof McpConnectError)) {
+    throw new Error(`Expected McpConnectError, got ${String(value)}`);
+  }
+  return value;
+}
+
 beforeAll(() => {
   server = startMockServices({ port: 0 });
 });
@@ -38,7 +45,8 @@ describe("discoverMcpTools", () => {
     ).catch((error: unknown) => error);
 
     expect(wrong).toBeInstanceOf(McpConnectError);
-    expect((wrong as McpConnectError).code).toBe("auth");
+    expect(connectError(wrong).code).toBe("auth");
+    expect(connectError(wrong).challenge).toContain("Bearer");
 
     const connection = await discoverMcpTools(
       url(MOCK_PATHS.calendarSecure),
@@ -66,7 +74,7 @@ describe("discoverMcpTools", () => {
       { type: "header", headerName: MOCK_AUTH.payHeaderName, value: "nope" },
       dev,
     ).catch((error: unknown) => error);
-    expect((wrong as McpConnectError).code).toBe("auth");
+    expect(connectError(wrong).code).toBe("auth");
   });
 
   test("falls back to legacy SSE when streamable HTTP is not served", async () => {
@@ -92,7 +100,7 @@ describe("discoverMcpTools", () => {
       dev,
     ).catch((caught: unknown) => caught);
 
-    expect((error as McpConnectError).code).toBe("auth");
+    expect(connectError(error).code).toBe("auth");
   });
 
   test("routes the connection through the egress guard", async () => {
@@ -102,6 +110,6 @@ describe("discoverMcpTools", () => {
       { allowLocalhostDev: false, timeoutMs: 1_000 },
     ).catch((caught: unknown) => caught);
 
-    expect((error as McpConnectError).code).toBe("egress");
+    expect(connectError(error).code).toBe("egress");
   });
 });
