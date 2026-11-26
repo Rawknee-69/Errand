@@ -1,11 +1,13 @@
 import { randomUUID } from "node:crypto";
+import type { ReceiptView } from "@errand/shared";
 import type { Db } from "../db/client.ts";
 import { appendJournalEvent } from "../db/journal.ts";
-import { getConnector } from "../db/scoped-reads.ts";
+import { getConnector, getSlip } from "../db/scoped-reads.ts";
 import { calls } from "../db/schema.ts";
 import {
   callConnectorTool,
   ConnectorCallError,
+  connectorTarget,
   DEFAULT_CALL_TIMEOUT_MS,
   DEFAULT_CONNECTOR_CONCURRENCY,
   DEFAULT_RESULT_CAP_BYTES,
@@ -16,12 +18,16 @@ import { ConnectorLimiter } from "../connectors/concurrency.ts";
 import { ConnectorError } from "../connectors/errors.ts";
 import type { DiscoverOptions } from "../connectors/mcp.ts";
 import { markConnectorNeedsReauth, markConnectorSuccess } from "../connectors/records.ts";
-import { createConnectorServiceDeps } from "../connectors/service.ts";
+import { createConnectorServiceDeps, type ConnectorServiceDeps } from "../connectors/service.ts";
 import type { CallDecision } from "../policy/pipeline.ts";
+import { recordReceipt } from "../receipts/receipts.ts";
+import { verifyChange, type UpstreamRead } from "../receipts/verifier.ts";
 import { VaultError } from "../vault/common.ts";
 import type { VaultKeyring } from "../vault/keyring.ts";
 
 export type AdmittedCall = Extract<CallDecision, { outcome: "admitted" }>;
+
+type ConnectorRow = NonNullable<ReturnType<typeof getConnector>>;
 
 export type ForwardFailureCode =
   | "upstream_timeout"
@@ -33,7 +39,12 @@ export type ForwardFailureCode =
 export type NotForwardedReason = "outbox_not_installed" | "spend_tap_not_installed";
 
 export type ForwardOutcome =
-  | { state: "forwarded"; result: ConnectorToolResult; durationMs: number }
+  | {
+      state: "forwarded";
+      result: ConnectorToolResult;
+      durationMs: number;
+      receipt?: ReceiptView;
+    }
   | { state: "not_forwarded"; reason: NotForwardedReason }
   | { state: "failed"; error: ForwardFailureCode; message: string; durationMs: number };
 
@@ -116,7 +127,7 @@ function recordSuccess(
   args: Record<string, unknown>,
   result: ConnectorToolResult,
   durationMs: number,
-): void {
+): string {
   const serialized = JSON.stringify(result);
   const callId = insertCall(db, userId, decision, args, { result: serialized, error: null });
   appendJournalEvent(db, {
@@ -135,6 +146,7 @@ function recordSuccess(
     },
   });
   markConnectorSuccess({ db, userId }, decision.connectorId);
+  return callId;
 }
 
 function recordFailure(
@@ -191,6 +203,50 @@ function notForwarded(
   return { state: "not_forwarded", reason };
 }
 
+type ReceiptContext = {
+  db: Db;
+  userId: string;
+  decision: AdmittedCall;
+  connector: ConnectorRow;
+  callId: string;
+  args: Record<string, unknown>;
+  result: ConnectorToolResult;
+  serviceDeps: ConnectorServiceDeps;
+  timeoutMs: number;
+  resultCapBytes: number;
+};
+
+async function receiptForChange(context: ReceiptContext): Promise<ReceiptView | undefined> {
+  const slip = getSlip(context.db, context.userId, context.decision.slipId);
+  if (slip === undefined) return undefined;
+  const read: UpstreamRead = (tool, args) =>
+    callConnectorTool(context.serviceDeps, connectorTarget(context.connector), tool, args, {
+      timeoutMs: context.timeoutMs,
+      resultCapBytes: context.resultCapBytes,
+    });
+  const verification = await verifyChange({
+    connectorUrl: context.connector.url,
+    connectorName: context.connector.name,
+    tool: context.decision.upstreamTool,
+    arguments: context.args,
+    result: context.result,
+    toolClass: context.decision.class,
+    read,
+  });
+
+  return recordReceipt({
+    db: context.db,
+    userId: context.userId,
+    slipId: context.decision.slipId,
+    callId: context.callId,
+    errandType: slip.errandType,
+    toolClass: context.decision.class,
+    verification: verification.verification,
+    summary: verification.summary,
+    ...(verification.inverse === undefined ? {} : { inverse: verification.inverse }),
+  });
+}
+
 export function createForwarder(options: ForwarderOptions): Forwarder {
   const limiter = new ConnectorLimiter(
     options.connectorConcurrency ?? DEFAULT_CONNECTOR_CONCURRENCY,
@@ -220,6 +276,13 @@ export function createForwarder(options: ForwarderOptions): Forwarder {
       return { state: "failed", ...failure, durationMs: 0 };
     }
 
+    const serviceDeps = createConnectorServiceDeps({
+      db: options.db,
+      keyring: options.keyring,
+      userId,
+      discoverOptions: options.discoverOptions,
+      redirectUri: options.redirectUri,
+    });
     const started = Date.now();
     const deadline = started + callTimeoutMs;
     let result: ConnectorToolResult | undefined;
@@ -234,19 +297,8 @@ export function createForwarder(options: ForwarderOptions): Forwarder {
           );
         }
         return callConnectorTool(
-          createConnectorServiceDeps({
-            db: options.db,
-            keyring: options.keyring,
-            userId,
-            discoverOptions: options.discoverOptions,
-            redirectUri: options.redirectUri,
-          }),
-          {
-            id: connector.id,
-            url: connector.url,
-            transport: connector.transport,
-            authType: connector.authType,
-          },
+          serviceDeps,
+          connectorTarget(connector),
           decision.upstreamTool,
           args,
           { timeoutMs: remaining, resultCapBytes },
@@ -266,7 +318,39 @@ export function createForwarder(options: ForwarderOptions): Forwarder {
       return { state: "failed", ...failed, durationMs };
     }
 
-    recordSuccess(options.db, userId, decision, args, result, durationMs);
-    return { state: "forwarded", result, durationMs };
+    const callId = recordSuccess(options.db, userId, decision, args, result, durationMs);
+    let receipt: ReceiptView | undefined;
+    if (decision.class !== "read") {
+      try {
+        receipt = await receiptForChange({
+          db: options.db,
+          userId,
+          decision,
+          connector,
+          callId,
+          args,
+          result,
+          serviceDeps,
+          timeoutMs: callTimeoutMs,
+          resultCapBytes,
+        });
+      } catch {
+        appendJournalEvent(options.db, {
+          userId,
+          eventType: "receipt.failed",
+          payload: {
+            slip_id: decision.slipId,
+            call_id: callId,
+            tool: decision.tool,
+          },
+        });
+      }
+    }
+    return {
+      state: "forwarded",
+      result,
+      durationMs,
+      ...(receipt === undefined ? {} : { receipt }),
+    };
   };
 }

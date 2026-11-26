@@ -22,6 +22,15 @@ export type ConnectorCallTarget = {
   authType: ConnectorAuthType;
 };
 
+export function connectorTarget(connector: ConnectorCallTarget): ConnectorCallTarget {
+  return {
+    id: connector.id,
+    url: connector.url,
+    transport: connector.transport,
+    authType: connector.authType,
+  };
+}
+
 export type ConnectorCallOptions = {
   timeoutMs?: number;
   resultCapBytes?: number;

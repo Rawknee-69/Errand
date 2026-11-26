@@ -6,6 +6,7 @@ import {
   slipDetailSchema,
   toolClassUpdateSchema,
   toolRequestableUpdateSchema,
+  undoApplyResponseSchema,
   type CatalogToolView,
   type ConnectorDetail,
   type GatewayHealth,
@@ -50,6 +51,7 @@ import { completeOAuthFlow, startOAuthFlow, startOAuthReauth } from "./connector
 import { VaultKeyring } from "./vault/keyring.ts";
 import { approveSlip, denySlip, SlipError } from "./slips/approval.ts";
 import { getSlipDetail, listSlipSummaries } from "./slips/view.ts";
+import { applyUndo, getReceiptView, listReceiptViews } from "./receipts/receipts.ts";
 import { streamFeed, type FeedStreamOptions } from "./feed/stream.ts";
 
 export { DEFAULT_OWNER_ID };
@@ -303,6 +305,55 @@ export function createGatewayApp(
     const userId = userIdFor(c);
     const body = slipDenySchema.parse(await optionalJson(c));
     return c.json(slipDetailSchema.parse(denySlip(db, userId, c.req.param("id"), body.reason)));
+  });
+
+  app.get("/api/receipts", (c) => {
+    const userId = userIdFor(c);
+    return c.json({ receipts: listReceiptViews(db, userId) });
+  });
+
+  app.get("/api/receipts/:id", (c) => {
+    const userId = userIdFor(c);
+    const receipt = getReceiptView(db, userId, c.req.param("id"));
+    if (receipt === undefined) return c.json({ error: "not_found" }, 404);
+    return c.json({ receipt });
+  });
+
+  app.post("/api/receipts/:id/undo", async (c) => {
+    if (keyring === undefined) {
+      return c.json({ error: "undo_unavailable", message: "The vault is not configured" }, 500);
+    }
+    const userId = userIdFor(c);
+    const result = await applyUndo(
+      {
+        db,
+        keyring,
+        discoverOptions,
+        redirectUri: oauthRedirectUri,
+        ...(options.callTimeoutMs === undefined ? {} : { callTimeoutMs: options.callTimeoutMs }),
+        ...(options.resultCapBytes === undefined
+          ? {}
+          : { resultCapBytes: options.resultCapBytes }),
+      },
+      userId,
+      c.req.param("id"),
+    );
+    if (!result.ok) {
+      const status =
+        result.code === "not_found"
+          ? 404
+          : result.code === "upstream_failed"
+            ? 502
+            : 409;
+      return c.json({ error: result.code, message: result.message }, status);
+    }
+    return c.json(
+      undoApplyResponseSchema.parse({
+        verification: result.verification,
+        summary: result.summary,
+        receipt: result.receipt,
+      }),
+    );
   });
 
   app.get("/api/events", (c) => {

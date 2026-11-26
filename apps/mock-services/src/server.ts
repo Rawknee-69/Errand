@@ -53,7 +53,26 @@ const dineOutTools = [
   },
 ];
 
-function calendarServer(listEventsDescription = "List calendar events in a date range."): McpServer {
+export type CalendarEvent = { id: string; title: string; start: string };
+
+export type CalendarState = {
+  events: Map<string, CalendarEvent>;
+  nextId: number;
+  dropWrites: boolean;
+};
+
+export function createCalendarState(): CalendarState {
+  return {
+    events: new Map([["evt-1", { id: "evt-1", title: "Dinner with Sam", start: "2026-12-01T19:00:00Z" }]]),
+    nextId: 2,
+    dropWrites: false,
+  };
+}
+
+function calendarServer(
+  state: CalendarState,
+  listEventsDescription = "List calendar events in a date range.",
+): McpServer {
   const server = new McpServer({ name: "calendar", version: "1.0.0" });
   server.registerTool(
     "list_events",
@@ -63,12 +82,7 @@ function calendarServer(listEventsDescription = "List calendar events in a date 
       annotations: { readOnlyHint: true, title: "List events" },
     },
     async () => ({
-      content: [
-        {
-          type: "text",
-          text: JSON.stringify([{ id: "evt-1", title: "Dinner with Sam", start: "2026-12-01T19:00:00Z" }]),
-        },
-      ],
+      content: [{ type: "text", text: JSON.stringify([...state.events.values()]) }],
     }),
   );
   server.registerTool(
@@ -78,9 +92,11 @@ function calendarServer(listEventsDescription = "List calendar events in a date 
       inputSchema: z.object({ title: z.string(), start: z.string() }),
       annotations: { readOnlyHint: false, title: "Create event" },
     },
-    async ({ title, start }) => ({
-      content: [{ type: "text", text: JSON.stringify({ id: "evt-new", title, start }) }],
-    }),
+    async ({ title, start }) => {
+      const id = `evt-${state.nextId++}`;
+      if (!state.dropWrites) state.events.set(id, { id, title, start });
+      return { content: [{ type: "text", text: JSON.stringify({ id, title, start }) }] };
+    },
   );
   server.registerTool(
     "delete_event",
@@ -89,7 +105,10 @@ function calendarServer(listEventsDescription = "List calendar events in a date 
       inputSchema: z.object({ id: z.string() }),
       annotations: { destructiveHint: true, title: "Delete event" },
     },
-    async ({ id }) => ({ content: [{ type: "text", text: JSON.stringify({ deleted: id }) }] }),
+    async ({ id }) => {
+      if (!state.dropWrites) state.events.delete(id);
+      return { content: [{ type: "text", text: JSON.stringify({ deleted: id }) }] };
+    },
   );
   return server;
 }
@@ -329,14 +348,17 @@ type MockServicesOptions = {
 
 export function startMockServices(options: MockServicesOptions = {}) {
   let listEventsDescription = "List calendar events in a date range.";
-  const calendarHandler = createMcpHandler(() => calendarServer(listEventsDescription));
-  const calendarSecureHandler = createMcpHandler(() => calendarServer(listEventsDescription));
+  const calendarState = createCalendarState();
+  const calendarHandler = createMcpHandler(() => calendarServer(calendarState, listEventsDescription));
+  const calendarSecureHandler = createMcpHandler(() =>
+    calendarServer(calendarState, listEventsDescription),
+  );
   const payHandler = createMcpHandler(() => payServer());
   const bigTracker: BigTracker = { active: 0, maxActive: 0 };
   const bigHandler = createMcpHandler(() => bigServer(bigTracker));
   const dineOut = legacySseSessions();
   const oauth = createMockAuthorizationServer();
-  const oauthResourceHandler = createMcpHandler(() => calendarServer());
+  const oauthResourceHandler = createMcpHandler(() => calendarServer(calendarState));
 
   return Bun.serve({
     port: options.port ?? DEFAULT_PORT,
@@ -356,6 +378,14 @@ export function startMockServices(options: MockServicesOptions = {}) {
         if (!body.success) return Response.json({ error: "invalid_body" }, { status: 400 });
         listEventsDescription = body.data.description;
         return Response.json({ ok: true });
+      }
+      if (pathname === "/mock/calendar/fault" && request.method === "POST") {
+        const body = z
+          .object({ mode: z.enum(["none", "drop_write"]) })
+          .safeParse(await request.json());
+        if (!body.success) return Response.json({ error: "invalid_body" }, { status: 400 });
+        calendarState.dropWrites = body.data.mode === "drop_write";
+        return Response.json({ mode: body.data.mode });
       }
       if (pathname === MOCK_PATHS.calendar) {
         return calendarHandler.fetch(request);
