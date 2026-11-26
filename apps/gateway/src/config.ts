@@ -10,6 +10,7 @@ const secret = z
 
 const configSchema = z.object({
   VAULT_KEY: secret,
+  VAULT_KEY_PREVIOUS: z.string().optional(),
   HMAC_KEY: secret,
   JWT_SECRET: secret,
   PORT: z.coerce.number().int().min(1).max(65535).default(8787),
