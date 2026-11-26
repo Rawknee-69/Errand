@@ -38,12 +38,18 @@ export type CallInput = {
   arguments: Record<string, unknown>;
 };
 
+// `unknown` is denied before admission, so an admitted call always has a class
+// the forwarder can route.
+export type ForwardableClass = Exclude<ToolClass, "unknown">;
+
 export type CallDecision =
   | {
       outcome: "admitted";
       slipId: string;
       tool: string;
-      class: ToolClass;
+      connectorId: string;
+      upstreamTool: string;
+      class: ForwardableClass;
       amountCents: number;
       callsRemaining: number;
       spendRemainingCents: number;
@@ -157,6 +163,8 @@ export function admitCall(
     outcome: "admitted",
     slipId: slip.id,
     tool: input.tool,
+    connectorId: tool.connectorId,
+    upstreamTool: tool.name,
     class: slipTool.class,
     amountCents,
     callsRemaining: reservation.callsRemaining,

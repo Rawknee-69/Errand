@@ -4,6 +4,7 @@ import gatewayPackage from "../../package.json" with { type: "json" };
 import type { Db } from "../db/client.ts";
 import { agentCatalog } from "./catalog.ts";
 import { submitCall } from "./call.ts";
+import type { Forwarder } from "./forward.ts";
 import { AGENT_LIMITS, type RequestedLimits } from "./limits.ts";
 import { ErrandRequestError, requestErrand } from "./request.ts";
 import { errandStatus } from "./status.ts";
@@ -50,7 +51,12 @@ function toRequestedLimits(limits: z.infer<typeof limitsInput> | undefined): Req
   };
 }
 
-function agentServer(db: Db, userId: string, hmacKey: string | undefined): McpServer {
+function agentServer(
+  db: Db,
+  userId: string,
+  hmacKey: string | undefined,
+  forwarder: Forwarder | undefined,
+): McpServer {
   const server = new McpServer({ name: "errand", version: gatewayPackage.version });
 
   server.registerTool(
@@ -116,7 +122,7 @@ function agentServer(db: Db, userId: string, hmacKey: string | undefined): McpSe
     "errand_call",
     {
       description:
-        "Submit one call for an approved slip, with the capability from errand_status. The call is checked against the signed slip and the spend, call and rate caps before anything runs; until the forwarder ships an admitted call returns not_forwarded.",
+        "Submit one call for an approved slip, with the capability from errand_status. The call is checked against the signed slip and the spend, call and rate caps, then forwarded for read, write and delete classes.",
       inputSchema: z.object({
         slip_id: z.string().min(1),
         tool: z.string().min(1),
@@ -135,15 +141,45 @@ function agentServer(db: Db, userId: string, hmacKey: string | undefined): McpSe
       if (decision.outcome === "denied") {
         return errorResult(decision.reason, decision.message, { tool });
       }
+      const remaining = {
+        calls: decision.callsRemaining,
+        spendCents: decision.spendRemainingCents,
+      };
+      if (forwarder === undefined) {
+        return textResult({
+          state: "not_forwarded",
+          slipId: decision.slipId,
+          tool: decision.tool,
+          reason: "forwarder_not_installed",
+          remaining,
+        });
+      }
+
+      const outcome = await forwarder(userId, decision, args ?? {});
+      if (outcome.state === "failed") {
+        return errorResult(outcome.error, outcome.message, {
+          slipId: decision.slipId,
+          tool: decision.tool,
+          remaining,
+        });
+      }
+      if (outcome.state === "not_forwarded") {
+        return textResult({
+          state: "not_forwarded",
+          slipId: decision.slipId,
+          tool: decision.tool,
+          reason: outcome.reason,
+          remaining,
+        });
+      }
       return textResult({
-        state: "not_forwarded",
+        state: "forwarded",
         slipId: decision.slipId,
         tool: decision.tool,
-        reason: "forwarder_not_installed",
-        remaining: {
-          calls: decision.callsRemaining,
-          spendCents: decision.spendRemainingCents,
-        },
+        class: decision.class,
+        result: outcome.result,
+        durationMs: outcome.durationMs,
+        remaining,
       });
     },
   );
@@ -151,12 +187,16 @@ function agentServer(db: Db, userId: string, hmacKey: string | undefined): McpSe
   return server;
 }
 
-export function createAgentHandler(db: Db, hmacKey: string | undefined): McpHttpHandler {
+export function createAgentHandler(
+  db: Db,
+  hmacKey: string | undefined,
+  forwarder?: Forwarder,
+): McpHttpHandler {
   return createMcpHandler((context) => {
     const userId = context.authInfo?.clientId;
     if (userId === undefined) {
       throw new Error("Agent request reached the MCP handler without authentication");
     }
-    return agentServer(db, userId, hmacKey);
+    return agentServer(db, userId, hmacKey, forwarder);
   });
 }

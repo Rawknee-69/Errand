@@ -21,6 +21,8 @@ const app = createGatewayApp(db, {
   oauthRedirectUri: config.OAUTH_REDIRECT_URI ?? DEFAULT_OAUTH_REDIRECT_URI,
   ...(config.WEB_ORIGIN === undefined ? {} : { webOrigin: config.WEB_ORIGIN }),
   hmacKey: config.HMAC_KEY,
+  callTimeoutMs: config.CALL_TIMEOUT_MS,
+  connectorConcurrency: config.CONNECTOR_CONCURRENCY,
   auth: {
     passphrase: config.OWNER_PASSPHRASE,
     sessionSecret: config.JWT_SECRET,

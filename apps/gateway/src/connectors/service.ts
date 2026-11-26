@@ -5,8 +5,9 @@ import type { Db } from "../db/client.ts";
 import { appendJournalEvent } from "../db/journal.ts";
 import { scopedList } from "../db/scoped-reads.ts";
 import { connectors, credentials, type ConnectorAuthType } from "../db/schema.ts";
-import type { CredentialStore } from "../vault/credentials.ts";
-import type { Vault } from "../vault/vault.ts";
+import { CredentialStore } from "../vault/credentials.ts";
+import type { VaultKeyring } from "../vault/keyring.ts";
+import { Vault } from "../vault/vault.ts";
 import { assertFetchableUrl } from "../egress/guard.ts";
 import { parseCredential, serialiseCredential, type ConnectorAuth } from "./auth.ts";
 import { getCatalogTool, pinToolDefinition, type DiscoveredTool, type IngestSummary } from "./catalog.ts";
@@ -31,6 +32,27 @@ export type ConnectorServiceDeps = ConnectorBaseDeps & {
   redirectUri: string;
   maxConnectors?: number;
 };
+
+export type ConnectorServiceOptions = {
+  db: Db;
+  keyring: VaultKeyring;
+  userId: string;
+  discoverOptions: DiscoverOptions;
+  redirectUri: string;
+  maxConnectors?: number;
+};
+
+export function createConnectorServiceDeps(options: ConnectorServiceOptions): ConnectorServiceDeps {
+  return {
+    db: options.db,
+    userId: options.userId,
+    vault: new Vault(options.db, options.keyring, options.userId),
+    store: new CredentialStore(options.db, options.keyring, options.userId),
+    discoverOptions: options.discoverOptions,
+    redirectUri: options.redirectUri,
+    ...(options.maxConnectors === undefined ? {} : { maxConnectors: options.maxConnectors }),
+  };
+}
 
 export type { AuthHint, ProbeResult };
 
