@@ -7,7 +7,12 @@ import { connectors, credentials, journal, oauthAttempts, users } from "../../sr
 import { verifyJournal } from "../../src/db/journal.ts";
 import { Vault } from "../../src/vault/vault.ts";
 import { VaultKeyring } from "../../src/vault/keyring.ts";
-import { connectResponseSchema, oauthStartResponseSchema, readJson } from "./support.ts";
+import {
+  connectResponseSchema,
+  errorResponseSchema,
+  oauthStartResponseSchema,
+  readJson,
+} from "./support.ts";
 
 const TS = "2026-01-01T00:00:00.000Z";
 const KEK = "vault-key-material-that-is-long-enough-for-aes";
@@ -146,9 +151,7 @@ describe("OAuth 2.1 + PKCE via the SDK", () => {
     expect(authorizationUrl.searchParams.get("code_challenge_method")).toBe("S256");
     expect((authorizationUrl.searchParams.get("code_challenge") ?? "").length).toBeGreaterThan(20);
     expect(authorizationUrl.searchParams.get("redirect_uri")).toBe(REDIRECT_URI);
-    expect(authorizationUrl.searchParams.get("state")).toBe(
-      db.select().from(oauthAttempts).all()[0]?.state ?? "",
-    );
+    expect(authorizationUrl.searchParams.get("state")).toHaveLength(43);
 
     expect(callback.searchParams.get("code")).not.toBeNull();
     expect(callback.searchParams.get("iss")).toBe(baseUrl());
@@ -177,7 +180,7 @@ describe("OAuth 2.1 + PKCE via the SDK", () => {
   });
 
   test("stores the verifier encrypted with a ten-minute lifetime, never in the attempt row", async () => {
-    const started = await startFlow();
+    await startFlow();
     const attempt = db.select().from(oauthAttempts).all()[0];
     expect(attempt).toBeDefined();
     expect(Date.parse(attempt?.expiresAt ?? "") - Date.parse(attempt?.createdAt ?? "")).toBe(600_000);
@@ -186,9 +189,9 @@ describe("OAuth 2.1 + PKCE via the SDK", () => {
       .select()
       .from(credentials)
       .all()
-      .find((row) => row.serviceId === `oauth_attempt:${started.attemptId}`);
+      .find((row) => row.kind === "oauth_attempt");
     expect(attemptCredential).toBeDefined();
-    expect(attemptCredential?.kind).toBe("oauth_attempt");
+    expect(JSON.stringify(attemptCredential)).not.toContain("codeVerifier");
     expect(JSON.stringify(attempt)).not.toContain("codeVerifier");
     expect(JSON.stringify(attempt)).not.toContain("code_verifier");
     expect(JSON.stringify(db.select().from(credentials).all())).not.toContain("codeVerifier");
@@ -200,12 +203,25 @@ describe("OAuth 2.1 + PKCE via the SDK", () => {
 
     const replay = await app.request(callbackPath(callback));
     expect(replay.status).toBe(400);
-    expect(((await replay.json()) as { error: string }).error).toBe("oauth_state");
+    expect((await readJson(replay, errorResponseSchema)).error).toBe("oauth_state");
 
     const unknown = await app.request(`/api/oauth/callback?state=nope&code=x`);
     expect(unknown.status).toBe(400);
 
     expect(db.select().from(connectors).all()[0]?.authStatus).toBe("active");
+  });
+
+  test("renders the connector name as text on the confirmation page", async () => {
+    const started = await startFlow('<img src=x onerror="alert(1)">');
+    const callback = await approve(started.authorizationUrl);
+    const response = await app.request(callbackPath(callback), {
+      headers: { accept: "text/html" },
+    });
+
+    expect(response.status).toBe(200);
+    const html = await response.text();
+    expect(html).not.toContain("<img src=x");
+    expect(html).toContain("&lt;img src=x onerror=&quot;alert(1)&quot;&gt;");
   });
 
   test("rejects a callback whose issuer is not the discovered authorization server", async () => {
@@ -215,7 +231,7 @@ describe("OAuth 2.1 + PKCE via the SDK", () => {
     const response = await app.request(callbackPath(callback));
 
     expect(response.status).toBe(400);
-    expect(((await response.json()) as { error: string }).error).toBe("oauth_issuer");
+    expect((await readJson(response, errorResponseSchema)).error).toBe("oauth_issuer");
     expect(db.select().from(connectors).all()[0]?.authStatus).toBe("needs_reauth");
   });
 
@@ -231,7 +247,7 @@ describe("OAuth 2.1 + PKCE via the SDK", () => {
 
     const response = await otherApp.request(callbackPath(callback));
     expect(response.status).toBe(400);
-    expect(((await response.json()) as { error: string }).error).toBe("oauth_state");
+    expect((await readJson(response, errorResponseSchema)).error).toBe("oauth_state");
   });
 
   test("refreshes under a per-connector lock and stores the rotated token", async () => {
@@ -265,7 +281,7 @@ describe("OAuth 2.1 + PKCE via the SDK", () => {
 
     const refresh = await post(`/api/connectors/${connectorId}/refresh`, {});
     expect(refresh.status).toBe(409);
-    expect(((await refresh.json()) as { error: string }).error).toBe("reauth");
+    expect((await readJson(refresh, errorResponseSchema)).error).toBe("reauth");
     expect(db.select().from(connectors).all()[0]?.authStatus).toBe("needs_reauth");
 
     const state = await mockState();

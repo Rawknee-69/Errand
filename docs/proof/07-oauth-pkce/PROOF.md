@@ -58,12 +58,14 @@
     connector `needs_reauth`. The recorded discovery issuer did not match.
 11. A fourth attempt whose callback is submitted twice — first 200, replay 400
     `oauth_state`. The attempt row is consumed and the connector stays active.
-12. Direct database read (`logs/db-scan.txt`): `oauth_attempts` has no
-    `code_verifier` column; five OAuth credential rows are sealed
-    (`ciphertext`, `nonce`, `auth_tag`, `wrapped_data_key`), and no ciphertext
-    or plain column contains `access_token`, `refresh_token`, `client_secret`
-    or `codeVerifier`. Every state is 43 characters and every attempt's
-    `expires_at - created_at` is exactly 600000 ms.
+12. The driver leaves one authorization attempt uncompleted. Direct database
+    read (`logs/db-scan.txt`): `oauth_attempts` has no `code_verifier` column;
+    every OAuth credential row is sealed (`ciphertext`, `nonce`, `auth_tag`,
+    `wrapped_data_key`), and no ciphertext or plain column contains
+    `access_token`, `refresh_token`, `client_secret` or `codeVerifier`. The
+    remaining state is 43 characters and its `expires_at - created_at` is
+    exactly 600000 ms. Completed attempts are deleted, which is why only the
+    pending one appears.
 13. A callback delivered to a different `OAUTH_REDIRECT_URI` is rejected with
     400 `oauth_state` (unit test, `tests/connectors/oauth.test.ts`, "rejects a
     callback delivered to a different redirect URI than the attempt").

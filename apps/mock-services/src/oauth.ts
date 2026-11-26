@@ -1,11 +1,12 @@
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
+import { escapeHtml } from "@errand/shared";
 import { z } from "zod";
 
 // A real authorization server, small enough to read: RFC 9728 discovery,
 // RFC 8414 metadata, RFC 7591 dynamic registration, Authorization Code + PKCE
 // (S256), RFC 9207 issuer response, and rotating refresh tokens.
 
-export const MOCK_OAUTH_PATHS = {
+const MOCK_OAUTH_PATHS = {
   resource: "/oauth/mcp",
   authorization: "/oauth/authorize",
   token: "/oauth/token",
@@ -18,7 +19,7 @@ export const MOCK_OAUTH_PATHS = {
   alwaysUnauthorized: "/mock/oauth/always-401",
 } as const;
 
-export const MOCK_OAUTH_SCOPE = "calendar.read";
+const MOCK_OAUTH_SCOPE = "calendar.read";
 
 type Client = {
   clientId: string;
@@ -88,14 +89,6 @@ function pkceMatches(verifier: string, challenge: string): boolean {
   const actual = Buffer.from(base64url(createHash("sha256").update(verifier).digest()));
   const expected = Buffer.from(challenge);
   return actual.length === expected.length && timingSafeEqual(actual, expected);
-}
-
-function escapeHtml(value: string): string {
-  return value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;");
 }
 
 function consentPage(url: URL, clientName: string, scope: string): Response {
@@ -349,7 +342,12 @@ export function createMockAuthorizationServer() {
       accessTokens.clear();
       refreshTokens.clear();
       alwaysUnauthorized = false;
-      for (const key of Object.keys(counters) as Array<keyof Counters>) counters[key] = 0;
+      counters.registrations = 0;
+      counters.authorizations = 0;
+      counters.authorizationCodeGrants = 0;
+      counters.refreshGrants = 0;
+      counters.pkceFailures = 0;
+      counters.refreshRotations = 0;
       return json({ ok: true });
     }
 

@@ -10,7 +10,8 @@ export type Tier = "learner" | "license";
 export type ConnectorAuthType = "none" | "bearer" | "header" | "basic" | "oauth";
 
 // OAuth connector lifecycle: pending until the first authorization completes.
-export type ConnectorAuthStatus = "active" | "pending" | "needs_reauth";
+export const CONNECTOR_AUTH_STATUSES = ["active", "pending", "needs_reauth"] as const;
+export type ConnectorAuthStatus = (typeof CONNECTOR_AUTH_STATUSES)[number];
 
 // Verifier outcomes per change; `unverified` never implies success (GLOSSARY.md).
 export type VerificationOutcome = "matched" | "mismatched" | "unverified";

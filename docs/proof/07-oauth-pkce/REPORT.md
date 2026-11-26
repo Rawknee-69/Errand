@@ -32,6 +32,10 @@
 - `apps/gateway/src/db/schema.ts` plus migration `0003` — connector
   `auth_status`/`last_auth_error`; `oauth_attempts` loses `code_verifier`
   (the verifier lives encrypted in the Vault).
+- `packages/shared/src/html.ts` — one `escapeHtml` used by the consent page and
+  the gateway confirmation page.
+- `scripts/checks/oauth-verifier.ts` — fails the build if `oauth_attempts`
+  grows a plaintext verifier column again.
 - `apps/mock-services/src/oauth.ts` and `server.ts` — a real mock authorization
   server: RFC 9728 and RFC 8414 metadata, RFC 7591 registration, consent form,
   S256 PKCE, RFC 9207 issuer, rotating refresh tokens, and a bearer-protected
@@ -65,16 +69,16 @@ $ bun run typecheck
 @errand/web typecheck: Exited with code 0
 @errand/mock-services typecheck: Exited with code 0
 @errand/gateway typecheck: Exited with code 0
-✓ 3 checks passed: comments, installed, no-any
+✓ 4 checks passed: comments, installed, no-any, oauth-verifier
 
 $ bun test
 apps\gateway\tests\connectors\oauth.test.ts:
 [mcp-sdk] OAuth "invalid_grant" — invalidating the stored tokens and retrying authorization. Cause: "refresh token is invalid, rotated or revoked"
 
- 205 pass
+ 236 pass
  0 fail
- 536 expect() calls
-Ran 205 tests across 23 files. [1244.00ms]
+ 629 expect() calls
+Ran 236 tests across 31 files. [1255.00ms]
 ```
 
 Full output: `docs/proof/07-oauth-pkce/logs/typecheck.txt` and
@@ -102,7 +106,35 @@ None. The OAuth client comes from the already-installed
 
 ## Review findings addressed
 
-Pending `/code-review`; updated before the ticket closes.
+Standards:
+- Escaped the connector name on the confirmation page and moved `escapeHtml`
+  into `packages/shared`, ending the second home for it.
+- Replaced every `as { … }` JSON cast in the new tests with Zod schemas; the
+  `Object.keys(...) as Array<keyof Counters>` reset is now explicit assignments.
+- Extracted `deleteAttempt` (three copies) and `runAuthorizationLeg` (two
+  copies of provider → `auth` → result check); attempts are now deleted on
+  consume, expiry, issuer mismatch and discard instead of lingering.
+- Added `scripts/checks/oauth-verifier.ts` so a plaintext verifier column fails
+  the build, per ADR 0002.
+- `ConnectorAuthStatus` is exported as `CONNECTOR_AUTH_STATUSES` and the test
+  schema uses it; `MOCK_OAUTH_PATHS`/`MOCK_OAUTH_SCOPE` are no longer exported.
+- Removed the storage-prefix assertions from the verifier test; it now checks
+  the ten-minute lifetime and that no attempt row carries the verifier.
+
+Spec:
+- An issuer is required when discovery advertises
+  `authorization_response_iss_parameter_supported`, so a missing `iss` is
+  rejected as well as a mismatched one.
+- A discovery failure after a successful code exchange no longer leaves the
+  connector `pending`: an auth 401 marks `needs_reauth`, anything else keeps
+  the connector `active` with a secret-free reason and a
+  `connector.oauth_discovery_failed` event.
+- `needs_reauth` is now only forced for `invalid_grant`, client errors, issuer
+  mismatch and a redirect-required refresh. A transient network failure keeps
+  the connector `active`, journals `connector.oauth_refresh_failed`, and
+  returns 502 `oauth_failed` instead of making the human sign in again.
+- Expired attempts are swept on each start and callback, so an abandoned
+  verifier does not outlive its ten-minute window.
 
 ## Deviations / not done
 

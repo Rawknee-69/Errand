@@ -1,4 +1,10 @@
 import { z } from "zod";
+import { CONNECTOR_AUTH_STATUSES } from "../../src/db/schema.ts";
+
+export const errorResponseSchema = z.object({
+  error: z.string(),
+  message: z.string().optional(),
+});
 
 export const toolClassSchema = z.enum(["read", "write", "send", "delete", "spend", "unknown"]);
 export const toolStateSchema = z.enum(["new", "active", "changed", "removed"]);
@@ -9,7 +15,7 @@ export const connectorSchema = z.object({
   url: z.string(),
   transport: z.string(),
   authType: z.string(),
-  authStatus: z.enum(["active", "pending", "needs_reauth"]),
+  authStatus: z.enum(CONNECTOR_AUTH_STATUSES),
   lastAuthError: z.string().nullable(),
   createdAt: z.string(),
   updatedAt: z.string(),

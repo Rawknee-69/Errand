@@ -107,6 +107,13 @@ show("callback first use / replay", {
   replayBody: secondUse.text,
 });
 
+// ---- leave one uncompleted attempt for the storage scan --------------------
+const pending = await startOAuth("Proof calendar pending");
+show("pending attempt left for the TTL scan", {
+  attemptId: pending.attemptId,
+  authStatus: pending.connector.authStatus,
+});
+
 // ---- final reads -----------------------------------------------------------
 const catalog = JSON.parse((await send("GET", `${gw}/api/catalog`)).text);
 show(

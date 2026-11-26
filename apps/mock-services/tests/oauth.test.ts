@@ -1,6 +1,28 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { createHash, randomBytes } from "node:crypto";
+import { z } from "zod";
 import { startMockServices } from "../src/server.ts";
+
+const clientSchema = z.object({ client_id: z.string() });
+const resourceMetadataSchema = z.object({
+  resource: z.string(),
+  authorization_servers: z.array(z.string()),
+});
+const authorizationMetadataSchema = z.object({
+  issuer: z.string(),
+  registration_endpoint: z.string(),
+  code_challenge_methods_supported: z.array(z.string()),
+});
+const errorSchema = z.object({ error: z.string() });
+const tokensSchema = z.object({
+  access_token: z.string(),
+  refresh_token: z.string(),
+});
+const rotatedSchema = z.object({ refresh_token: z.string() });
+const countersSchema = z.object({
+  refreshRotations: z.number(),
+  pkceFailures: z.number(),
+});
 
 let server: ReturnType<typeof startMockServices>;
 
@@ -25,8 +47,7 @@ async function register(redirectUri: string): Promise<string> {
     }),
   });
   expect(response.status).toBe(201);
-  const body = (await response.json()) as { client_id: string };
-  return body.client_id;
+  return clientSchema.parse(await response.json()).client_id;
 }
 
 async function authorize(clientId: string, redirectUri: string, challenge: string): Promise<URL> {
@@ -75,16 +96,12 @@ describe("mock authorization server", () => {
   test("advertises RFC 9728 and RFC 8414 metadata", async () => {
     const resource = await fetch(`${base()}/.well-known/oauth-protected-resource/oauth/mcp`);
     expect(resource.status).toBe(200);
-    const resourceBody = (await resource.json()) as { resource: string; authorization_servers: string[] };
+    const resourceBody = resourceMetadataSchema.parse(await resource.json());
     expect(resourceBody.resource).toBe(`${base()}/oauth/mcp`);
     expect(resourceBody.authorization_servers).toEqual([base()]);
 
     const metadata = await fetch(`${base()}/.well-known/oauth-authorization-server`);
-    const metadataBody = (await metadata.json()) as {
-      issuer: string;
-      registration_endpoint: string;
-      code_challenge_methods_supported: string[];
-    };
+    const metadataBody = authorizationMetadataSchema.parse(await metadata.json());
     expect(metadataBody.issuer).toBe(base());
     expect(metadataBody.registration_endpoint).toBe(`${base()}/oauth/register`);
     expect(metadataBody.code_challenge_methods_supported).toEqual(["S256"]);
@@ -101,7 +118,7 @@ describe("mock authorization server", () => {
     });
     const response = await fetch(`${base()}/oauth/authorize?${params.toString()}`);
     expect(response.status).toBe(400);
-    expect(((await response.json()) as { error: string }).error).toBe("invalid_request");
+    expect(errorSchema.parse(await response.json()).error).toBe("invalid_request");
   });
 
   test("requires the PKCE verifier, burns the code once and rotates refresh tokens", async () => {
@@ -121,7 +138,7 @@ describe("mock authorization server", () => {
       redirect_uri: redirectUri,
     });
     expect(wrong.status).toBe(400);
-    expect(((await wrong.json()) as { error: string }).error).toBe("invalid_grant");
+    expect(errorSchema.parse(await wrong.json()).error).toBe("invalid_grant");
 
     const right = await exchange({
       grant_type: "authorization_code",
@@ -131,7 +148,7 @@ describe("mock authorization server", () => {
       redirect_uri: redirectUri,
     });
     expect(right.status).toBe(200);
-    const tokens = (await right.json()) as { access_token: string; refresh_token: string };
+    const tokens = tokensSchema.parse(await right.json());
     expect(tokens.access_token).toStartWith("at_");
     expect(tokens.refresh_token).toStartWith("rt_");
 
@@ -143,7 +160,7 @@ describe("mock authorization server", () => {
       redirect_uri: redirectUri,
     });
     expect(replay.status).toBe(400);
-    expect(((await replay.json()) as { error: string }).error).toBe("invalid_grant");
+    expect(errorSchema.parse(await replay.json()).error).toBe("invalid_grant");
 
     const refresh = await exchange({
       grant_type: "refresh_token",
@@ -151,7 +168,7 @@ describe("mock authorization server", () => {
       refresh_token: tokens.refresh_token,
     });
     expect(refresh.status).toBe(200);
-    const rotated = (await refresh.json()) as { refresh_token: string };
+    const rotated = rotatedSchema.parse(await refresh.json());
     expect(rotated.refresh_token).not.toBe(tokens.refresh_token);
 
     const stale = await exchange({
@@ -160,12 +177,9 @@ describe("mock authorization server", () => {
       refresh_token: tokens.refresh_token,
     });
     expect(stale.status).toBe(400);
-    expect(((await stale.json()) as { error: string }).error).toBe("invalid_grant");
+    expect(errorSchema.parse(await stale.json()).error).toBe("invalid_grant");
 
-    const state = (await (await fetch(`${base()}/mock/oauth/state`)).json()) as {
-      refreshRotations: number;
-      pkceFailures: number;
-    };
+    const state = countersSchema.parse(await (await fetch(`${base()}/mock/oauth/state`)).json());
     expect(state.refreshRotations).toBe(1);
     expect(state.pkceFailures).toBe(1);
   });

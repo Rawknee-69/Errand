@@ -1,4 +1,4 @@
-import type { GatewayHealth } from "@errand/shared";
+import { escapeHtml, type GatewayHealth } from "@errand/shared";
 import type { AuthInfo } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import { Hono } from "hono";
@@ -111,7 +111,7 @@ function oauthCallbackPage(connectorName: string): string {
 <title>Errand — connected</title>
 <body style="font-family: system-ui, sans-serif; max-width: 32rem; margin: 4rem auto">
   <h1>Connected</h1>
-  <p><strong>${connectorName}</strong> is authorized and its tools are catalogued.</p>
+  <p><strong>${escapeHtml(connectorName)}</strong> is authorized and its tools are catalogued.</p>
   <p><a href="/api/catalog">Open the catalog</a></p>
 </body>`;
 }
@@ -305,7 +305,13 @@ export function createGatewayApp(
     }
     if (error instanceof ConnectorError) {
       const status =
-        error.code === "not_found" ? 404 : error.code === "reauth" ? 409 : 400;
+        error.code === "not_found"
+          ? 404
+          : error.code === "reauth"
+            ? 409
+            : error.code === "oauth_failed"
+              ? 502
+              : 400;
       return c.json({ error: error.code, message: error.message }, status);
     }
     console.error(error);
