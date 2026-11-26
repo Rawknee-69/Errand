@@ -15,6 +15,9 @@ export type VerificationOutcome = "matched" | "mismatched" | "unverified";
 // Catalog lifecycle: new at discovery, changed or removed blocks new slips until re-approved.
 export type ToolState = "new" | "active" | "changed" | "removed";
 
+// A slip's lifecycle: a request waits as pending until a human decides.
+export type SlipState = "pending" | "approved" | "denied" | "expired" | "burned";
+
 export const users = sqliteTable("users", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),
@@ -132,7 +135,7 @@ export const slips = sqliteTable(
     userId: text("user_id").notNull().references(() => users.id),
     errandType: text("errand_type").notNull(),
     goal: text("goal").notNull().default(""),
-    state: text("state").notNull(),
+    state: text("state").notNull().$type<SlipState>(),
     tier: text("tier").notNull().$type<Tier>(),
     tools: text("tools").notNull().default("[]"),
     constraints: text("constraints").notNull().default("{}"),

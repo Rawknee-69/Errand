@@ -55,7 +55,7 @@ describe("vault leak boundary", () => {
       });
 
       fixture.db.insert(slips)
-        .values({ id: "slip", userId: "user-a", errandType: "calendar", state: "done", tier: "learner", expiresAt: TS, createdAt: TS, updatedAt: TS })
+        .values({ id: "slip", userId: "user-a", errandType: "calendar", state: "approved", tier: "learner", expiresAt: TS, createdAt: TS, updatedAt: TS })
         .run();
       fixture.db.insert(calls)
         .values({ id: "call", userId: "user-a", slipId: "slip", connectorId: "conn", tool: "notion__search", createdAt: TS })

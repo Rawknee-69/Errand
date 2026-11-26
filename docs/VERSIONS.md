@@ -21,7 +21,7 @@ Runtime on the same machine: `bun 1.4.4`, `node v26.13.1`.
 | `hono` | gateway | 4.13.22 | `latest` | `latest => 4.13.22` |
 | `zod` | gateway, mock-services | 4.6.7 | `latest` | `latest => 4.6.7` |
 | `@modelcontextprotocol/client` | gateway | 2.4.0 | `latest` | `latest => 2.4.0` |
-| `@modelcontextprotocol/server` | mock-services | 2.4.0 | `latest` | `latest => 2.4.0` |
+| `@modelcontextprotocol/server` | gateway, mock-services | 2.4.0 | `latest` | `latest => 2.4.0` |
 | `react` | web | 19.3.1 | `latest` | `latest => 19.3.1` |
 | `react-dom` | web | 19.3.1 | `latest` | `latest => 19.3.1` |
 | `vite` | web (dev) | 8.3.8 | `latest` | `latest => 8.3.8` |
