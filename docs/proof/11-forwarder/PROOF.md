@@ -31,7 +31,7 @@
 | 9 | A 1000 ms upstream call with a 500 ms per-call limit returned `upstream_timeout`; `callsUsed` stayed at 1 for the attempt, the journal held `call.failed` with reason `upstream_timeout`, and the calls row has `result: null` plus the timeout error. | `logs/forward-transcript.txt` |
 | 10 | Six concurrent `big__slow_result` calls with a per-connector limit of two ran in three waves; the mock measured `maxActive: 2`. | `logs/forward-transcript.txt` |
 | 11 | The journal and calls table were scanned for all three upstream credentials: 0 matches in 46 journal rows and 12 calls rows. | `logs/secret-scan.txt`, `db-scan.ts` |
-| 12 | `/api/journal/verify` returned `{ok:true, checked:46}` after the forwarded, failed and deferred entries. | `logs/forward-transcript.txt` |
+| 12 | `/api/journal/verify` returned `{ok:true, checked:46}` after the forwarded and failed entries. | `logs/forward-transcript.txt` |
 | 13 | Full suite and typecheck. | `logs/test-output.txt`, `logs/typecheck.txt` |
 
 ## Findings

@@ -169,8 +169,25 @@ function recordFailure(
 }
 
 // Sends and spends are admitted by policy but cannot run until ticket #12
-// installs the outbox and the spend tap.
-function notForwarded(reason: NotForwardedReason): ForwardOutcome {
+// installs the outbox and the spend tap. The journal still records the outcome,
+// because admission has already consumed the call and spend counters.
+function notForwarded(
+  db: Db,
+  userId: string,
+  decision: AdmittedCall,
+  reason: NotForwardedReason,
+): ForwardOutcome {
+  appendJournalEvent(db, {
+    userId,
+    eventType: "call.not_forwarded",
+    payload: {
+      slip_id: decision.slipId,
+      tool: decision.tool,
+      connector_id: decision.connectorId,
+      class: decision.class,
+      reason,
+    },
+  });
   return { state: "not_forwarded", reason };
 }
 
@@ -184,17 +201,9 @@ export function createForwarder(options: ForwarderOptions): Forwarder {
   return async (userId, decision, args) => {
     switch (decision.class) {
       case "send":
-        return notForwarded("outbox_not_installed");
+        return notForwarded(options.db, userId, decision, "outbox_not_installed");
       case "spend":
-        return notForwarded("spend_tap_not_installed");
-      case "unknown": {
-        const failure = {
-          error: "upstream_error" as const,
-          message: `${decision.tool} has no forwardable class`,
-        };
-        recordFailure(options.db, userId, decision, args, failure, 0);
-        return { state: "failed", ...failure, durationMs: 0 };
-      }
+        return notForwarded(options.db, userId, decision, "spend_tap_not_installed");
       case "read":
       case "write":
       case "delete":
@@ -216,15 +225,22 @@ export function createForwarder(options: ForwarderOptions): Forwarder {
     let result: ConnectorToolResult | undefined;
     let failure: ForwardFailure | undefined;
     try {
-      result = await limiter.run(connector.id, () =>
-        callConnectorTool(
-          createConnectorServiceDeps(
-            options.db,
-            options.keyring,
+      result = await limiter.run(connector.id, () => {
+        const remaining = deadline - Date.now();
+        if (remaining <= 0) {
+          throw new ConnectorCallError(
+            "timeout",
+            `The upstream call to ${decision.tool} timed out waiting for a connector slot`,
+          );
+        }
+        return callConnectorTool(
+          createConnectorServiceDeps({
+            db: options.db,
+            keyring: options.keyring,
             userId,
-            options.discoverOptions,
-            options.redirectUri,
-          ),
+            discoverOptions: options.discoverOptions,
+            redirectUri: options.redirectUri,
+          }),
           {
             id: connector.id,
             url: connector.url,
@@ -233,9 +249,9 @@ export function createForwarder(options: ForwarderOptions): Forwarder {
           },
           decision.upstreamTool,
           args,
-          { timeoutMs: Math.max(1, deadline - Date.now()), resultCapBytes },
-        ),
-      );
+          { timeoutMs: remaining, resultCapBytes },
+        );
+      });
     } catch (error) {
       failure = failureFrom(error, decision.tool);
     }

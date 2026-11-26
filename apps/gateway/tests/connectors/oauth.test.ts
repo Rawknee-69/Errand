@@ -9,6 +9,7 @@ import { issueAgentKey } from "../../src/vault/agent-keys.ts";
 import { Vault } from "../../src/vault/vault.ts";
 import { VaultKeyring } from "../../src/vault/keyring.ts";
 import { callTool, connectAgent } from "../agent/mcp-client.ts";
+import { requestAndApprove } from "../agent/forward-support.ts";
 import { SLIP_KEY } from "../support/fixtures.ts";
 import {
   connectResponseSchema,
@@ -414,16 +415,14 @@ describe("OAuth 2.1 + PKCE via the SDK", () => {
     const server = Bun.serve({ port: 0, fetch: app.fetch });
     const client = await connectAgent(`http://127.0.0.1:${server.port}`, key);
     try {
-      const requested = await callTool(client, "request_errand", {
-        goal: "read the calendar",
-        tools: ["oauth_calendar__list_events"],
-      });
-      expect(requested.result.isError).toBeFalsy();
-      const slipId = z.object({ slipId: z.string() }).parse(requested.body).slipId;
-      const approved = await post(`/api/slips/${slipId}/approve`, {});
-      expect(approved.status).toBe(200);
-      const status = await callTool(client, "errand_status", { slip_id: slipId });
-      const capability = z.object({ capability: z.string() }).parse(status.body).capability;
+      const { slipId, capability } = await requestAndApprove(
+        client,
+        ["oauth_calendar__list_events"],
+        async (slipId) => {
+          const approved = await post(`/api/slips/${slipId}/approve`, {});
+          expect(approved.status).toBe(200);
+        },
+      );
 
       const response = await callTool(client, "errand_call", {
         slip_id: slipId,
@@ -433,6 +432,7 @@ describe("OAuth 2.1 + PKCE via the SDK", () => {
       expect(response.result.isError).toBeFalsy();
       expect(response.body).toMatchObject({ state: "forwarded", class: "read" });
       expect(JSON.stringify(response.body)).toContain("Dinner with Sam");
+      expect((await mockState()).refreshGrants).toBeGreaterThan(0);
 
       const callRow = db.select().from(calls).all().find((row) => row.slipId === slipId);
       expect(callRow?.error).toBeNull();

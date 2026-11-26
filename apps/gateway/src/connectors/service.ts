@@ -33,22 +33,24 @@ export type ConnectorServiceDeps = ConnectorBaseDeps & {
   maxConnectors?: number;
 };
 
-export function createConnectorServiceDeps(
-  db: Db,
-  keyring: VaultKeyring,
-  userId: string,
-  discoverOptions: DiscoverOptions,
-  redirectUri: string,
-  maxConnectors?: number,
-): ConnectorServiceDeps {
+export type ConnectorServiceOptions = {
+  db: Db;
+  keyring: VaultKeyring;
+  userId: string;
+  discoverOptions: DiscoverOptions;
+  redirectUri: string;
+  maxConnectors?: number;
+};
+
+export function createConnectorServiceDeps(options: ConnectorServiceOptions): ConnectorServiceDeps {
   return {
-    db,
-    userId,
-    vault: new Vault(db, keyring, userId),
-    store: new CredentialStore(db, keyring, userId),
-    discoverOptions,
-    redirectUri,
-    ...(maxConnectors === undefined ? {} : { maxConnectors }),
+    db: options.db,
+    userId: options.userId,
+    vault: new Vault(options.db, options.keyring, options.userId),
+    store: new CredentialStore(options.db, options.keyring, options.userId),
+    discoverOptions: options.discoverOptions,
+    redirectUri: options.redirectUri,
+    ...(options.maxConnectors === undefined ? {} : { maxConnectors: options.maxConnectors }),
   };
 }
 

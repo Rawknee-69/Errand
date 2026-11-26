@@ -2,7 +2,9 @@ import { authSecrets, type ConnectorAuth } from "./auth.ts";
 
 export function redactText(text: string, secrets: string[]): string {
   let redacted = text;
-  for (const secret of secrets) {
+  // Longest first, so a short password cannot break a longer encoded form
+  // (the base64 `user:password` header) before that form is replaced.
+  for (const secret of [...secrets].sort((a, b) => b.length - a.length)) {
     if (secret !== "") redacted = redacted.split(secret).join("[redacted]");
   }
   return redacted;

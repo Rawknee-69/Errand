@@ -173,11 +173,19 @@ export async function callConnectorTool(
 ): Promise<ConnectorToolResult> {
   const timeoutMs = options.timeoutMs ?? DEFAULT_CALL_TIMEOUT_MS;
   const capBytes = options.resultCapBytes ?? DEFAULT_RESULT_CAP_BYTES;
+  const deadline = Date.now() + timeoutMs;
 
   return withConnectorAuth(deps, connector.id, connector.authType, async (auth) => {
     const secrets = authSecrets(auth);
     try {
-      const raw = await invoke(auth, connector, tool, args, deps.discoverOptions, timeoutMs);
+      const remaining = deadline - Date.now();
+      if (remaining <= 0) {
+        throw new ConnectorCallError(
+          "timeout",
+          `The upstream call to ${tool} timed out before it could run`,
+        );
+      }
+      const raw = await invoke(auth, connector, tool, args, deps.discoverOptions, remaining);
       const redacted = redactAuthSecrets(raw, auth);
       const parsed = rawResultSchema.safeParse(redacted);
       if (!parsed.success) {

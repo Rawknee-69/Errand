@@ -25,7 +25,8 @@
   `refreshOAuthAccessToken` out of `refreshOAuthConnection` so a call can obtain
   the refreshed token without running discovery.
 - `apps/gateway/src/agent/forward.ts` — class handling (read/write/delete
-  forward; send/spend defer to #12; unknown fails), the per-connector limiter,
+  forward; send/spend return `not_forwarded` and journal `call.not_forwarded`
+  until #12; unknown cannot reach the forwarder), the per-connector limiter,
   success/failure calls rows, `call.succeeded` / `call.failed` journal entries,
   and needs-reauth handling on auth failures.
 - `apps/gateway/src/agent/mcp.ts` — `errand_call` now forwards, returns the
@@ -72,10 +73,10 @@ $ bun run typecheck
 ✓ 4 checks passed: comments, installed, no-any, oauth-verifier
 
 $ bun test
- 330 pass
+ 343 pass
  0 fail
- 1030 expect() calls
-Ran 330 tests across 42 files.
+ 1068 expect() calls
+Ran 343 tests across 42 files.
 ```
 
 ## Proof
@@ -102,31 +103,35 @@ None. No dependency was added, upgraded, downgraded or removed.
 Standards:
 - Extracted `createMcpTransport` so discovery and forwarding no longer copy the
   transport/egress block.
-- Extracted `createConnectorServiceDeps` so `app.ts` and the forwarder share one
-  vault/store/discovery bundle.
-- Extracted shared proof/test schemas and the `call` helper into
-  `tests/agent/forward-support.ts`; removed the duplicated helpers.
-- Removed the `as { … }` assertions from the proof driver; bodies are narrowed
+- Extracted `createConnectorServiceDeps` (one options object) so `app.ts` and
+  the forwarder share one vault/store/discovery bundle.
+- Extracted shared proof/test schemas, `call`, `bytes` and `requestAndApprove`
+  into `tests/agent/forward-support.ts`; the OAuth test uses the same flow.
+- Removed the `as { ... }` assertions from the proof driver; bodies are narrowed
   with zod. The db-scan uses a type guard instead of casts.
 - Moved generic value redaction to `connectors/redaction.ts`.
-- Replaced the `send`/`spend` if-chain with an explicit `switch` over
-  `ToolClass`, so `unknown` is a compile-visible case.
-- Removed the `call.deferred` event; an admitted send/spend still returns
-  `not_forwarded` and consumes the admission exactly as before.
+- Replaced the `send`/`spend` if-chain with an explicit `switch`; the admitted
+  class type now excludes `unknown`, so the case cannot exist.
 - Collapsed the duplicated calls-row insert into `insertCall`.
+- Redaction replaces longer secrets first, so a short password cannot break the
+  base64 header form before it is replaced.
 
 Spec:
 - Fixed basic-auth redaction to include the base64 header form.
 - The result cap is measured on the whole returned result, including the
   `truncated` / `originalBytes` flags, not just its payload.
-- The per-call deadline now starts before the concurrency queue, so waiting for
-  a slot is inside the bound.
+- The per-call deadline starts before the concurrency queue and covers OAuth
+  refresh time before the upstream call; a call that waits past its deadline
+  fails without opening a connection.
 - OAuth reauth/failed refresh errors map to `upstream_auth`, not
   `upstream_error`.
-- Failure responses now include the remaining counters.
-- Added an in-process OAuth forwarding test.
-- Kept `markConnectorSuccess` as the success-side connector counter; removed the
-  speculative deferred journal event.
+- Failure responses include the remaining counters.
+- Added an in-process OAuth forwarding test that asserts a refresh grant happened
+  before the forwarded call.
+- An admitted send/spend now journals `call.not_forwarded` with its reason, so
+  the consumed counter is not silent; there is still no calls row because
+  nothing reached upstream.
+- Kept `markConnectorSuccess` as the success-side connector counter.
 
 Open judgement calls:
 - `authSecrets` is a third switch on `auth.type`; a single behaviour table would
@@ -135,6 +140,8 @@ Open judgement calls:
   forwarder's class boundary rather than re-driving the whole slip pipeline.
 - Each admitted call opens its own MCP session; connection reuse is a later
   performance change.
+- OAuth calls refresh the token on every call; correctness is covered, the extra
+  refresh traffic is not measured.
 - Responses above the 10 MB egress ceiling are refused rather than truncated.
 
 ## Unverified

@@ -31,3 +31,19 @@ export function call(
 export function bytes(value: unknown): number {
   return Buffer.byteLength(JSON.stringify(value), "utf8");
 }
+
+export async function requestAndApprove(
+  client: Client,
+  tools: string[],
+  approve: (slipId: string) => Promise<void>,
+): Promise<{ slipId: string; capability: string }> {
+  const requested = await callTool(client, "request_errand", { goal: "forward test", tools });
+  if (requested.result.isError === true) throw new Error("request_errand was refused");
+  const slipId = requestedSchema.parse(requested.body).slipId;
+  await approve(slipId);
+
+  const status = await callTool(client, "errand_status", { slip_id: slipId });
+  const capability = statusSchema.parse(status.body).capability;
+  if (capability === null) throw new Error("approved slip has no capability");
+  return { slipId, capability };
+}

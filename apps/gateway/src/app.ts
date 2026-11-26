@@ -187,14 +187,14 @@ export function createGatewayApp(
     if (keyring === undefined) {
       throw new ConnectorError("credential", "The vault is not configured on this gateway");
     }
-    return createConnectorServiceDeps(
+    return createConnectorServiceDeps({
       db,
       keyring,
       userId,
       discoverOptions,
-      oauthRedirectUri,
-      options.maxConnectors,
-    );
+      redirectUri: oauthRedirectUri,
+      ...(options.maxConnectors === undefined ? {} : { maxConnectors: options.maxConnectors }),
+    });
   }
 
   function connectorDetail(result: ConnectResult, userId: string): ConnectorDetail {

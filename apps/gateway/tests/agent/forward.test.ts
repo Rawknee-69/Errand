@@ -5,13 +5,13 @@ import { createGatewayApp, type GatewayAppOptions } from "../../src/app.ts";
 import { createForwarder } from "../../src/agent/forward.ts";
 import { redactAuthSecrets } from "../../src/connectors/redaction.ts";
 import type { Db } from "../../src/db/client.ts";
-import { calls, connectors } from "../../src/db/schema.ts";
+import { calls, connectors, journal } from "../../src/db/schema.ts";
 import { issueAgentKey } from "../../src/vault/agent-keys.ts";
 import { VaultKeyring } from "../../src/vault/keyring.ts";
 import { listJournalEvents } from "../../src/db/journal.ts";
 import { KEK, SLIP_KEY, userDb } from "../support/fixtures.ts";
 import { callTool, connectAgent } from "./mcp-client.ts";
-import { call, errorSchema, forwardedSchema, requestedSchema, statusSchema } from "./forward-support.ts";
+import { call, errorSchema, forwardedSchema, requestAndApprove as requestAndApproveShared } from "./forward-support.ts";
 
 const catalogSchema = z.object({
   tools: z.array(
@@ -79,19 +79,14 @@ async function requestAndApprove(
   client: Awaited<ReturnType<typeof connectAgent>>,
   tools: string[],
 ): Promise<{ slipId: string; capability: string }> {
-  const requested = await callTool(client, "request_errand", { goal: "forward test", tools });
-  expect(requested.result.isError).toBeFalsy();
-  const slipId = requestedSchema.parse(requested.body).slipId;
-  const approved = await testApp.app.request(`/api/slips/${slipId}/approve`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: "{}",
+  return requestAndApproveShared(client, tools, async (slipId) => {
+    const approved = await testApp.app.request(`/api/slips/${slipId}/approve`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: "{}",
+    });
+    expect(approved.status).toBe(200);
   });
-  expect(approved.status).toBe(200);
-  const status = await callTool(client, "errand_status", { slip_id: slipId });
-  const capability = statusSchema.parse(status.body).capability;
-  if (capability === null) throw new Error("approved slip has no capability");
-  return { slipId, capability };
 }
 
 function mockUrl(path: string): string {
@@ -246,6 +241,14 @@ describe("forwarding admitted calls", () => {
     const spend = await forwarder("user-a", { ...decision, class: "spend" }, { cents: 50 });
     expect(spend).toEqual({ state: "not_forwarded", reason: "spend_tap_not_installed" });
     expect(testApp.db.select().from(calls).all().some((row) => row.slipId === "deferred-slip")).toBe(false);
+    const notForwarded = testApp.db
+      .select()
+      .from(journal)
+      .all()
+      .filter((event) => event.eventType === "call.not_forwarded");
+    expect(notForwarded).toHaveLength(2);
+    expect(notForwarded.map((event) => event.payload).join("\n")).toContain("outbox_not_installed");
+    expect(notForwarded.map((event) => event.payload).join("\n")).toContain("spend_tap_not_installed");
   });
 
   test("basic auth redacts the password and its base64 header form, not the username", () => {
