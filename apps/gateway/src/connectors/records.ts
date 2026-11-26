@@ -1,7 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import type { ConnectorView } from "@errand/shared";
 import type { Db } from "../db/client.ts";
-import { appendJournalEvent } from "../db/journal.ts";
+import { recordEvent } from "../db/events.ts";
 import { connectors, type ConnectorAuthStatus } from "../db/schema.ts";
 import { scopedGet } from "../db/scoped-reads.ts";
 import { ConnectorError } from "./errors.ts";
@@ -65,10 +65,10 @@ export function markConnectorNeedsReauth(
   const wasNeedsReauth = row.authStatus === "needs_reauth";
   setConnectorAuthStatus(deps, connectorId, "needs_reauth", reason);
   if (!wasNeedsReauth) {
-    appendJournalEvent(deps.db, {
+    recordEvent(deps.db, {
       userId: deps.userId,
       eventType: "connector.needs_reauth",
-      payload: { connectorId, reason },
+      payload: { connector_id: connectorId, reason },
     });
   }
 }

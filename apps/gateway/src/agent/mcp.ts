@@ -6,7 +6,7 @@ import type { Db } from "../db/client.ts";
 import { agentCatalog } from "./catalog.ts";
 import { submitCall } from "./call.ts";
 import type { Forwarder } from "./forward.ts";
-import type { RequestedLimits } from "./limits.ts";
+import type { RequestedLimits } from "../slips/caps.ts";
 import { ErrandRequestError, requestErrand } from "./request.ts";
 import { errandStatus } from "./status.ts";
 

@@ -3,7 +3,8 @@ import { and, eq, inArray, lt, lte } from "drizzle-orm";
 import { isPendingOutboxState, type OutboxItem } from "@errand/shared";
 import type { AdmittedCall, Forwarder } from "../agent/forward.ts";
 import type { Db } from "../db/client.ts";
-import { appendJournalEventIn } from "../db/journal.ts";
+import { recordEventIn } from "../db/events.ts";
+import { GatewayError } from "../errors.ts";
 import { outbox, type OutboxClass } from "../db/schema.ts";
 import { getOutboxItem, getSlip, listOutbox } from "../db/scoped-reads.ts";
 import { admitCall } from "../policy/pipeline.ts";
@@ -18,13 +19,12 @@ import { outboxView, type OutboxRow } from "./view.ts";
 
 export type OutboxErrorCode = "not_found" | "not_pending" | "not_confirmable" | "expired";
 
-export class OutboxError extends Error {
+export class OutboxError extends GatewayError {
   constructor(
-    readonly code: OutboxErrorCode,
+    override readonly code: OutboxErrorCode,
     message: string,
   ) {
-    super(message);
-    this.name = "OutboxError";
+    super(code, message, code === "not_found" ? 404 : 409);
   }
 }
 
@@ -94,7 +94,7 @@ function create(
         updatedAt: createdAt,
       })
       .run();
-    appendJournalEventIn(tx, {
+    recordEventIn(tx, {
       userId,
       eventType: toolClass === "send" ? "outbox.held" : "outbox.needs_human",
       payload: {
@@ -149,7 +149,7 @@ function close(
       amountCents: row.amountCents,
       now,
     });
-    appendJournalEventIn(tx, {
+    recordEventIn(tx, {
       userId: row.userId,
       eventType,
       payload: {
@@ -157,6 +157,7 @@ function close(
         slip_id: row.slipId,
         tool: row.tool,
         class: row.toolClass,
+        amount_cents: row.amountCents,
         reason,
         ...(to === "expired" ? { expires_at: row.expiresAt } : {}),
       },
@@ -217,7 +218,7 @@ async function run(
       .set({ state, callId, reason, updatedAt: now.toISOString() })
       .where(and(eq(outbox.userId, row.userId), eq(outbox.id, row.id)))
       .run();
-    appendJournalEventIn(tx, {
+    recordEventIn(tx, {
       userId: row.userId,
       eventType: row.toolClass === "send" ? "outbox.released" : "outbox.completed",
       payload: {
@@ -292,7 +293,7 @@ export function createOutboxService(options: OutboxServiceOptions): OutboxServic
       const claimed = db.transaction((tx) => {
         const updated = claim(tx, userId, id, ["needs_human"], "releasing", now);
         if (updated === undefined) return undefined;
-        appendJournalEventIn(tx, {
+        recordEventIn(tx, {
           userId,
           eventType: "outbox.confirmed",
           payload: {

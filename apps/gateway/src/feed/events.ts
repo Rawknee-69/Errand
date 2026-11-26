@@ -1,21 +1,20 @@
-import { feedPayloadSchema, type FeedEvent } from "@errand/shared";
+import { journalPayload, type FeedEvent } from "@errand/shared";
 import { and, asc, eq, gt } from "drizzle-orm";
 import type { Db } from "../db/client.ts";
 import { journal } from "../db/schema.ts";
 
 export function toFeedEvent(row: typeof journal.$inferSelect): FeedEvent {
-  let payload: Record<string, unknown> = {};
+  let raw: unknown = {};
   try {
-    const parsed = feedPayloadSchema.safeParse(JSON.parse(row.payload));
-    if (parsed.success) payload = parsed.data;
+    raw = JSON.parse(row.payload);
   } catch {
-    payload = {};
+    raw = {};
   }
   return {
     seq: row.seq,
     eventType: row.eventType,
     createdAt: row.createdAt,
-    payload,
+    payload: journalPayload(row.eventType, raw),
   };
 }
 

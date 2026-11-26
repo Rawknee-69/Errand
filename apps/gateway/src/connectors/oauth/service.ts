@@ -7,7 +7,7 @@ import {
   auth,
   type FetchLike,
 } from "@modelcontextprotocol/client";
-import { appendJournalEvent } from "../../db/journal.ts";
+import { recordEvent } from "../../db/events.ts";
 import { oauthAttempts, connectors } from "../../db/schema.ts";
 import { scopedGet } from "../../db/scoped-reads.ts";
 import { assertFetchableUrl, egressRequest } from "../../egress/guard.ts";
@@ -356,10 +356,10 @@ async function authorizeAndAnnounce(
     input.state,
   );
   pruneAttempts(deps, input.connectorId);
-  appendJournalEvent(deps.db, {
+  recordEvent(deps.db, {
     userId: deps.userId,
     eventType: input.eventType,
-    payload: { connectorId: input.connectorId, host: new URL(input.url).host },
+    payload: { connector_id: input.connectorId, host: new URL(input.url).host },
   });
   return {
     connector: connectorView(connectorRow(deps, input.connectorId)),
@@ -536,20 +536,20 @@ export async function completeOAuthFlow(
       markConnectorNeedsReauth(deps, row.id, "upstream_401");
     } else {
       setConnectorAuthStatus(deps, row.id, "active", failureReason(error));
-      appendJournalEvent(deps.db, {
+      recordEvent(deps.db, {
         userId: deps.userId,
         eventType: "connector.oauth_discovery_failed",
-        payload: { connectorId: row.id, reason: failureReason(error) },
+        payload: { connector_id: row.id, reason: failureReason(error) },
       });
     }
     throw error;
   }
 
   setConnectorAuthStatus(deps, row.id, "active", null);
-  appendJournalEvent(deps.db, {
+  recordEvent(deps.db, {
     userId: deps.userId,
     eventType: "connector.oauth_authorized",
-    payload: { connectorId: row.id, host: new URL(row.url).host },
+    payload: { connector_id: row.id, host: new URL(row.url).host },
   });
   const summary = applyDiscovery(deps, row.id, row.name, connection, "catalog.ingested");
 
@@ -585,10 +585,10 @@ export function refreshOAuthAccessToken(
         markConnectorNeedsReauth(deps, connectorId, reason);
       } else {
         setConnectorAuthStatus(deps, connectorId, "active", reason);
-        appendJournalEvent(deps.db, {
+        recordEvent(deps.db, {
           userId: deps.userId,
           eventType: "connector.oauth_refresh_failed",
-          payload: { connectorId, reason },
+          payload: { connector_id: connectorId, reason },
         });
       }
       throw asConnectorError(error, reason, reauth ? "reauth" : "oauth_failed");
@@ -618,10 +618,10 @@ export async function refreshOAuthConnection(
       deps.discoverOptions,
     );
     setConnectorAuthStatus(deps, connectorId, "active", null);
-    appendJournalEvent(deps.db, {
+    recordEvent(deps.db, {
       userId: deps.userId,
       eventType: "connector.oauth_refreshed",
-      payload: { connectorId },
+      payload: { connector_id: connectorId },
     });
     return connection;
   } catch (error) {

@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import type { AuthHint, McpTransportKind, ProbeResult } from "@errand/shared";
 import type { Db } from "../db/client.ts";
-import { appendJournalEvent } from "../db/journal.ts";
+import { recordEvent } from "../db/events.ts";
 import { scopedList } from "../db/scoped-reads.ts";
 import { connectors, credentials, type ConnectorAuthType } from "../db/schema.ts";
 import { CredentialStore } from "../vault/credentials.ts";
@@ -10,9 +10,8 @@ import type { VaultKeyring } from "../vault/keyring.ts";
 import { Vault } from "../vault/vault.ts";
 import { assertFetchableUrl } from "../egress/guard.ts";
 import { parseCredential, serialiseCredential, type ConnectorAuth } from "./auth.ts";
-import { getCatalogTool, pinToolDefinition, type DiscoveredTool, type IngestSummary } from "./catalog.ts";
+import type { DiscoveredTool, IngestSummary } from "./catalog.ts";
 import { applyDiscovery } from "./discovery.ts";
-import { ConnectorError } from "./errors.ts";
 import { assertConnectorQuota } from "./quota.ts";
 import {
   discoverMcpTools,
@@ -162,22 +161,22 @@ export async function connectConnector(
   try {
     if (secret !== undefined) {
       deps.store.store({ serviceId: id, kind: input.auth.type, secret, connectorId: id });
-      appendJournalEvent(deps.db, {
+      recordEvent(deps.db, {
         userId: deps.userId,
         eventType: "vault.credential_sealed",
         payload: { connector_id: id, auth_type: input.auth.type },
       });
     }
     const connection = await discoverWithStoredAuth(deps, id, input.auth.type, normalized);
-    appendJournalEvent(deps.db, {
+    recordEvent(deps.db, {
       userId: deps.userId,
       eventType: "connector.connected",
       payload: {
-        connectorId: id,
+        connector_id: id,
         host: connectorHost(normalized),
         transport: connection.transport,
-        authType: input.auth.type,
-        toolCount: connection.tools.length,
+        auth_type: input.auth.type,
+        tool_count: connection.tools.length,
       },
     });
     const summary = applyDiscovery(deps, id, input.name, connection, "catalog.ingested");
@@ -204,11 +203,11 @@ export async function refreshConnector(
   try {
     connection = await discoverWithStoredAuth(deps, row.id, row.authType, row.url);
   } catch (error) {
-    appendJournalEvent(deps.db, {
+    recordEvent(deps.db, {
       userId: deps.userId,
       eventType: "connector.refresh_failed",
       payload: {
-        connectorId: row.id,
+        connector_id: row.id,
         message: error instanceof Error ? error.message : "unknown error",
       },
     });
@@ -224,23 +223,3 @@ export async function refreshConnector(
   };
 }
 
-export function approveCatalogTool(db: Db, userId: string, toolId: string) {
-  const row = getCatalogTool(db, userId, toolId);
-  if (row === undefined) throw new ConnectorError("not_found", `Tool ${toolId} not found`);
-  if (row.state === "removed") throw new ConnectorError("not_found", `Tool ${row.name} was removed`);
-  const tool = pinToolDefinition(db, userId, row);
-  appendJournalEvent(db, {
-    userId,
-    eventType: "catalog.tool_approved",
-    payload: {
-      toolId: tool.id,
-      connectorId: tool.connectorId,
-      name: tool.name,
-      previousClass: row.class,
-      class: tool.class,
-      previousHash: row.definitionHash,
-      hash: tool.definitionHash,
-    },
-  });
-  return tool;
-}

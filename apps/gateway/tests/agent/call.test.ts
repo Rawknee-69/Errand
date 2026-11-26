@@ -12,7 +12,7 @@ import { listJournalEvents } from "../../src/db/journal.ts";
 import { connectors, slips, tools, trust, users } from "../../src/db/schema.ts";
 import { getSlip, getTrust } from "../../src/db/scoped-reads.ts";
 import { errandTypeFor } from "../../src/policy/errand-type.ts";
-import { DECOY_NAMES } from "../../src/policy/decoys.ts";
+import { DECOY_NAMES } from "@errand/shared";
 import { SPEND_AMOUNT_ARGUMENT } from "../../src/policy/spend.ts";
 import { hashCapability, issueCapability, issueValidCapability } from "../../src/policy/capability.ts";
 import { signSlip } from "../../src/policy/slip-signing.ts";

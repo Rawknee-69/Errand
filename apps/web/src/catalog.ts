@@ -1,6 +1,6 @@
 import {
   isBlockedToolState,
-  isToolExposed,
+  isExposed,
   type CatalogToolView,
 } from "@errand/shared";
 
@@ -16,5 +16,5 @@ export function blockedToolCount(tools: CatalogToolView[]): number {
 }
 
 export function exposedToolCount(tools: CatalogToolView[]): number {
-  return tools.filter(isToolExposed).length;
+  return tools.filter(isExposed).length;
 }

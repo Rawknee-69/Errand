@@ -2,6 +2,7 @@ import { lookup } from "node:dns/promises";
 import { request as httpRequest, type IncomingMessage } from "node:http";
 import { request as httpsRequest } from "node:https";
 import { isIP, type LookupFunction } from "node:net";
+import { GatewayError } from "../errors.ts";
 import { classifyAddress, stripBrackets, type BlockedReason } from "./address.ts";
 
 export type EgressRefusalCode =
@@ -15,13 +16,12 @@ export type EgressRefusalCode =
   | "timeout"
   | "response-too-large";
 
-export class EgressRefusal extends Error {
-  readonly code: EgressRefusalCode;
-
-  constructor(code: EgressRefusalCode, message: string) {
-    super(message);
-    this.name = "EgressRefusal";
-    this.code = code;
+export class EgressRefusal extends GatewayError {
+  constructor(
+    override readonly code: EgressRefusalCode,
+    message: string,
+  ) {
+    super(code, message, 400);
   }
 }
 

@@ -1,7 +1,8 @@
 import type { CapTrim, SlipApprovalInput, SlipDetail } from "@errand/shared";
 import { and, eq } from "drizzle-orm";
 import type { Db } from "../db/client.ts";
-import { appendJournalEventIn } from "../db/journal.ts";
+import { GatewayError, type HttpStatus } from "../errors.ts";
+import { recordEventIn } from "../db/events.ts";
 import { slips } from "../db/schema.ts";
 import { getSlip } from "../db/scoped-reads.ts";
 import { issueCapability, hashCapability } from "../policy/capability.ts";
@@ -17,13 +18,19 @@ export type SlipErrorCode =
   | "signing_unavailable"
   | "invalid_json";
 
-export class SlipError extends Error {
+function slipStatus(code: SlipErrorCode): HttpStatus {
+  if (code === "not_found") return 404;
+  if (code === "cap_above_request" || code === "invalid_json") return 400;
+  if (code === "signing_unavailable") return 500;
+  return 409;
+}
+
+export class SlipError extends GatewayError {
   constructor(
-    readonly code: SlipErrorCode,
+    override readonly code: SlipErrorCode,
     message: string,
   ) {
-    super(message);
-    this.name = "SlipError";
+    super(code, message, slipStatus(code));
   }
 }
 
@@ -130,7 +137,7 @@ export function approveSlip(
       .all()[0];
     if (row === undefined) throw new Error(`Slip ${id} vanished while approving`);
 
-    appendJournalEventIn(tx, {
+    recordEventIn(tx, {
       userId,
       eventType: "slip.approved",
       payload: {
@@ -176,7 +183,7 @@ export function denySlip(
       .all()[0];
     if (row === undefined) throw new Error(`Slip ${id} vanished while denying`);
 
-    appendJournalEventIn(tx, {
+    recordEventIn(tx, {
       userId,
       eventType: "slip.denied",
       payload: {

@@ -1,11 +1,7 @@
 import { z } from "zod";
 import { toolClassSchema, type ToolClass, type VerificationOutcome } from "@errand/shared";
 import type { ConnectorToolResult } from "../connectors/call.ts";
-
-export type UpstreamRead = (
-  tool: string,
-  args: Record<string, unknown>,
-) => Promise<ConnectorToolResult>;
+import type { UpstreamRead } from "../connectors/upstream.ts";
 
 export const inverseSchema = z.object({
   tool: z.string().min(1),

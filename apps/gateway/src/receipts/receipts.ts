@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import type { ReceiptView, ToolClass, VerificationOutcome } from "@errand/shared";
 import type { Db } from "../db/client.ts";
-import { appendJournalEvent, appendJournalEventIn } from "../db/journal.ts";
+import { recordEvent, recordEventIn } from "../db/events.ts";
 import { receipts, undoActions } from "../db/schema.ts";
 import { demoteTrust } from "../policy/trust.ts";
 import {
@@ -13,22 +13,11 @@ import {
   listUndoActions,
   listReceipts,
 } from "../db/scoped-reads.ts";
-import {
-  callConnectorTool,
-  connectorTarget,
-  DEFAULT_CALL_TIMEOUT_MS,
-  DEFAULT_RESULT_CAP_BYTES,
-} from "../connectors/call.ts";
-import { createConnectorServiceDeps } from "../connectors/service.ts";
 import type { DiscoverOptions } from "../connectors/mcp.ts";
+import type { HttpStatus } from "../errors.ts";
+import { createUpstream, type Upstream } from "../connectors/upstream.ts";
 import type { VaultKeyring } from "../vault/keyring.ts";
-import {
-  inverseSchema,
-  verifyChange,
-  type Inverse,
-  type UpstreamRead,
-  type Verification,
-} from "./verifier.ts";
+import { inverseSchema, verifyChange, type Inverse, type Verification } from "./verifier.ts";
 
 type ReceiptRow = typeof receipts.$inferSelect;
 type UndoRow = typeof undoActions.$inferSelect;
@@ -127,7 +116,7 @@ export function recordReceipt(input: RecordReceiptInput): ReceiptView {
         .run();
     }
 
-    appendJournalEventIn(tx, {
+    recordEventIn(tx, {
       userId: input.userId,
       eventType: "receipt.created",
       payload: {
@@ -178,44 +167,35 @@ export type UndoDeps = {
   resultCapBytes?: number;
 };
 
+type UndoFailureCode =
+  | "not_found"
+  | "no_undo"
+  | "already_applied"
+  | "connector_missing"
+  | "upstream_failed";
+
+const UNDO_STATUS: Record<UndoFailureCode, HttpStatus> = {
+  not_found: 404,
+  no_undo: 409,
+  already_applied: 409,
+  connector_missing: 409,
+  upstream_failed: 502,
+};
+
 export type UndoResult =
   | { ok: true; verification: VerificationOutcome; summary: string; receipt: ReceiptView }
-  | {
-      ok: false;
-      code:
-        | "not_found"
-        | "no_undo"
-        | "already_applied"
-        | "connector_missing"
-        | "upstream_failed";
-      message: string;
-    };
+  | { ok: false; code: UndoFailureCode; message: string; status: HttpStatus };
+
+function undoFailed(code: UndoFailureCode, message: string): UndoResult {
+  return { ok: false, code, message, status: UNDO_STATUS[code] };
+}
 
 async function verifyUndo(
-  deps: UndoDeps,
-  userId: string,
+  upstream: Upstream,
   connector: NonNullable<ReturnType<typeof getConnector>>,
   inverse: Inverse,
-  read: UpstreamRead,
 ): Promise<Verification> {
-  const serviceDeps = createConnectorServiceDeps({
-    db: deps.db,
-    keyring: deps.keyring,
-    userId,
-    discoverOptions: deps.discoverOptions,
-    redirectUri: deps.redirectUri,
-  });
-  const options = {
-    timeoutMs: deps.callTimeoutMs ?? DEFAULT_CALL_TIMEOUT_MS,
-    resultCapBytes: deps.resultCapBytes ?? DEFAULT_RESULT_CAP_BYTES,
-  };
-  const result = await callConnectorTool(
-    serviceDeps,
-    connectorTarget(connector),
-    inverse.tool,
-    inverse.arguments,
-    options,
-  );
+  const result = await upstream.call(connector, inverse.tool, inverse.arguments);
   return verifyChange({
     connectorUrl: connector.url,
     connectorName: connector.name,
@@ -223,7 +203,7 @@ async function verifyUndo(
     arguments: inverse.arguments,
     result,
     toolClass: inverse.toolClass,
-    read,
+    read: upstream.reader(connector),
   });
 }
 
@@ -234,54 +214,52 @@ export async function applyUndo(
 ): Promise<UndoResult> {
   const receipt = getReceipt(deps.db, userId, receiptId);
   if (receipt === undefined) {
-    return { ok: false, code: "not_found", message: `No receipt ${receiptId} for this owner` };
+    return undoFailed("not_found", `No receipt ${receiptId} for this owner`);
   }
   const undo = listUndoActions(deps.db, userId).find((row) => row.receiptId === receipt.id);
   if (undo === undefined) {
-    return { ok: false, code: "no_undo", message: "This change has no inverse and cannot be undone" };
+    return undoFailed("no_undo", "This change has no inverse and cannot be undone");
   }
   const parsed = inverseSchema.safeParse(JSON.parse(undo.inverse));
   if (!parsed.success) {
-    return { ok: false, code: "no_undo", message: "The stored inverse could not be read" };
+    return undoFailed("no_undo", "The stored inverse could not be read");
   }
   const call = receipt.callId === null ? undefined : getCall(deps.db, userId, receipt.callId);
   const connector = call === undefined ? undefined : getConnector(deps.db, userId, call.connectorId);
   if (connector === undefined) {
-    return { ok: false, code: "connector_missing", message: "The connector for this receipt is gone" };
+    return undoFailed("connector_missing", "The connector for this receipt is gone");
   }
 
-  const claimedAt = new Date().toISOString();
-  const claimed = deps.db.$client
-    .prepare(
-      `UPDATE undo_actions SET started_at = ?
-       WHERE user_id = ? AND id = ? AND started_at IS NULL AND applied_at IS NULL`,
+  const claimed = deps.db
+    .update(undoActions)
+    .set({ startedAt: new Date().toISOString() })
+    .where(
+      and(
+        eq(undoActions.userId, userId),
+        eq(undoActions.id, undo.id),
+        isNull(undoActions.startedAt),
+        isNull(undoActions.appliedAt),
+      ),
     )
-    .run(claimedAt, userId, undo.id);
-  if (claimed.changes === 0) {
-    return {
-      ok: false,
-      code: "already_applied",
-      message: "This undo has already been applied or is in progress",
-    };
+    .returning({ id: undoActions.id })
+    .all();
+  if (claimed.length === 0) {
+    return undoFailed("already_applied", "This undo has already been applied or is in progress");
   }
 
-  const serviceDeps = createConnectorServiceDeps({
+  const upstream = createUpstream({
     db: deps.db,
     keyring: deps.keyring,
     userId,
     discoverOptions: deps.discoverOptions,
     redirectUri: deps.redirectUri,
+    ...(deps.callTimeoutMs === undefined ? {} : { timeoutMs: deps.callTimeoutMs }),
+    ...(deps.resultCapBytes === undefined ? {} : { resultCapBytes: deps.resultCapBytes }),
   });
-  const options = {
-    timeoutMs: deps.callTimeoutMs ?? DEFAULT_CALL_TIMEOUT_MS,
-    resultCapBytes: deps.resultCapBytes ?? DEFAULT_RESULT_CAP_BYTES,
-  };
-  const read: UpstreamRead = (tool, args) =>
-    callConnectorTool(serviceDeps, connectorTarget(connector), tool, args, options);
 
   let verification: Verification;
   try {
-    verification = await verifyUndo(deps, userId, connector, parsed.data, read);
+    verification = await verifyUndo(upstream, connector, parsed.data);
   } catch (error) {
     deps.db
       .update(undoActions)
@@ -289,12 +267,12 @@ export async function applyUndo(
       .where(and(eq(undoActions.userId, userId), eq(undoActions.id, undo.id)))
       .run();
     const message = error instanceof Error ? error.message : String(error);
-    appendJournalEvent(deps.db, {
+    recordEvent(deps.db, {
       userId,
       eventType: "undo.failed",
       payload: { receipt_id: receipt.id, slip_id: receipt.slipId, message },
     });
-    return { ok: false, code: "upstream_failed", message };
+    return undoFailed("upstream_failed", message);
   }
 
   const matched = verification.verification === "matched";
@@ -309,7 +287,7 @@ export async function applyUndo(
       .where(and(eq(undoActions.userId, userId), eq(undoActions.id, undo.id)))
       .run();
 
-    appendJournalEventIn(tx, {
+    recordEventIn(tx, {
       userId,
       eventType: matched ? "undo.applied" : "undo.mismatched",
       payload: {
@@ -326,7 +304,7 @@ export async function applyUndo(
 
   const updated = getReceiptView(deps.db, userId, receipt.id);
   if (updated === undefined) {
-    return { ok: false, code: "not_found", message: `No receipt ${receiptId} for this owner` };
+    return undoFailed("not_found", `No receipt ${receiptId} for this owner`);
   }
   return {
     ok: true,

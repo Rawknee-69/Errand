@@ -13,7 +13,6 @@ import {
   trustListResponseSchema,
   licenseAcceptResponseSchema,
   undoApplyResponseSchema,
-  type CatalogToolView,
   type ConnectorDetail,
   type GatewayHealth,
 } from "@errand/shared";
@@ -29,22 +28,22 @@ import { registerAuth, requestUserId, type AuthOptions, type GatewayEnv } from "
 import { DEFAULT_OWNER_ID } from "./auth/owner.ts";
 import { webOriginSchema } from "./config.ts";
 import { createMigratedDatabase, type Db } from "./db/client.ts";
-import { appendJournalEvent, verifyJournal } from "./db/journal.ts";
+import { verifyJournal } from "./db/journal.ts";
+import { recordEvent } from "./db/events.ts";
 import { users } from "./db/schema.ts";
 import { getUser, listAgentKeys } from "./db/scoped-reads.ts";
-import { EgressRefusal } from "./egress/guard.ts";
-import { ConnectorLimitError } from "./connectors/quota.ts";
+import { GatewayError } from "./errors.ts";
 import {
+  approveCatalogTool,
+  catalogToolView,
   listCatalog,
   setToolClass,
   setToolRequestable,
-  type CatalogTool,
 } from "./connectors/catalog.ts";
-import { McpConnectError, type DiscoverOptions } from "./connectors/mcp.ts";
+import type { DiscoverOptions } from "./connectors/mcp.ts";
 import { connectorAuthInputSchema, toConnectorAuth } from "./connectors/auth.ts";
-import { ConnectorError, type ConnectorErrorCode } from "./connectors/errors.ts";
+import { ConnectorError } from "./connectors/errors.ts";
 import {
-  approveCatalogTool,
   connectConnector,
   createConnectorServiceDeps,
   listConnectors,
@@ -59,10 +58,9 @@ import { VaultKeyring } from "./vault/keyring.ts";
 import { approveSlip, denySlip, SlipError } from "./slips/approval.ts";
 import { getSlipDetail, listSlipSummaries } from "./slips/view.ts";
 import { applyUndo, getReceiptView, listReceiptViews } from "./receipts/receipts.ts";
-import { acceptLicense, listTrustViews, TrustError } from "./policy/trust.ts";
+import { acceptLicense, listTrustViews } from "./policy/trust.ts";
 import { traceView } from "./trace/view.ts";
 import { streamFeed, type FeedStreamOptions } from "./feed/stream.ts";
-import { OutboxError } from "./outbox/service.ts";
 
 export { DEFAULT_OWNER_ID };
 export const DEFAULT_OAUTH_REDIRECT_URI = "http://127.0.0.1:8787/api/oauth/callback";
@@ -118,46 +116,10 @@ const oauthCallbackSchema = z.object({
   iss: z.string().optional(),
 });
 
-const CONNECTOR_ERROR_STATUS = {
-  not_found: 404,
-  credential: 400,
-  oauth_state: 400,
-  oauth_issuer: 400,
-  oauth_failed: 502,
-  reauth: 409,
-  confirmation_required: 409,
-  blocked: 409,
-} as const satisfies Record<ConnectorErrorCode, number>;
-
-export function catalogToolView(row: CatalogTool): CatalogToolView {
-  return {
-    id: row.id,
-    connectorId: row.connectorId,
-    name: row.name,
-    agentName: row.agentName,
-    description: row.description,
-    inputSchema: row.inputSchema,
-    annotations: row.annotations,
-    class: row.class,
-    definitionHash: row.definitionHash,
-    observedDescription: row.observedDescription,
-    observedInputSchema: row.observedInputSchema,
-    observedAnnotations: row.observedAnnotations,
-    observedClass: row.observedClass,
-    observedHash: row.observedHash,
-    state: row.state,
-    requestable: row.requestable,
-    changedAt: row.changedAt,
-    removedAt: row.removedAt,
-    createdAt: row.createdAt,
-    updatedAt: row.updatedAt,
-  };
-}
-
 function oauthCallbackPage(connectorName: string): string {
   return `<!doctype html>
 <meta charset="utf-8">
-<title>Errand — connected</title>
+<title>Errand â€” connected</title>
 <body style="font-family: system-ui, sans-serif; max-width: 32rem; margin: 4rem auto">
   <h1>Connected</h1>
   <p><strong>${escapeHtml(connectorName)}</strong> is authorized and its tools are catalogued.</p>
@@ -263,7 +225,7 @@ export function createGatewayApp(
     const userId = userIdFor(c);
     const body = agentKeyCreateSchema.parse(await c.req.json());
     const issued = issueAgentKey(db, userId, body.name);
-    appendJournalEvent(db, {
+    recordEvent(db, {
       userId,
       eventType: "agent_key.created",
       payload: { agent_key_id: issued.record.id, name: issued.record.name },
@@ -283,7 +245,7 @@ export function createGatewayApp(
     const result = revokeAgentKey(db, userId, c.req.param("id"));
     if (result === undefined) return c.json({ error: "not_found" }, 404);
     if (result.changed) {
-      appendJournalEvent(db, {
+      recordEvent(db, {
         userId,
         eventType: "agent_key.revoked",
         payload: { agent_key_id: result.record.id },
@@ -364,13 +326,7 @@ export function createGatewayApp(
       c.req.param("id"),
     );
     if (!result.ok) {
-      const status =
-        result.code === "not_found"
-          ? 404
-          : result.code === "upstream_failed"
-            ? 502
-            : 409;
-      return c.json({ error: result.code, message: result.message }, status);
+      return c.json({ error: result.code, message: result.message }, result.status);
     }
     return c.json(
       undoApplyResponseSchema.parse({
@@ -525,31 +481,8 @@ export function createGatewayApp(
   });
 
   app.onError((error, c) => {
-    if (error instanceof OutboxError) {
-      return c.json(
-        { error: error.code, message: error.message },
-        error.code === "not_found" ? 404 : 409,
-      );
-    }
-    if (error instanceof TrustError) {
-      const status =
-        error.code === "unknown_errand_type"
-          ? 404
-          : error.code === "license_not_offered"
-            ? 409
-            : 400;
-      return c.json({ error: error.code, message: error.message }, status);
-    }
-    if (error instanceof SlipError) {
-      const status =
-        error.code === "not_found"
-          ? 404
-          : error.code === "cap_above_request" || error.code === "invalid_json"
-            ? 400
-            : error.code === "signing_unavailable"
-              ? 500
-              : 409;
-      return c.json({ error: error.code, message: error.message }, status);
+    if (error instanceof GatewayError) {
+      return c.json({ error: error.code, message: error.message }, error.status);
     }
     if (error instanceof z.ZodError) {
       return c.json(
@@ -561,24 +494,6 @@ export function createGatewayApp(
           })),
         },
         400,
-      );
-    }
-    if (error instanceof EgressRefusal) {
-      return c.json({ error: "egress", code: error.code, message: error.message }, 400);
-    }
-    if (error instanceof ConnectorLimitError) {
-      return c.json({ error: "connector_limit", message: error.message }, 409);
-    }
-    if (error instanceof McpConnectError) {
-      return c.json(
-        { error: error.code, message: error.message },
-        error.code === "auth" ? 401 : 502,
-      );
-    }
-    if (error instanceof ConnectorError) {
-      return c.json(
-        { error: error.code, message: error.message },
-        CONNECTOR_ERROR_STATUS[error.code],
       );
     }
     console.error(error);

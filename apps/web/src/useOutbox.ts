@@ -1,46 +1,36 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useState } from "react";
 import { isPendingOutboxState, type OutboxItem } from "@errand/shared";
 import { api, errorMessage } from "./api.ts";
+import { useResource } from "./useResource.ts";
 
 export type OutboxView = {
   pending: OutboxItem[];
   recent: OutboxItem[];
 };
 
+async function loadOutbox(): Promise<OutboxView> {
+  const { items } = await api.outbox();
+  return {
+    pending: items.filter((item) => isPendingOutboxState(item.state)),
+    recent: items.filter((item) => !isPendingOutboxState(item.state)).slice(0, 8),
+  };
+}
+
 export function useOutbox() {
-  const [data, setData] = useState<OutboxView | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const { data, error, reload } = useResource(loadOutbox);
   const [busy, setBusy] = useState<string | null>(null);
-  const latest = useRef(0);
-
-  const reload = useCallback(async () => {
-    const request = ++latest.current;
-    try {
-      const { items } = await api.outbox();
-      if (request !== latest.current) return;
-      setData({
-        pending: items.filter((item) => isPendingOutboxState(item.state)),
-        recent: items.filter((item) => !isPendingOutboxState(item.state)).slice(0, 8),
-      });
-      setError(null);
-    } catch (caught) {
-      if (request === latest.current) setError(errorMessage(caught));
-    }
-  }, []);
-
-  useEffect(() => {
-    void reload();
-  }, [reload]);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const decide = useCallback(
     async (id: string, action: "cancel" | "confirm") => {
       setBusy(id);
+      setActionError(null);
       try {
         if (action === "cancel") await api.cancelOutbox(id);
         else await api.confirmOutbox(id);
         await reload();
       } catch (caught) {
-        setError(errorMessage(caught));
+        setActionError(errorMessage(caught));
         await reload();
       } finally {
         setBusy(null);
@@ -49,5 +39,5 @@ export function useOutbox() {
     [reload],
   );
 
-  return { data, error, busy, reload, decide };
+  return { data, error: error ?? actionError, busy, reload, decide };
 }

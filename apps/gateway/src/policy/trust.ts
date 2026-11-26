@@ -6,7 +6,8 @@ import {
 } from "@errand/shared";
 import { and, eq, isNull } from "drizzle-orm";
 import type { Db } from "../db/client.ts";
-import { appendJournalEventIn } from "../db/journal.ts";
+import { recordEventIn } from "../db/events.ts";
+import { GatewayError } from "../errors.ts";
 import { calls, receipts, slips, trust } from "../db/schema.ts";
 import {
   getSlip,
@@ -17,7 +18,6 @@ import {
   listTrust,
 } from "../db/scoped-reads.ts";
 import { parseSlipTools } from "../agent/slip-tools.ts";
-import { AGENT_LIMITS } from "@errand/shared";
 import type { SlipRow } from "../slips/row.ts";
 
 type TrustRow = typeof trust.$inferSelect;
@@ -159,7 +159,7 @@ export function settleSlip(db: Db, userId: string, slipId: string, now = new Dat
 
     const trustRow = ensureLearnerTrust(tx, userId, slip.errandType, now);
     if (verdict === "clean") {
-      const event = appendJournalEventIn(tx, {
+      const event = recordEventIn(tx, {
         userId,
         eventType: "trust.run_clean",
         payload: {
@@ -173,7 +173,7 @@ export function settleSlip(db: Db, userId: string, slipId: string, now = new Dat
         .where(and(eq(trust.userId, userId), eq(trust.errandType, slip.errandType)))
         .run();
       if (trustRow.tier === "learner" && trustRow.cleanRuns + 1 === CLEAN_RUNS_FOR_LICENSE) {
-        appendJournalEventIn(tx, {
+        recordEventIn(tx, {
           userId,
           eventType: "trust.license_offered",
           payload: { errand_type: slip.errandType, clean_runs: trustRow.cleanRuns + 1 },
@@ -182,7 +182,7 @@ export function settleSlip(db: Db, userId: string, slipId: string, now = new Dat
       return;
     }
 
-    appendJournalEventIn(tx, {
+    recordEventIn(tx, {
       userId,
       eventType: "trust.run_unclean",
       payload: {
@@ -218,7 +218,7 @@ export function demoteTrust(
     .all()[0];
   if (row === undefined || (row.tier === "learner" && row.cleanRuns === 0)) return;
 
-  const event = appendJournalEventIn(writer, {
+  const event = recordEventIn(writer, {
     userId,
     eventType: "trust.demoted",
     payload: {
@@ -248,14 +248,14 @@ export function listTrustViews(db: Db, userId: string, now = new Date()): TrustV
     .sort((left, right) => left.errandType.localeCompare(right.errandType));
 }
 
-export type TrustErrorCode = "unknown_errand_type" | "license_not_offered" | "invalid_caps";
-export class TrustError extends Error {
+export type TrustErrorCode = "unknown_errand_type" | "license_not_offered";
+
+export class TrustError extends GatewayError {
   constructor(
-    readonly code: TrustErrorCode,
+    override readonly code: TrustErrorCode,
     message: string,
   ) {
-    super(message);
-    this.name = "TrustError";
+    super(code, message, code === "unknown_errand_type" ? 404 : 409);
   }
 }
 
@@ -278,21 +278,13 @@ export function acceptLicense(
       `A license needs ${CLEAN_RUNS_FOR_LICENSE} clean runs; ${errandType} has ${row.cleanRuns}`,
     );
   }
-  if (
-    caps.callCap > AGENT_LIMITS.calls ||
-    caps.spendCapCents > AGENT_LIMITS.spendCents ||
-    caps.minutes > AGENT_LIMITS.minutes
-  ) {
-    throw new TrustError("invalid_caps", "Those caps are above the server maximum");
-  }
-
   const at = now.toISOString();
   db.transaction((tx) => {
     tx.update(trust)
       .set({ tier: "license", caps: JSON.stringify(caps), updatedAt: at })
       .where(and(eq(trust.userId, userId), eq(trust.errandType, errandType)))
       .run();
-    appendJournalEventIn(tx, {
+    recordEventIn(tx, {
       userId,
       eventType: "trust.license_accepted",
       payload: { errand_type: errandType, caps, clean_runs: row.cleanRuns },

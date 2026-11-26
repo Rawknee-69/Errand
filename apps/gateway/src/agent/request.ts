@@ -1,15 +1,19 @@
 import { randomUUID } from "node:crypto";
 import type { Db } from "../db/client.ts";
-import { appendJournalEvent } from "../db/journal.ts";
+import { recordEvent } from "../db/events.ts";
 import { slips, type Tier } from "../db/schema.ts";
+import { isDecoyToolName, isExposed } from "@errand/shared";
 import { listCatalog } from "../connectors/catalog.ts";
-import { isRequestableTool } from "./catalog.ts";
-import { isDecoyToolName } from "../policy/decoys.ts";
 import { errandTypeFor } from "../policy/errand-type.ts";
 import { ensureLearnerTrust, parseTrustCaps, settleRuns } from "../policy/trust.ts";
 import { approveSlip } from "../slips/approval.ts";
-import { AGENT_LIMITS } from "@errand/shared";
-import { resolveLimits, type ClampedLimit, type RequestedLimits } from "./limits.ts";
+import { AGENT_LIMITS, type LimitClamp } from "@errand/shared";
+import {
+  clampToCeiling,
+  tighten,
+  type RequestedLimits,
+  type SlipCaps,
+} from "../slips/caps.ts";
 import type { SlipTool } from "./slip-tools.ts";
 
 export type RequestErrandInput = {
@@ -26,7 +30,7 @@ export type RequestErrandResult = {
   callCap: number;
   spendCapCents: number;
   expiresAt: string;
-  clamped: ClampedLimit[];
+  clamped: LimitClamp[];
 };
 
 export type ErrandRequestErrorCode = "invalid_goal" | "unknown_tool" | "decoy";
@@ -60,13 +64,13 @@ export function requestErrand(
       throw new ErrandRequestError("decoy", `${name} is bait and can never be requested`, name);
     }
     const tool = catalog.get(name);
-    if (tool === undefined || !isRequestableTool(tool)) {
+    if (tool === undefined || !isExposed(tool)) {
       throw new ErrandRequestError("unknown_tool", `${name} is not requestable`, name);
     }
     return { name: tool.agentName, connectorId: tool.connectorId, class: tool.class };
   });
 
-  const limits = resolveLimits(input.limits ?? {});
+  const limits = clampToCeiling(input.limits ?? {});
   const id = randomUUID();
   const errandType = errandTypeFor(
     tools.map((tool) => tool.name),
@@ -77,13 +81,8 @@ export function requestErrand(
   const licenseCaps = trustRow.tier === "license" ? parseTrustCaps(trustRow.caps) : null;
   // A license needs a signing key; without one the slip waits for a human.
   const autoApproved = licenseCaps !== null && hmacKey !== undefined;
-  const applied = autoApproved
-    ? {
-        callCap: Math.min(limits.callCap, licenseCaps.callCap),
-        spendCapCents: Math.min(limits.spendCapCents, licenseCaps.spendCapCents),
-        minutes: Math.min(limits.minutes, licenseCaps.minutes),
-      }
-    : limits;
+  const applied: SlipCaps =
+    autoApproved && licenseCaps !== null ? tighten(limits, licenseCaps) : limits;
   const tier: Tier = autoApproved ? "license" : "learner";
   const expiresAt = new Date(now.getTime() + applied.minutes * 60_000).toISOString();
 
@@ -106,7 +105,7 @@ export function requestErrand(
     })
     .run();
 
-  appendJournalEvent(db, {
+  recordEvent(db, {
     userId,
     eventType: "slip.requested",
     payload: {
@@ -123,9 +122,9 @@ export function requestErrand(
     },
   });
 
-  if (autoApproved) {
+  if (autoApproved && licenseCaps !== null) {
     approveSlip(db, userId, id, {}, { now, hmacKey });
-    appendJournalEvent(db, {
+    recordEvent(db, {
       userId,
       eventType: "trust.license_used",
       payload: {

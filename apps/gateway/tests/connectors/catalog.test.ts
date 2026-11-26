@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, test } from "bun:test";
 import { createMigratedDatabase, type Db } from "../../src/db/client.ts";
 import { connectors, tools, users } from "../../src/db/schema.ts";
 import {
-  approveTool,
+  approveCatalogTool,
   ingestTools,
   listCatalog,
   setToolRequestable,
@@ -168,7 +168,7 @@ describe("ingestTools", () => {
     expect(changed.description).toBe("List events");
     expect(changed.observedDescription).toBe("Changed");
 
-    const approved = approveTool(db, "user-a", changed.id, "2026-01-03T00:00:00.000Z");
+    const approved = approveCatalogTool(db, "user-a", changed.id, "2026-01-03T00:00:00.000Z");
 
     expect(approved.state).toBe("active");
     expect(approved.requestable).toBe(true);
@@ -199,7 +199,7 @@ describe("ingestTools", () => {
     expect(changed.state).toBe("changed");
     expect(changed.requestable).toBe(false);
 
-    const approved = approveTool(db, "user-a", changed.id);
+    const approved = approveCatalogTool(db, "user-a", changed.id);
     expect(approved.requestable).toBe(false);
   });
 
@@ -242,7 +242,7 @@ describe("ingestTools", () => {
     expect(changed.observedClass).toBe("read");
     expect(changed.requestable).toBe(false);
 
-    const approved = approveTool(db, "user-a", changed.id);
+    const approved = approveCatalogTool(db, "user-a", changed.id);
     expect(approved.class).toBe("read");
     expect(approved.requestable).toBe(false);
   });
@@ -347,7 +347,7 @@ describe("ingestTools", () => {
   });
 });
 
-describe("approveTool", () => {
+describe("approveCatalogTool", () => {
   test("refuses to approve a removed tool", () => {
     const db = fixture();
     ingestTools(db, {
@@ -366,6 +366,6 @@ describe("approveTool", () => {
     });
     const removed = db.select().from(tools).all()[0]!;
 
-    expect(() => approveTool(db, "user-a", removed.id, TS)).toThrow("removed");
+    expect(() => approveCatalogTool(db, "user-a", removed.id, TS)).toThrow("removed");
   });
 });

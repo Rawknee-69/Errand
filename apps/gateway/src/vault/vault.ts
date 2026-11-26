@@ -1,9 +1,9 @@
 import { and, desc, eq } from "drizzle-orm";
 import type { Db } from "../db/client.ts";
 import { credentials } from "../db/schema.ts";
-import { openCredentialDataKey, VaultError } from "./common.ts";
-import { credentialAad, openSecret } from "./envelope.ts";
+import { VaultError } from "./common.ts";
 import type { VaultKeyring } from "./keyring.ts";
+import { decryptCredential } from "./open.ts";
 
 function carriesSecret(value: unknown, secret: string, depth = 0): boolean {
   if (typeof value === "string") return value.includes(secret);
@@ -32,20 +32,7 @@ export class Vault {
     if (!row) {
       throw new VaultError("credential_not_found", `no credential for service ${serviceId}`);
     }
-    const kek = this.keyring.find(row.keyId);
-    if (!kek) {
-      throw new VaultError("key_unavailable", `no key material for key id ${row.keyId}`);
-    }
-
-    const dataKey = openCredentialDataKey(kek, row);
-    let secret: string;
-    try {
-      secret = openSecret(dataKey, row, credentialAad(row.id, row.serviceId));
-    } catch {
-      throw new VaultError("decrypt_failed", `credential ${row.id} failed authentication`);
-    } finally {
-      dataKey.fill(0);
-    }
+    const secret = decryptCredential(this.keyring, row);
 
     const result = await fn(secret);
     if (carriesSecret(result, secret)) {

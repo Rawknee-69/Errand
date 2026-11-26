@@ -1,6 +1,6 @@
 import { and, eq } from "drizzle-orm";
 import { connectors } from "../db/schema.ts";
-import { appendJournalEvent } from "../db/journal.ts";
+import { recordEvent } from "../db/events.ts";
 import { ingestTools, type IngestSummary } from "./catalog.ts";
 import type { McpConnection } from "./mcp.ts";
 import type { ConnectorBaseDeps } from "./records.ts";
@@ -26,10 +26,10 @@ export function applyDiscovery(
     connectorName,
     tools: connection.tools,
   });
-  appendJournalEvent(deps.db, {
+  recordEvent(deps.db, {
     userId: deps.userId,
     eventType,
-    payload: { connectorId, ...summary },
+    payload: { connector_id: connectorId, ...summary },
   });
   return summary;
 }
