@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { startMockServices } from "../src/index.ts";
+import { startMockServices } from "../src/server.ts";
 
 let server: ReturnType<typeof startMockServices> | undefined;
 

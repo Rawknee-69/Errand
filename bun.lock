@@ -21,6 +21,9 @@
     "apps/mock-services": {
       "name": "@errand/mock-services",
       "version": "0.1.0",
+      "dependencies": {
+        "@errand/shared": "workspace:*",
+      },
     },
     "apps/web": {
       "name": "@errand/web",

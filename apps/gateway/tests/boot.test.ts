@@ -35,4 +35,19 @@ describe("gateway boot", () => {
     expect(stderr).toContain("Invalid gateway configuration");
     expect(stderr).toContain("VAULT_KEY");
   });
+
+  test("refuses to start when a secret is one byte short", async () => {
+    const env = {
+      ...envWithoutSecrets(),
+      VAULT_KEY: "v".repeat(31),
+      HMAC_KEY: "h".repeat(32),
+      JWT_SECRET: "j".repeat(32),
+    };
+
+    const { exitCode, stderr } = await boot(env);
+
+    expect(exitCode).not.toBe(0);
+    expect(stderr).toContain("VAULT_KEY");
+    expect(stderr).toContain("32 bytes");
+  });
 });

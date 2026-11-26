@@ -26,6 +26,22 @@ Runtime on the same machine: `bun 1.4.4`, `node v26.13.1`.
 | `@vitejs/plugin-react` | web (dev) | 6.3.0 | `latest` | `latest => 6.3.0` |
 | `@types/react` | web (dev) | 19.3.3 | `latest` | `latest => 19.3.3` |
 | `@types/react-dom` | web (dev) | 19.3.0 | `latest` | `latest => 19.3.0` |
+| `@errand/shared` | gateway | 0.1.0 | n/a | Local workspace (`workspace:*`), no registry version |
+
+Captured output of the checks above, one line per package:
+
+```
+typescript => latest 7.0.2
+@types/bun => latest 1.4.5
+hono => latest 4.13.22
+zod => latest 4.6.7
+react => latest 19.3.1
+react-dom => latest 19.3.1
+vite => latest 8.3.8
+@vitejs/plugin-react => latest 6.3.0
+@types/react => latest 19.3.3
+@types/react-dom => latest 19.3.0
+```
 
 ## Verified but not installed yet
 
