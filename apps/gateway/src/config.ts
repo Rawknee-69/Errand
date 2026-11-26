@@ -8,6 +8,29 @@ const secret = z
     message: "must be at least 32 bytes",
   });
 
+function isHttpOrigin(value: string): boolean {
+  if (value !== value.trim()) return false;
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    return false;
+  }
+  return (
+    (url.protocol === "http:" || url.protocol === "https:") &&
+    url.username === "" &&
+    url.password === "" &&
+    url.pathname === "/" &&
+    url.search === "" &&
+    url.hash === ""
+  );
+}
+
+export const webOriginSchema = z
+  .string()
+  .refine(isHttpOrigin, { message: "must be an absolute http(s) origin without a path" })
+  .transform((value) => new URL(value).origin);
+
 const booleanish = (fallback: boolean) =>
   z
     .union([z.boolean(), z.enum(["true", "false", "1", "0"])])
@@ -31,7 +54,7 @@ const configSchema = z.object({
   MAX_CONNECTORS_PER_USER: z.coerce.number().int().positive().default(DEFAULT_MAX_CONNECTORS_PER_USER),
   // Must match the public callback URL registered with each authorization server.
   OAUTH_REDIRECT_URI: z.string().url().optional(),
-  WEB_ORIGIN: z.string().url().optional(),
+  WEB_ORIGIN: webOriginSchema.optional(),
 });
 
 export type GatewayConfig = z.infer<typeof configSchema>;

@@ -10,7 +10,9 @@
   `ALLOW_LOCALHOST_DEV=true`, `SESSION_COOKIE_SECURE=false`, and SQLite at
   `%TEMP%\opencode\errand-43-after.db`.
 - Gateway **before** on `http://127.0.0.1:8789`, same configuration minus
-  `WEB_ORIGIN`, SQLite at `%TEMP%\opencode\errand-43-before.db`.
+  `WEB_ORIGIN`, SQLite at `%TEMP%\opencode\errand-43-before.db`. Both gateways
+  booted as real processes (`logs/gateway-after-server.txt`,
+  `logs/gateway-before-server.txt`).
 - Mock services on `http://127.0.0.1:4002`: a real authorization server with
   Authorization Code + PKCE (S256) consent, RFC 9207 issuer, and a
   bearer-protected `/oauth/mcp` resource server — the same mock #7 and #21
@@ -20,7 +22,8 @@
 - Browser: Microsoft Edge driven with Playwright (`browser.mjs`). The
   Playwright MCP server is pinned to the Chrome channel and Chrome is not
   installed on this machine; installing it needs Administrator, so Edge is the
-  Chromium build used. This is the only tool substitution.
+  Chromium build used. `browser.mjs` ran with `playwright-core` 1.65.1 from a
+  temporary directory; the repo gains no dependency.
 - Bun 1.4.4, TypeScript 7.0.2, Zod 4.6.7.
 
 ## Steps driven
@@ -51,18 +54,28 @@
    `screens/08-connectors-phone.png`).
 8. Checked the page text for `access_token`, `refresh_token`, `client_secret`
    and `code_verifier` — none visible.
-9. Before case: completed the same consent flow against the gateway with no
-   `WEB_ORIGIN`. Its callback answered `200 text/html` with the “Connected”
-   page and only an “Open the catalog” link to `/api/catalog`
-   (`screens/09-before-deadend-desktop.png`, `logs/before-transcript.txt`).
-10. Real HTTP driver (`drive.mjs`) against the after gateway:
-    - `Accept: text/html` → `302`, `Location: http://127.0.0.1:5173/connectors`,
-      empty body (`logs/after-transcript.txt`, lines 8–12).
-    - No HTML accept → `200 application/json`, existing connector detail
-      (`logs/after-transcript.txt`, lines 18–22).
-    - Callback with `webOrigin=https://evil.example&next=https://evil.example`
-      → still `302 http://127.0.0.1:5173/connectors`
-      (`logs/after-transcript.txt`, lines 28–31).
+9. Real HTTP driver (`drive.mjs`) against the after gateway
+   (`logs/after-transcript.txt`):
+   - `Accept: text/html` → `302`, `Location: http://127.0.0.1:5173/connectors`,
+     empty body (lines 9–13).
+   - Replaying the same consumed callback → `400 application/json`
+     `oauth_state` (lines 14–18).
+   - An unknown state with `Accept: text/html` → `400 application/json`
+     `oauth_state`, not a redirect (lines 19–21).
+   - Refreshing the consent page mid-flow, then approving → `302` to
+     `/connectors` (lines 22–32).
+   - No HTML accept → `200 application/json`, existing connector detail
+     (lines 39–43).
+   - Callback with `webOrigin=https://evil.example&next=https://evil.example`
+     → still `302 http://127.0.0.1:5173/connectors` (lines 50–54).
+10. Before case on the gateway with no `WEB_ORIGIN`
+    (`logs/before-transcript.txt`): the same callback answered `200 text/html`
+    with the “Connected” page and only an “Open the catalog” link to
+    `/api/catalog` (`screens/09-before-deadend-desktop.png`, lines 9–13); an
+    unknown state still answered `400 application/json` (lines 14–16).
+11. Suite and typecheck run from the final tree; output committed as
+    `logs/test-output.txt` and `logs/typecheck.txt` (334 pass, 0 fail;
+    four typecheck targets and four checks green).
 
 ## Findings
 
@@ -72,6 +85,10 @@
 
 Observations, not defects:
 
+- The gateway emits only its startup line; it has no per-request logging. The
+  request window is therefore captured in `logs/browser-window.txt` (browser
+  console, network, SSE-free fetch sequence) and the two driver transcripts,
+  not in the gateway log.
 - The browser console also carries the dev-only Vite connection logs and one
   verbose Chromium accessibility note about password forms. No runtime error
   or failed API request occurs during the flow.
@@ -82,6 +99,8 @@ Observations, not defects:
 
 ## Not proven
 
+- The consent **deny** path: the mock consent page offers only **Approve**, and
+  the gateway's OAuth failure response is explicitly out of scope.
 - A real third-party authorization server (Notion, Linear); the mock implements
   the same RFC 9728/8414/7591/9207 surface.
 - HTTPS and a production reverse proxy. `WEB_ORIGIN` behind Caddy is P10; this

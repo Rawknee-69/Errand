@@ -1,3 +1,5 @@
+import { CONNECTORS_PATH } from "@errand/shared";
+
 export type Screen =
   | "connect"
   | "connectors"
@@ -33,7 +35,7 @@ const entries: ScreenInfo[] = [
   },
   {
     screen: "connectors",
-    path: "/connectors",
+    path: CONNECTORS_PATH,
     label: "Connectors",
     title: "Connectors",
   },

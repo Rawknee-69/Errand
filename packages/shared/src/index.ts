@@ -2,6 +2,10 @@ import { z } from "zod";
 
 export { escapeHtml } from "./html.ts";
 
+// The control panel's Connectors screen; the gateway redirect and the web
+// router share it so they cannot drift apart.
+export const CONNECTORS_PATH = "/connectors";
+
 export type Health = {
   status: "ok";
 };

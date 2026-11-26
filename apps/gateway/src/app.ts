@@ -1,4 +1,5 @@
 import {
+  CONNECTORS_PATH,
   escapeHtml,
   slipApprovalInputSchema,
   slipApprovedSchema,
@@ -16,6 +17,7 @@ import gatewayPackage from "../package.json" with { type: "json" };
 import { AGENT_PATH, createAgentHandler } from "./agent/mcp.ts";
 import { registerAuth, requestUserId, type AuthOptions, type GatewayEnv } from "./auth/api.ts";
 import { DEFAULT_OWNER_ID } from "./auth/owner.ts";
+import { webOriginSchema } from "./config.ts";
 import { createMigratedDatabase, type Db } from "./db/client.ts";
 import { appendJournalEvent, verifyJournal } from "./db/journal.ts";
 import { users } from "./db/schema.ts";
@@ -155,7 +157,8 @@ export function createGatewayApp(
   }
   const agentHandler = createAgentHandler(db, options.hmacKey);
   const oauthRedirectUri = options.oauthRedirectUri ?? DEFAULT_OAUTH_REDIRECT_URI;
-  const webOrigin = options.webOrigin?.replace(/\/+$/, "");
+  const webOrigin =
+    options.webOrigin === undefined ? undefined : webOriginSchema.parse(options.webOrigin);
 
   if (options.auth !== "disabled") registerAuth(app, db, options.auth);
 
@@ -330,7 +333,7 @@ export function createGatewayApp(
     });
     if (c.req.header("accept")?.includes("text/html") === true) {
       if (webOrigin !== undefined) {
-        return c.redirect(`${webOrigin}/connectors`, 302);
+        return c.redirect(`${webOrigin}${CONNECTORS_PATH}`, 302);
       }
       return c.html(oauthCallbackPage(result.connector.name));
     }

@@ -99,10 +99,20 @@ describe("loadConfig", () => {
     expect(loadConfig({ ...keys, WEB_ORIGIN: "https://app.example" }).WEB_ORIGIN).toBe(
       "https://app.example",
     );
+    expect(loadConfig({ ...keys, WEB_ORIGIN: "https://app.example/" }).WEB_ORIGIN).toBe(
+      "https://app.example",
+    );
   });
 
-  test("rejects a WEB_ORIGIN that is not an absolute URL", () => {
-    expect(() => loadConfig({ ...keys, WEB_ORIGIN: "app.example" })).toThrow(/WEB_ORIGIN/);
-    expect(() => loadConfig({ ...keys, WEB_ORIGIN: "/connectors" })).toThrow(/WEB_ORIGIN/);
+  test.each([
+    "app.example",
+    "/connectors",
+    "ftp://app.example",
+    "javascript:alert(1)",
+    "https://app.example/path",
+    "https://user:secret@app.example",
+    " https://app.example ",
+  ])("rejects WEB_ORIGIN=%s", (value) => {
+    expect(() => loadConfig({ ...keys, WEB_ORIGIN: value })).toThrow(/WEB_ORIGIN/);
   });
 });

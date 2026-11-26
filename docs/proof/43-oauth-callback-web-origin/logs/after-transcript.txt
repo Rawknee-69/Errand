@@ -1,31 +1,53 @@
 # OAuth callback proof — after — gateway http://127.0.0.1:8788, mock http://127.0.0.1:4002
 POST /api/auth/login -> 200 authenticated=true
 POST /api/connectors/oauth/start -> 201
-  connector b011e05c-d181-4166-8b5b-5efc7f02b7fb authStatus=pending
-GET /oauth/authorize -> 200 consent-form=true
+  connector a93dfb3b-a0a3-4dec-b422-2a86c16d2980 authStatus=pending
+GET /oauth/authorize (open) -> 200
+GET /oauth/authorize (refresh mid-flow) -> 200
 POST /oauth/authorize (Approve) -> 302
-  Location: http://127.0.0.1:8788/api/oauth/callback?code=4IKfMRS50fIHo9z_AaDH1o4O9nsX-4fm&state=Jl0FZm-uSZI2bKXKCyqBhGdCdV1uN_5Y9MrfOn2Rp9Y&iss=http%3A%2F%2F127.0.0.1%3A4002
-GET /api/oauth/callback?code=4IKfMRS50fIHo9z_AaDH1o4O9nsX-4fm&state=Jl0FZm-uSZI2bKXKCyqBhGdCdV1uN_5Y9MrfOn2Rp9Y&iss=http%3A%2F%2F127.0.0.1%3A4002 (Accept: text/html)
+  Location: http://127.0.0.1:8788/api/oauth/callback?code=d2zUWJ7yL0HicQ07aFWNkMFDS9yZjt9e&state=Nd_W_eanSxc1Wq03lWxYOn4pW276Ge8p8xa7xvT2wa0&iss=http%3A%2F%2F127.0.0.1%3A4002
+GET /api/oauth/callback?code=d2zUWJ7yL0HicQ07aFWNkMFDS9yZjt9e&state=Nd_W_eanSxc1Wq03lWxYOn4pW276Ge8p8xa7xvT2wa0&iss=http%3A%2F%2F127.0.0.1%3A4002 (success, Accept: text/html)
+  status: 302
+  Location: http://127.0.0.1:5173/connectors
+  Content-Type: null
+  body: 
+GET /api/oauth/callback?code=d2zUWJ7yL0HicQ07aFWNkMFDS9yZjt9e&state=Nd_W_eanSxc1Wq03lWxYOn4pW276Ge8p8xa7xvT2wa0&iss=http%3A%2F%2F127.0.0.1%3A4002 (replay of the consumed state, Accept: text/html)
+  status: 400
+  Location: null
+  Content-Type: application/json
+  body: {"error":"oauth_state","message":"The authorization state is unknown or already used"}
+GET /api/oauth/callback?state=nope&code=x (unknown state, Accept: text/html)
+  status: 400
+  body: {"error":"oauth_state","message":"The authorization state is unknown or already used"}
+POST /api/connectors/oauth/start -> 201
+  connector 3365ffd3-0568-4d7c-afd6-ebc8af12c6bc authStatus=pending
+GET /oauth/authorize (open) -> 200
+GET /oauth/authorize (refresh mid-flow) -> 200
+POST /oauth/authorize (Approve) -> 302
+  Location: http://127.0.0.1:8788/api/oauth/callback?code=q434phqcVhZRh-1PdswL1Z7xUUIru3fg&state=dsOqcPT9pY3kGJmsgz7Z-3J3euoSPtjB3m2kdWCz2cs&iss=http%3A%2F%2F127.0.0.1%3A4002
+GET /api/oauth/callback?code=q434phqcVhZRh-1PdswL1Z7xUUIru3fg&state=dsOqcPT9pY3kGJmsgz7Z-3J3euoSPtjB3m2kdWCz2cs&iss=http%3A%2F%2F127.0.0.1%3A4002 (success after a mid-flow consent refresh)
   status: 302
   Location: http://127.0.0.1:5173/connectors
   Content-Type: null
   body: 
 POST /api/connectors/oauth/start -> 201
-  connector 8c56d390-679e-44d5-b346-e8ba6460439d authStatus=pending
-GET /oauth/authorize -> 200 consent-form=true
+  connector 21ac7d50-9da2-444e-9ce5-81c209d52f86 authStatus=pending
+GET /oauth/authorize (open) -> 200
+GET /oauth/authorize (refresh mid-flow) -> 200
 POST /oauth/authorize (Approve) -> 302
-  Location: http://127.0.0.1:8788/api/oauth/callback?code=m5s73qVdeGavXB1-nypBwiji2-7gFE_V&state=hvE89mq4l-p2NaVQcX3B0kHMtARboafEHbDS34UNf30&iss=http%3A%2F%2F127.0.0.1%3A4002
-GET /api/oauth/callback?code=m5s73qVdeGavXB1-nypBwiji2-7gFE_V&state=hvE89mq4l-p2NaVQcX3B0kHMtARboafEHbDS34UNf30&iss=http%3A%2F%2F127.0.0.1%3A4002 (no HTML accept)
+  Location: http://127.0.0.1:8788/api/oauth/callback?code=i_5nFVu1zZXnIoZZAIe9JUayUx3AwLd_&state=YSGbmVk7U6VQDh_dz00oQi_b9L9_j-vp6HrbD16r2Nw&iss=http%3A%2F%2F127.0.0.1%3A4002
+GET /api/oauth/callback?code=i_5nFVu1zZXnIoZZAIe9JUayUx3AwLd_&state=YSGbmVk7U6VQDh_dz00oQi_b9L9_j-vp6HrbD16r2Nw&iss=http%3A%2F%2F127.0.0.1%3A4002 (non-HTML caller)
   status: 200
   Location: null
   Content-Type: application/json
-  body: {"connector":{"id":"8c56d390-679e-44d5-b346-e8ba6460439d","name":"Mock calendar after 2","url":"http://127.0.0.1:4002/oauth/mcp","transport":"streamable-http","authType":"oauth","authStatus":"active","lastAuthError":null,"lastSuccessAt":"2026-11-26T08:43:34.843Z","createdAt":"2026-11-26T08:43:34.803
+  body: {"connector":{"id":"21ac7d50-9da2-444e-9ce5-81c209d52f86","name":"Mock calendar after 3","url":"http://127.0.0.1:4002/oauth/mcp","transport":"streamable-http","authType":"oauth","authStatus":"active","lastAuthError":null,"lastSuccessAt":"2026-11-26T08:48:27.432Z","createdAt":"2026-11-26T08:48:27.389
 POST /api/connectors/oauth/start -> 201
-  connector c2c8a606-7708-45e1-accb-bb78d5f49c24 authStatus=pending
-GET /oauth/authorize -> 200 consent-form=true
+  connector 8619760a-6c71-4405-b3e6-f9547db370b2 authStatus=pending
+GET /oauth/authorize (open) -> 200
+GET /oauth/authorize (refresh mid-flow) -> 200
 POST /oauth/authorize (Approve) -> 302
-  Location: http://127.0.0.1:8788/api/oauth/callback?code=eO9zhFm9RogR7_GIXr1OAo1IcwVJnI8j&state=my5nHhsLXkg51qmMk0PFlnyjoWYgCxAElzhb3P8svl4&iss=http%3A%2F%2F127.0.0.1%3A4002
-GET /api/oauth/callback?code=eO9zhFm9RogR7_GIXr1OAo1IcwVJnI8j&state=my5nHhsLXkg51qmMk0PFlnyjoWYgCxAElzhb3P8svl4&iss=http%3A%2F%2F127.0.0.1%3A4002&webOrigin=https%3A%2F%2Fevil.example&next=https%3A%2F%2Fevil.example (Accept: text/html)
+  Location: http://127.0.0.1:8788/api/oauth/callback?code=KjpipKsAjUEEyrQqGvKSzt2JOm2Qwnzh&state=85Uzg5t17tElBfGFFMUM9dTd2jRxo25NkHjodQ4HUqE&iss=http%3A%2F%2F127.0.0.1%3A4002
+GET /api/oauth/callback?code=KjpipKsAjUEEyrQqGvKSzt2JOm2Qwnzh&state=85Uzg5t17tElBfGFFMUM9dTd2jRxo25NkHjodQ4HUqE&iss=http%3A%2F%2F127.0.0.1%3A4002&webOrigin=https%3A%2F%2Fevil.example&next=https%3A%2F%2Fevil.example (attempted open redirect)
   status: 302
   Location: http://127.0.0.1:5173/connectors
   Content-Type: null
