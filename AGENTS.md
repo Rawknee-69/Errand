@@ -29,6 +29,11 @@ Read `docs/agents/workflow.md` before touching code. Non-negotiable summary:
   Never close a ticket without a passing suite; closing unblocks dependents.
 - `/code-review` on every ticket, `/improve-codebase-architecture` at every
   phase gate.
+- Review the proof, not the diff. Drive the running app in a browser, click
+  every route and button, capture console/network logs and screenshots under
+  `docs/proof/<NN>-<slug>/`, and give each finding the artifact that shows it.
+  The diff is read only to locate a cause. A diff over ~300 lines means split
+  the ticket. Details in `docs/proof/README.md`.
 - Reuse before writing: a second caller extracts a shared helper instead of
   copying. No near-duplicate code, no dead code.
 - Comments only where code cannot explain itself, one or two lines.

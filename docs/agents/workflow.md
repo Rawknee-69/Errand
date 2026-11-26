@@ -35,7 +35,8 @@ before touching code.
 A session ends when its ticket is done, and **does not start another**.
 
 Done means, in order: implementation complete, full suite green, typecheck
-clean, `/code-review` run and its findings addressed, PR opened, and — if CI is
+clean, proof captured under `docs/proof/<NN>-<slug>/` with a `pass` verdict,
+`/code-review` run and its findings addressed, PR opened, and — if CI is
 green with no conflicts — squash-merged into `integration`.
 
 Closing is part of done, and it is a command rather than a memory:
@@ -90,11 +91,43 @@ Rules:
 - A blocked session is a valid end state. Report what is blocked and why; never
   simulate the unavailable step.
 
+## Proof review — the gate
+
+The gate is the running system, not the diff. Nobody can read 300 lines of
+change and predict which button breaks, so approval comes from driving the
+thing and capturing what happened.
+
+Before a ticket merges:
+
+1. Bring the real app up, with real services or the mock services — not
+   stubs. Drive it in the in-app browser; use the Playwright MCP server when a
+   flow needs recording.
+2. Do the full pass, not the happy path: every route, every button, cancel and
+   deny, refresh mid-flow, empty / loading / error states, phone viewport
+   390×844 and desktop 1440×900. Capture console, failed requests and SSE
+   frames for the window.
+3. Write `docs/proof/<NN>-<slug>/PROOF.md` with the environment, the steps
+   driven, findings as a table, and a verdict. Save the screenshots and logs
+   beside it. Layout and limits are in `docs/proof/README.md`.
+4. Every finding names the artifact that shows it. A fixing agent works from
+   that evidence, not from a description of it.
+5. `Verdict: fail` blocks the merge. Fix in the branch or file a ticket, then
+   re-run the steps that failed and capture them again.
+
+The diff is read only to locate the cause once proof fails. It is never the
+basis of approval.
+
+A diff over roughly 300 changed lines means the ticket was too big: split it
+rather than reviewing harder. Generated files and lockfiles do not count.
+
+Passing tests are necessary and never sufficient — they prove the paths
+someone thought of.
+
 ## Review gates
 
-- **Every ticket:** `/code-review` against the ticket's acceptance criteria
-  (Spec axis) and this file's coding standards (Standards axis). Findings are
-  fixed in the same branch, not deferred.
+- **Every ticket:** proof review above, then `/code-review` against the
+  ticket's acceptance criteria (Spec axis) and this file's coding standards
+  (Standards axis). `/code-review` is the second pass, not the gate.
 - **Every phase gate:** `/improve-codebase-architecture` over the phase's
   diff. Record each real finding as a ticket; fix the ones that block the next
   phase before starting it.

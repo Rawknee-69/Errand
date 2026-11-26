@@ -1,0 +1,29 @@
+﻿## Guard checks (bun run scripts/complete-ticket.ts --dry)
+
+### 1. report with no Proof section
+bun : Report has no usable proof.
+At line:1 char:424
++ ... EMP\r1.md"; bun run scripts/complete-ticket.ts 27 "$env:TEMP\r1.md" - ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (Report has no usable proof.:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+Required: a `## Proof` section naming at least one existing file under docs/proof/.
+Drive the running app, save screenshots and logs there, then reference them. See docs/proof/README.md.
+### 2. Proof section naming a file that does not exist
+bun : Report has no usable proof.
+At line:1 char:781
++ ... EMP\r2.md"; bun run scripts/complete-ticket.ts 27 "$env:TEMP\r2.md" - ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (Report has no usable proof.:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+Required: a `## Proof` section naming at least one existing file under docs/proof/.
+Drive the running app, save screenshots and logs there, then reference them. See docs/proof/README.md.
+### 3. Proof section naming a real artifact
+#27 process ┬╖ Review the proof, not the diff
+  tick 7 acceptance criteria
+  comment C:\Users\Rem\AppData\Local\Temp\r3.md
+  close as completed in Rawknee-69/Errand
+
+--dry: no changes made.

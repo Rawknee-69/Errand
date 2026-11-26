@@ -3,10 +3,10 @@
 //
 //   bun run scripts/complete-ticket.ts <issue> [report.md] [--dry]
 //
-// The report must contain the brief's §31 evidence (commands, pasted test
-// output). Closing is what unblocks dependents, so a dry run is available.
+// The report must carry the brief's §31 evidence (commands, pasted test
+// output) and a Proof section pointing at real files under docs/proof/.
 import { execFileSync } from "node:child_process";
-import { readFileSync, writeFileSync, rmSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -68,16 +68,35 @@ if (current.state === "CLOSED") {
 const unchecked = (current.body.match(/^- \[ \]/gm) ?? []).length;
 const ticked = current.body.replace(/^- \[ \]/gm, "- [x]");
 
+let reportText = "";
+
 if (reportPath) {
   const raw = readFileSync(reportPath);
   // Windows shells default to UTF-16, sometimes with a BOM; decode what it is.
   const utf16 = (raw[0] === 0xff && raw[1] === 0xfe) || raw[1] === 0;
   const text = utf16 ? raw.toString("utf16le") : raw.toString("utf8");
   const report = text.replace(/^\uFEFF/, "").trim();
+  reportText = report;
+
   const missing = ["test", "command"].filter((word) => !report.toLowerCase().includes(word));
   if (missing.length) {
     console.error(
       `Report does not look like a §31 report (no mention of: ${missing.join(", ")}). Refusing to close without evidence.`,
+    );
+    process.exit(1);
+  }
+
+  const artifacts = [...report.matchAll(/docs\/proof\/[\w./-]+/g)]
+    .map((match) => match[0])
+    .filter((path) => !path.endsWith("README.md") && existsSync(join(process.cwd(), path)));
+
+  if (!/^##\s+Proof\b/im.test(report) || artifacts.length === 0) {
+    console.error(
+      [
+        "Report has no usable proof.",
+        "Required: a `## Proof` section naming at least one existing file under docs/proof/.",
+        "Drive the running app, save screenshots and logs there, then reference them. See docs/proof/README.md.",
+      ].join("\n"),
     );
     process.exit(1);
   }
