@@ -8,6 +8,9 @@ import {
   slipDetailSchema,
   toolClassUpdateSchema,
   toolRequestableUpdateSchema,
+  trustCapsSchema,
+  trustListResponseSchema,
+  licenseAcceptResponseSchema,
   undoApplyResponseSchema,
   type CatalogToolView,
   type ConnectorDetail,
@@ -54,6 +57,7 @@ import { VaultKeyring } from "./vault/keyring.ts";
 import { approveSlip, denySlip, SlipError } from "./slips/approval.ts";
 import { getSlipDetail, listSlipSummaries } from "./slips/view.ts";
 import { applyUndo, getReceiptView, listReceiptViews } from "./receipts/receipts.ts";
+import { acceptLicense, listTrustViews, TrustError } from "./policy/trust.ts";
 import { streamFeed, type FeedStreamOptions } from "./feed/stream.ts";
 import { OutboxError } from "./outbox/service.ts";
 
@@ -392,6 +396,18 @@ export function createGatewayApp(
     return c.json(outboxItemResponseSchema.parse({ item }));
   });
 
+  app.get("/api/trust", (c) => {
+    const userId = userIdFor(c);
+    return c.json(trustListResponseSchema.parse({ trust: listTrustViews(db, userId) }));
+  });
+
+  app.post("/api/trust/:errandType/license", async (c) => {
+    const userId = userIdFor(c);
+    const body = trustCapsSchema.parse(await c.req.json());
+    const view = acceptLicense(db, userId, c.req.param("errandType"), body);
+    return c.json(licenseAcceptResponseSchema.parse({ trust: view }));
+  });
+
   app.get("/api/events", (c) => {
     const userId = userIdFor(c);
     const cursor = c.req.header("last-event-id") ?? c.req.query("since");
@@ -499,6 +515,15 @@ export function createGatewayApp(
         { error: error.code, message: error.message },
         error.code === "not_found" ? 404 : 409,
       );
+    }
+    if (error instanceof TrustError) {
+      const status =
+        error.code === "unknown_errand_type"
+          ? 404
+          : error.code === "license_not_offered"
+            ? 409
+            : 400;
+      return c.json({ error: error.code, message: error.message }, status);
     }
     if (error instanceof SlipError) {
       const status =

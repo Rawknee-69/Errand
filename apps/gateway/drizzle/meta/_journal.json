@@ -71,6 +71,13 @@
       "when": 1795694275830,
       "tag": "0009_misty_pride",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1795695425970,
+      "tag": "0010_gifted_bullseye",
+      "breakpoints": true
     }
   ]
 }

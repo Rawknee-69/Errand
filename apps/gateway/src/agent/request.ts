@@ -6,6 +6,8 @@ import { listCatalog } from "../connectors/catalog.ts";
 import { isRequestableTool } from "./catalog.ts";
 import { isDecoyToolName } from "../policy/decoys.ts";
 import { errandTypeFor } from "../policy/errand-type.ts";
+import { ensureLearnerTrust, parseTrustCaps, settleRuns } from "../policy/trust.ts";
+import { approveSlip } from "../slips/approval.ts";
 import { AGENT_LIMITS, resolveLimits, type ClampedLimit, type RequestedLimits } from "./limits.ts";
 import type { SlipTool } from "./slip-tools.ts";
 
@@ -17,7 +19,7 @@ export type RequestErrandInput = {
 
 export type RequestErrandResult = {
   slipId: string;
-  state: "pending";
+  state: "pending" | "approved";
   tier: Tier;
   tools: SlipTool[];
   callCap: number;
@@ -44,6 +46,7 @@ export function requestErrand(
   userId: string,
   input: RequestErrandInput,
   now = new Date(),
+  hmacKey?: string,
 ): RequestErrandResult {
   const goal = input.goal.trim();
   if (goal === "") {
@@ -63,12 +66,25 @@ export function requestErrand(
   });
 
   const limits = resolveLimits(input.limits ?? {});
-  const expiresAt = new Date(now.getTime() + limits.minutes * 60_000).toISOString();
   const id = randomUUID();
   const errandType = errandTypeFor(
     tools.map((tool) => tool.name),
     [],
   );
+  settleRuns(db, userId, now);
+  const trustRow = ensureLearnerTrust(db, userId, errandType, now);
+  const licenseCaps = trustRow.tier === "license" ? parseTrustCaps(trustRow.caps) : null;
+  // A license needs a signing key; without one the slip waits for a human.
+  const autoApproved = licenseCaps !== null && hmacKey !== undefined;
+  const applied = autoApproved
+    ? {
+        callCap: Math.min(limits.callCap, licenseCaps.callCap),
+        spendCapCents: Math.min(limits.spendCapCents, licenseCaps.spendCapCents),
+        minutes: Math.min(limits.minutes, licenseCaps.minutes),
+      }
+    : limits;
+  const tier: Tier = autoApproved ? "license" : "learner";
+  const expiresAt = new Date(now.getTime() + applied.minutes * 60_000).toISOString();
 
   db.insert(slips)
     .values({
@@ -77,12 +93,12 @@ export function requestErrand(
       errandType,
       goal,
       state: "pending",
-      tier: "learner",
+      tier,
       tools: JSON.stringify(tools),
       constraints: "{}",
-      callCap: limits.callCap,
+      callCap: applied.callCap,
       rateCap: AGENT_LIMITS.callsPerMinute,
-      spendCapCents: limits.spendCapCents,
+      spendCapCents: applied.spendCapCents,
       expiresAt,
       createdAt: now.toISOString(),
       updatedAt: now.toISOString(),
@@ -97,21 +113,37 @@ export function requestErrand(
       errand_type: errandType,
       goal,
       tools: tools.map((tool) => tool.name),
-      call_cap: limits.callCap,
-      spend_cap_cents: limits.spendCapCents,
+      call_cap: applied.callCap,
+      spend_cap_cents: applied.spendCapCents,
       expires_at: expiresAt,
-      tier: "learner",
+      tier,
+      auto_approved: autoApproved,
       clamped: limits.clamped,
     },
   });
 
+  if (autoApproved) {
+    approveSlip(db, userId, id, {}, { now, hmacKey });
+    appendJournalEvent(db, {
+      userId,
+      eventType: "trust.license_used",
+      payload: {
+        slip_id: id,
+        errand_type: errandType,
+        caps: licenseCaps,
+        call_cap: applied.callCap,
+        spend_cap_cents: applied.spendCapCents,
+      },
+    });
+  }
+
   return {
     slipId: id,
-    state: "pending",
-    tier: "learner",
+    state: autoApproved ? "approved" : "pending",
+    tier,
     tools,
-    callCap: limits.callCap,
-    spendCapCents: limits.spendCapCents,
+    callCap: applied.callCap,
+    spendCapCents: applied.spendCapCents,
     expiresAt,
     clamped: limits.clamped,
   };

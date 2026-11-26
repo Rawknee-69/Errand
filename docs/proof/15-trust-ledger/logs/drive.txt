@@ -1,0 +1,128 @@
+
+== sign in as the owner
+session: {
+  "authenticated": true,
+  "user": {
+    "id": "owner",
+    "name": "owner"
+  }
+}
+
+== connect the mock calendar with a vaulted bearer credential
+connector: {
+  "id": "03912ff2-16b6-40e3-a5fa-2d82554deb4a",
+  "name": "Calendar"
+}
+
+== issue an agent key and attach the real MCP client
+
+== a new errand type starts on a learner permit
+trust after first request: {
+  "errandType": "8e162757bdc0d4dd2608fb18ac0fd115c1b26cc80451a779482dfcff88fcf290",
+  "tier": "learner",
+  "cleanRuns": 0,
+  "licenseOffered": false,
+  "caps": null
+}
+
+== five consecutive clean runs earn a license offer
+clean run 1/5 recorded for calendar__list_events
+clean run 2/5 recorded for calendar__list_events
+clean run 3/5 recorded for calendar__list_events
+clean run 4/5 recorded for calendar__list_events
+clean run 5/5 recorded for calendar__list_events
+trust after five clean runs: {
+  "errandType": "8e162757bdc0d4dd2608fb18ac0fd115c1b26cc80451a779482dfcff88fcf290",
+  "tier": "learner",
+  "cleanRuns": 5,
+  "licenseOffered": true,
+  "caps": null
+}
+
+== the human accepts with caps they choose
+trust after accepting: {
+  "errandType": "8e162757bdc0d4dd2608fb18ac0fd115c1b26cc80451a779482dfcff88fcf290",
+  "tier": "license",
+  "cleanRuns": 5,
+  "licenseOffered": false,
+  "caps": {
+    "callCap": 2,
+    "spendCapCents": 0,
+    "minutes": 5
+  }
+}
+
+== a licensed request is auto-approved and clamped to the human's caps
+auto-approved request: {
+  "slipId": "b7006c0c-22c0-4658-8eff-f7e6cc3ceabe",
+  "state": "approved",
+  "tier": "license",
+  "callCap": 2,
+  "spendCapCents": 0
+}
+status without a human approval: {
+  "state": "approved",
+  "tier": "license",
+  "capability": "<issued>",
+  "callCap": 2,
+  "spendCapCents": 0
+}
+
+== a call outside the licensed slip demotes the type
+out-of-scope refusal: {
+  "error": "out_of_scope"
+}
+trust after the scope violation: {
+  "errandType": "8e162757bdc0d4dd2608fb18ac0fd115c1b26cc80451a779482dfcff88fcf290",
+  "tier": "learner",
+  "cleanRuns": 0,
+  "licenseOffered": false,
+  "caps": null
+}
+
+== writes run on a learner permit until they earn their own license
+clean run 1/5 recorded for calendar__create_event
+clean run 2/5 recorded for calendar__create_event
+clean run 3/5 recorded for calendar__create_event
+clean run 4/5 recorded for calendar__create_event
+clean run 5/5 recorded for calendar__create_event
+write trust after five clean runs: {
+  "errandType": "16090fdccde94c41acad42f208f158d4c4e87f2f265f478b9eeb4d210447877e",
+  "tier": "learner",
+  "cleanRuns": 5,
+  "licenseOffered": true,
+  "caps": null
+}
+
+== an undo demotes the type and journals the reason
+undo result: "matched"
+trust after the undo: {
+  "errandType": "16090fdccde94c41acad42f208f158d4c4e87f2f265f478b9eeb4d210447877e",
+  "tier": "learner",
+  "cleanRuns": 0,
+  "licenseOffered": false,
+  "caps": null
+}
+
+== re-earn the license, then a forced mismatch demotes again
+clean run 1/5 recorded for calendar__create_event
+clean run 2/5 recorded for calendar__create_event
+clean run 3/5 recorded for calendar__create_event
+clean run 4/5 recorded for calendar__create_event
+clean run 5/5 recorded for calendar__create_event
+verifier verdict: "mismatched"
+trust after the mismatch: {
+  "errandType": "16090fdccde94c41acad42f208f158d4c4e87f2f265f478b9eeb4d210447877e",
+  "tier": "learner",
+  "cleanRuns": 0,
+  "licenseOffered": false,
+  "caps": null
+}
+
+== the journal is still a valid hash chain
+journal verify: {
+  "ok": true,
+  "checked": 118
+}
+
+PROOF DRIVE COMPLETE

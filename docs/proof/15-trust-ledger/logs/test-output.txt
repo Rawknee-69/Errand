@@ -1,0 +1,20 @@
+﻿bun test v1.4.4 (38afee6c8)
+bun : 
+At line:1 char:133
++ ... t-ledger\logs\typecheck.txt; $tc=$LASTEXITCODE; bun test 2>&1 | Out-F ...
++                                                     ~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+apps\gateway\tests\connectors\oauth.test.ts:
+[mcp-sdk] OAuth "invalid_grant" ΓÇö invalidating the stored tokens and retrying authorization. Cause: "refresh token 
+is invalid, rotated or revoked"
+[mcp-sdk] OAuth "invalid_grant" ΓÇö invalidating the stored tokens and retrying authorization. Cause: "refresh token 
+is invalid, rotated or revoked"
+[mcp-sdk] OAuth "invalid_grant" ΓÇö invalidating the stored tokens and retrying authorization. Cause: "refresh token 
+is invalid, rotated or revoked"
+
+ 396 pass
+ 0 fail
+ 1439 expect() calls
+Ran 396 tests across 48 files. [10.39s]
