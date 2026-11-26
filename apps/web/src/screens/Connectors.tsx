@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { CatalogResponse, ConnectorView, McpTransportKind } from "@errand/shared";
 import { api, errorMessage } from "../api.ts";
+import { blockedToolCount, toolsForConnector } from "../catalog.ts";
 import { formatTimestamp } from "../format.ts";
 import { useCatalog } from "../useCatalog.ts";
 
@@ -34,11 +35,8 @@ function hostOf(url: string): string {
 }
 
 function toolCounts(data: CatalogResponse | null, connectorId: string) {
-  const rows = (data?.tools ?? []).filter((tool) => tool.connectorId === connectorId);
-  return {
-    total: rows.length,
-    blocked: rows.filter((tool) => tool.state === "changed" || tool.state === "removed").length,
-  };
+  const rows = toolsForConnector(data?.tools ?? [], connectorId);
+  return { total: rows.length, blocked: blockedToolCount(rows) };
 }
 
 export function Connectors({ onOpenConnect }: Props) {
@@ -162,6 +160,11 @@ export function Connectors({ onOpenConnect }: Props) {
                 runs through this connector until it is authorized again.
               </p>
             )}
+            {connector.authStatus === "pending" && (
+              <p className="hint" role="status">
+                Sign-in has not finished. Restart it if the consent tab was closed.
+              </p>
+            )}
 
             <div className="actions">
               <button
@@ -172,21 +175,18 @@ export function Connectors({ onOpenConnect }: Props) {
               >
                 {busy ? "Working…" : "Refresh catalog"}
               </button>
-              {connector.authStatus === "needs_reauth" && connector.authType === "oauth" && (
-                <button
-                  type="button"
-                  className="button small primary"
-                  disabled={busy}
-                  onClick={() => void reauth(connector)}
-                >
-                  Sign in again
-                </button>
-              )}
-              {connector.authStatus === "needs_reauth" && connector.authType !== "oauth" && (
-                <button type="button" className="button small" onClick={onOpenConnect}>
-                  Update credential
-                </button>
-              )}
+              {connector.authType === "oauth" &&
+                (connector.authStatus === "needs_reauth" ||
+                  connector.authStatus === "pending") && (
+                  <button
+                    type="button"
+                    className="button small primary"
+                    disabled={busy}
+                    onClick={() => void reauth(connector)}
+                  >
+                    {connector.authStatus === "pending" ? "Restart sign-in" : "Sign in again"}
+                  </button>
+                )}
             </div>
           </article>
         );

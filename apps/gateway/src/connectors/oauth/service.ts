@@ -250,6 +250,38 @@ function insertAttempt(
     .run();
 }
 
+async function authorizeAndAnnounce(
+  deps: OAuthServiceDeps,
+  input: {
+    connectorId: string;
+    url: string;
+    store: OAuthStore;
+    attemptId: string;
+    state: string;
+    eventType: "connector.oauth_started" | "connector.oauth_restarted";
+  },
+): Promise<OAuthStartResult> {
+  const { authorizationUrl } = await beginAuthorization(
+    deps,
+    input.connectorId,
+    input.url,
+    input.store,
+    input.attemptId,
+    input.state,
+  );
+  pruneAttempts(deps, input.connectorId);
+  appendJournalEvent(deps.db, {
+    userId: deps.userId,
+    eventType: input.eventType,
+    payload: { connectorId: input.connectorId, host: new URL(input.url).host },
+  });
+  return {
+    connector: connectorView(connectorRow(deps, input.connectorId)),
+    authorizationUrl,
+    attemptId: input.attemptId,
+  };
+}
+
 export async function startOAuthFlow(
   deps: OAuthServiceDeps,
   input: { name: string; url: string },
@@ -280,25 +312,14 @@ export async function startOAuthFlow(
 
   const store = new OAuthStore(deps.vault, deps.store);
   try {
-    const { authorizationUrl } = await beginAuthorization(
-      deps,
+    return await authorizeAndAnnounce(deps, {
       connectorId,
-      normalized,
+      url: normalized,
       store,
       attemptId,
       state,
-    );
-    pruneAttempts(deps, connectorId);
-    appendJournalEvent(deps.db, {
-      userId: deps.userId,
       eventType: "connector.oauth_started",
-      payload: { connectorId, host: new URL(normalized).host },
     });
-    return {
-      connector: connectorView(connectorRow(deps, connectorId)),
-      authorizationUrl,
-      attemptId,
-    };
   } catch (error) {
     discardConnector(deps, connectorId, [attemptId]);
     throw asConnectorError(error, failureReason(error), "oauth_failed");
@@ -328,25 +349,14 @@ export async function startOAuthReauth(
 
   const store = new OAuthStore(deps.vault, deps.store);
   try {
-    const { authorizationUrl } = await beginAuthorization(
-      deps,
+    return await authorizeAndAnnounce(deps, {
       connectorId,
-      row.url,
+      url: row.url,
       store,
       attemptId,
       state,
-    );
-    pruneAttempts(deps, connectorId);
-    appendJournalEvent(deps.db, {
-      userId: deps.userId,
       eventType: "connector.oauth_restarted",
-      payload: { connectorId, host: new URL(row.url).host },
     });
-    return {
-      connector: connectorView(connectorRow(deps, connectorId)),
-      authorizationUrl,
-      attemptId,
-    };
   } catch (error) {
     deleteAttempt(store, deps, attemptId);
     markNeedsReauth(deps, connectorId, failureReason(error));

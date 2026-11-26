@@ -130,6 +130,16 @@ export function isClassLoosening(from: ToolClass, to: ToolClass): boolean {
 export const toolStateSchema = z.enum(["new", "active", "changed", "removed"]);
 export type ToolState = z.infer<typeof toolStateSchema>;
 
+export function isBlockedToolState(state: ToolState): boolean {
+  return state === "changed" || state === "removed";
+}
+
+// Exposure is the human's requestable choice, but a blocked definition never
+// reaches the agent even if that choice was on.
+export function isToolExposed(tool: { requestable: boolean; state: ToolState }): boolean {
+  return tool.requestable && !isBlockedToolState(tool.state);
+}
+
 export const connectorAuthTypeSchema = z.enum(["none", "bearer", "header", "basic", "oauth"]);
 export type ConnectorAuthType = z.infer<typeof connectorAuthTypeSchema>;
 
@@ -258,12 +268,10 @@ export const toolClassUpdateSchema = z.object({
   class: toolClassSchema,
   confirm: z.boolean().default(false),
 });
-export type ToolClassUpdate = z.infer<typeof toolClassUpdateSchema>;
 
 export const toolRequestableUpdateSchema = z.object({
   requestable: z.boolean(),
 });
-export type ToolRequestableUpdate = z.infer<typeof toolRequestableUpdateSchema>;
 
 export const connectorReauthResponseSchema = z.object({
   connector: connectorViewSchema,

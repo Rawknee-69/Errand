@@ -1,12 +1,17 @@
 import { useState } from "react";
 import {
+  isBlockedToolState,
   isClassLoosening,
   toolClassSchema,
   type CatalogToolView,
-  type ConnectorView,
   type ToolClass,
 } from "@errand/shared";
 import { api, errorMessage } from "../api.ts";
+import {
+  blockedToolCount,
+  exposedToolCount,
+  toolsForConnector,
+} from "../catalog.ts";
 import { useCatalog } from "../useCatalog.ts";
 
 type Props = {
@@ -19,10 +24,6 @@ type PendingLoosening = {
 };
 
 const CLASS_OPTIONS = toolClassSchema.options;
-
-function blocked(tool: CatalogToolView): boolean {
-  return tool.state === "changed" || tool.state === "removed";
-}
 
 function stateLabel(tool: CatalogToolView): string | null {
   if (tool.state === "changed") return "changed — blocked";
@@ -39,8 +40,8 @@ export function Catalog({ onOpenConnect }: Props) {
 
   const tools = data?.tools ?? [];
   const connectors = data?.connectors ?? [];
-  const blockedCount = tools.filter(blocked).length;
-  const requestableCount = tools.filter((tool) => tool.requestable).length;
+  const blockedCount = blockedToolCount(tools);
+  const requestableCount = exposedToolCount(tools);
 
   async function mutate(toolId: string, action: () => Promise<CatalogToolView>) {
     setBusyId(toolId);
@@ -82,10 +83,6 @@ export function Catalog({ onOpenConnect }: Props) {
 
   function approve(tool: CatalogToolView) {
     void mutate(tool.id, async () => (await api.approveTool(tool.id)).tool);
-  }
-
-  function toolsFor(connector: ConnectorView): CatalogToolView[] {
-    return tools.filter((tool) => tool.connectorId === connector.id);
   }
 
   return (
@@ -150,7 +147,7 @@ export function Catalog({ onOpenConnect }: Props) {
           )}
 
           {connectors.map((connector) => {
-            const rows = toolsFor(connector);
+            const rows = toolsForConnector(tools, connector.id);
             if (rows.length === 0) return null;
             return (
               <section key={connector.id} className="catalog-group" aria-label={connector.name}>
@@ -163,7 +160,7 @@ export function Catalog({ onOpenConnect }: Props) {
 
                 <ul className="tool-list">
                   {rows.map((tool) => {
-                    const isBlocked = blocked(tool);
+                    const isBlocked = isBlockedToolState(tool.state);
                     const busy = busyId === tool.id;
                     return (
                       <li

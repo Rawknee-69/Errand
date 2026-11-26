@@ -45,8 +45,8 @@
    and the new sanitised description with a **Re-approve this definition**
    button (`09-connectors-blocked.jpg`, `11-catalog-changed.jpg`).
 7. Re-approved. The tool became active, adopted the new pinned description and
-   restored requestability (`12-catalog-reapproved.jpg`,
-   `logs/journal-events.txt` #9).
+   kept its requestable state rather than resetting it
+   (`12-catalog-reapproved.jpg`, `logs/journal-events.txt` #9).
 8. Opened Connectors. Every connector showed its status, last success time,
    transport, auth type and tool/blocked count (`08-connectors.jpg`).
 9. Started the OAuth connector through the gateway API, approved the mock
@@ -91,6 +91,9 @@
   database already had connectors; no second fresh environment was started.
 - Real Notion and Linear endpoints; only the mock calendar was used.
 - Physical phone use; layout and touch targets were measured at 390×844.
+- Restarting an abandoned OAuth sign-in from the `pending` state. The control
+  and route exist and the failed-start path marks `needs_reauth`, but the
+  abandoned-consent flow was not re-driven end to end.
 - A changed tool suspending existing slips: slip policy is a later ticket; this
   screen proves the blocked definition and re-approval, not slip enforcement.
 

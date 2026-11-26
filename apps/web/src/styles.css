@@ -889,13 +889,8 @@ pre {
 }
 
 @media (min-width: 560px) {
+  .grid-2,
   .tool-controls {
-    grid-template-columns: 1fr 1fr;
-  }
-}
-
-@media (min-width: 560px) {
-  .grid-2 {
     grid-template-columns: 1fr 1fr;
   }
 

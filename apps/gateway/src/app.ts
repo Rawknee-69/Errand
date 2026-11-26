@@ -30,7 +30,7 @@ import {
 } from "./connectors/catalog.ts";
 import { McpConnectError, type DiscoverOptions } from "./connectors/mcp.ts";
 import { connectorAuthInputSchema, toConnectorAuth } from "./connectors/auth.ts";
-import { ConnectorError } from "./connectors/errors.ts";
+import { ConnectorError, type ConnectorErrorCode } from "./connectors/errors.ts";
 import {
   approveCatalogTool,
   connectConnector,
@@ -88,6 +88,17 @@ const oauthCallbackSchema = z.object({
   code: z.string().min(1),
   iss: z.string().optional(),
 });
+
+const CONNECTOR_ERROR_STATUS = {
+  not_found: 404,
+  credential: 400,
+  oauth_state: 400,
+  oauth_issuer: 400,
+  oauth_failed: 502,
+  reauth: 409,
+  confirmation_required: 409,
+  blocked: 409,
+} as const satisfies Record<ConnectorErrorCode, number>;
 
 export function catalogToolView(row: CatalogTool): CatalogToolView {
   return {
@@ -393,17 +404,10 @@ export function createGatewayApp(
       );
     }
     if (error instanceof ConnectorError) {
-      const status =
-        error.code === "not_found"
-          ? 404
-          : error.code === "reauth" ||
-              error.code === "confirmation_required" ||
-              error.code === "blocked"
-            ? 409
-            : error.code === "oauth_failed"
-              ? 502
-              : 400;
-      return c.json({ error: error.code, message: error.message }, status);
+      return c.json(
+        { error: error.code, message: error.message },
+        CONNECTOR_ERROR_STATUS[error.code],
+      );
     }
     console.error(error);
     return c.json({ error: "internal", message: "Unexpected gateway error" }, 500);

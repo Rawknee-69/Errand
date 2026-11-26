@@ -10,7 +10,7 @@ import {
   sessionViewSchema,
   type AgentKeyCreated,
   type CatalogResponse,
-  type CatalogToolView,
+  type CatalogToolResponse,
   type ConnectorAuthInput,
   type ConnectorDetail,
   type ConnectorReauthResponse,
@@ -87,20 +87,16 @@ export const api = {
   reauthConnector(id: string): Promise<ConnectorReauthResponse> {
     return send(connectorReauthResponseSchema, `/api/connectors/${id}/reauth`, "POST", {});
   },
-  approveTool(id: string): Promise<{ tool: CatalogToolView }> {
+  approveTool(id: string): Promise<CatalogToolResponse> {
     return send(catalogToolResponseSchema, `/api/catalog/${id}/approve`, "POST", {});
   },
-  setToolClass(
-    id: string,
-    toolClass: ToolClass,
-    confirm: boolean,
-  ): Promise<{ tool: CatalogToolView }> {
+  setToolClass(id: string, toolClass: ToolClass, confirm: boolean): Promise<CatalogToolResponse> {
     return send(catalogToolResponseSchema, `/api/catalog/${id}/class`, "POST", {
       class: toolClass,
       confirm,
     });
   },
-  setToolRequestable(id: string, requestable: boolean): Promise<{ tool: CatalogToolView }> {
+  setToolRequestable(id: string, requestable: boolean): Promise<CatalogToolResponse> {
     return send(catalogToolResponseSchema, `/api/catalog/${id}/requestable`, "POST", {
       requestable,
     });
