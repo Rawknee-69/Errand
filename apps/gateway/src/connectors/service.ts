@@ -71,9 +71,14 @@ function connectorHost(url: string): string {
   return new URL(url).host;
 }
 
+// A Bearer challenge carrying resource_metadata is an MCP OAuth server per
+// RFC 9728; a bare Bearer challenge is a static token.
 function authHint(challenge: string | undefined): AuthHint | null {
-  const scheme = challenge?.split(/\s+/)[0]?.toLowerCase();
-  if (scheme === "bearer") return "bearer";
+  if (challenge === undefined) return null;
+  const scheme = challenge.split(/\s+/)[0]?.toLowerCase();
+  if (scheme === "bearer") {
+    return /(?:^|[,\s])resource_metadata\s*=/i.test(challenge) ? "oauth" : "bearer";
+  }
   if (scheme === "basic") return "basic";
   if (scheme !== undefined && scheme !== "") return "header";
   return null;

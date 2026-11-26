@@ -379,6 +379,14 @@ describe("POST /api/connectors/probe", () => {
     expect(body.toolCount).toBe(0);
   });
 
+  test("recognises an OAuth challenge by its resource metadata", async () => {
+    const response = await post("/api/connectors/probe", { url: url("/oauth/mcp") });
+    expect(response.status).toBe(200);
+    const body = await readJson(response, probeResponseSchema);
+    expect(body.requiresAuth).toBe(true);
+    expect(body.authHint).toBe("oauth");
+  });
+
   test("names a non-bearer, non-basic challenge as a header hint", async () => {
     const response = await post("/api/connectors/probe", { url: url(MOCK_PATHS.pay) });
     const body = await readJson(response, probeResponseSchema);

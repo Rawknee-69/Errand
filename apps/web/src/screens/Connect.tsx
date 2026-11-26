@@ -25,6 +25,26 @@ const AUTH_LABELS: Array<{ type: SelectableAuth; label: string }> = [
   { type: "basic", label: "Basic" },
 ];
 
+function AuthChip(props: {
+  type: ConnectorAuthType;
+  label: string;
+  checked: boolean;
+  onSelect: (type: ConnectorAuthType) => void;
+}) {
+  return (
+    <label className={props.checked ? "chip is-selected" : "chip"}>
+      <input
+        type="radio"
+        name="authType"
+        value={props.type}
+        checked={props.checked}
+        onChange={() => props.onSelect(props.type)}
+      />
+      {props.label}
+    </label>
+  );
+}
+
 function hostOf(url: string): string {
   try {
     return new URL(url).host;
@@ -44,7 +64,7 @@ export function Connect({ onOpenCatalog }: Props) {
   const [url, setUrl] = useState("");
   const [name, setName] = useState("");
   const [probe, setProbe] = useState<ProbeResult | null>(null);
-  const [authType, setAuthType] = useState<SelectableAuth>("none");
+  const [authType, setAuthType] = useState<ConnectorAuthType>("none");
   const [token, setToken] = useState("");
   const [headerName, setHeaderName] = useState("");
   const [headerValue, setHeaderValue] = useState("");
@@ -79,17 +99,17 @@ export function Connect({ onOpenCatalog }: Props) {
     }
   }
 
-  function authInput(): ConnectorAuthInput {
+  function credentialAuthInput(auth: SelectableAuth): ConnectorAuthInput {
     const base = { name: serverName(), url: url.trim() };
-    switch (authType) {
+    switch (auth) {
       case "bearer":
-        return { ...base, authType, token };
+        return { ...base, authType: auth, token };
       case "header":
-        return { ...base, authType, headerName, headerValue };
+        return { ...base, authType: auth, headerName, headerValue };
       case "basic":
-        return { ...base, authType, username, password };
+        return { ...base, authType: auth, username, password };
       case "none":
-        return { ...base, authType };
+        return { ...base, authType: auth };
     }
   }
 
@@ -98,7 +118,12 @@ export function Connect({ onOpenCatalog }: Props) {
     setBusy(true);
     setError(null);
     try {
-      setResult(await api.connect(authInput()));
+      if (authType === "oauth") {
+        const started = await api.startOAuth(serverName(), url.trim());
+        window.location.assign(started.authorizationUrl);
+        return;
+      }
+      setResult(await api.connect(credentialAuthInput(authType)));
       setStep("connected");
     } catch (caught) {
       setError(errorMessage(caught));
@@ -221,24 +246,32 @@ export function Connect({ onOpenCatalog }: Props) {
           <fieldset className="field-group">
             <legend>How should Errand authenticate?</legend>
             <div className="chips">
+              {probe.authHint === "oauth" && (
+                <AuthChip
+                  type="oauth"
+                  label="Sign in (OAuth)"
+                  checked={authType === "oauth"}
+                  onSelect={setAuthType}
+                />
+              )}
               {AUTH_LABELS.map((option) => (
-                <label
+                <AuthChip
                   key={option.type}
-                  className={authType === option.type ? "chip is-selected" : "chip"}
-                >
-                  <input
-                    type="radio"
-                    name="authType"
-                    value={option.type}
-                    checked={authType === option.type}
-                    onChange={() => setAuthType(option.type)}
-                  />
-                  {option.label}
-                </label>
+                  type={option.type}
+                  label={option.label}
+                  checked={authType === option.type}
+                  onSelect={setAuthType}
+                />
               ))}
             </div>
             {probe.authHint !== null && (
               <p className="hint">The server's challenge suggests {probe.authHint}.</p>
+            )}
+            {authType === "oauth" && (
+              <p className="hint">
+                You will be sent to the service to sign in. Errand stores the token; your agent
+                never sees it.
+              </p>
             )}
           </fieldset>
 
@@ -309,7 +342,7 @@ export function Connect({ onOpenCatalog }: Props) {
             </p>
           )}
           <button type="submit" className="button primary" disabled={busy}>
-            {busy ? "Connecting…" : "Connect"}
+            {busy ? "Connecting…" : authType === "oauth" ? "Sign in and connect" : "Connect"}
           </button>
           <p className="hint">
             The credential is encrypted in the vault. It is never returned, logged or shown again.

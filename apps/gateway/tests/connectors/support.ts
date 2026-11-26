@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { authHintSchema } from "@errand/shared";
 import { CONNECTOR_AUTH_STATUSES } from "../../src/db/schema.ts";
 
 export const errorResponseSchema = z.object({
@@ -84,7 +85,7 @@ export const probeResponseSchema = z.object({
   reachable: z.boolean(),
   transport: z.string().nullable(),
   requiresAuth: z.boolean(),
-  authHint: z.enum(["bearer", "basic", "header"]).nullable(),
+  authHint: authHintSchema.nullable(),
   toolCount: z.number(),
 });
 
