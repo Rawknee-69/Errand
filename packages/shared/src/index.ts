@@ -282,6 +282,41 @@ export function isToolExposed(tool: { requestable: boolean; state: ToolState }):
   return tool.requestable && !isBlockedToolState(tool.state);
 }
 
+export const DECOY_NAMES = ["export_all_contacts", "transfer_all_funds", "delete_all_data"] as const;
+
+// Accepts the bare upstream name or the agent-facing `<connector>__<tool>` form.
+export function isDecoyToolName(name: string): boolean {
+  const bare = name.toLowerCase().split("__").at(-1) ?? "";
+  return DECOY_NAMES.some((decoy) => decoy === bare);
+}
+
+export type ExposureInput = {
+  name: string;
+  agentName: string;
+  state: ToolState;
+  requestable: boolean;
+};
+
+export type Exposure =
+  | { exposed: true }
+  | { exposed: false; reason: HiddenToolReason };
+
+// One answer to "may the agent see this tool", and why not when it cannot. The
+// gateway's catalog and the control panel both ask this one function.
+export function exposureOf(tool: ExposureInput): Exposure {
+  if (isDecoyToolName(tool.name) || isDecoyToolName(tool.agentName)) {
+    return { exposed: false, reason: "decoy" };
+  }
+  if (tool.state === "changed") return { exposed: false, reason: "definition_changed" };
+  if (tool.state === "removed") return { exposed: false, reason: "definition_removed" };
+  if (!isToolExposed(tool)) return { exposed: false, reason: "not_requestable" };
+  return { exposed: true };
+}
+
+export function isExposed(tool: ExposureInput): boolean {
+  return exposureOf(tool).exposed;
+}
+
 export const connectorAuthTypeSchema = z.enum(["none", "bearer", "header", "basic", "oauth"]);
 export type ConnectorAuthType = z.infer<typeof connectorAuthTypeSchema>;
 

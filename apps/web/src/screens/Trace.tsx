@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useState } from "react";
-import type { JournalVerifyResponse, TraceEvent, TraceResponse } from "@errand/shared";
+import { useState } from "react";
+import type { JournalVerifyResponse, TraceEvent } from "@errand/shared";
 import { api, errorMessage } from "../api.ts";
 import { describeTraceEvent, familyOf, prettyJson, TRACE_FAMILIES, type TraceFamily } from "../trace.ts";
 import { useLiveFeed } from "../useLiveFeed.ts";
+import { useResource } from "../useResource.ts";
 
 function clock(iso: string): string {
   return new Date(iso).toLocaleTimeString([], {
@@ -49,30 +50,14 @@ function EventRow({ event }: { event: TraceEvent }) {
 }
 
 export function Trace() {
-  const [trace, setTrace] = useState<TraceResponse | null>(null);
+  const { data: trace, loading, error: readError, reload } = useResource(api.trace);
   const [family, setFamily] = useState<TraceFamily>("all");
   const [verify, setVerify] = useState<JournalVerifyResponse | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  const load = useCallback(async () => {
-    try {
-      setTrace(await api.trace());
-      setError(null);
-    } catch (caught) {
-      setError(errorMessage(caught));
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
 
   const { status } = useLiveFeed(() => {
-    void load();
+    void reload(true);
   });
 
   async function runVerify() {
@@ -85,6 +70,8 @@ export function Trace() {
       setBusy(false);
     }
   }
+
+  const shownError = readError ?? error;
 
   const events = trace?.events ?? [];
   const shown = family === "all" ? events : events.filter((event) => familyOf(event.eventType) === family);
@@ -117,12 +104,12 @@ export function Trace() {
         </li>
       </ul>
 
-      {error !== null && (
+      {shownError !== null && (
         <div className="panel stack">
           <p className="alert" role="alert">
-            {error}
+            {shownError}
           </p>
-          <button type="button" className="button secondary" onClick={() => void load()}>
+          <button type="button" className="button secondary" onClick={() => void reload()}>
             Try again
           </button>
         </div>
@@ -136,7 +123,7 @@ export function Trace() {
           </div>
           {verify !== null &&
             (verify.ok ? (
-              <span className="badge ok">Chain intact · {verify.checked}</span>
+              <span className="badge ok">Chain intact Â· {verify.checked}</span>
             ) : (
               <span className="badge warn">Broken at #{verify.firstBrokenSeq}</span>
             ))}
@@ -145,7 +132,7 @@ export function Trace() {
           <button type="button" className="button small" onClick={() => void runVerify()} disabled={busy}>
             Verify the chain
           </button>
-          <button type="button" className="button small" onClick={() => void load()}>
+          <button type="button" className="button small" onClick={() => void reload()}>
             Refresh
           </button>
         </div>

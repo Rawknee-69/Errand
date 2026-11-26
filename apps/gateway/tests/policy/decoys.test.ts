@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { DECOY_NAMES, isDecoyToolName } from "../../src/policy/decoys.ts";
+import { DECOY_NAMES, isDecoyToolName } from "@errand/shared";
 
 describe("decoys", () => {
   test("every bait name is recognised bare and under a connector prefix", () => {

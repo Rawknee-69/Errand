@@ -13,7 +13,6 @@ import {
   trustListResponseSchema,
   licenseAcceptResponseSchema,
   undoApplyResponseSchema,
-  type CatalogToolView,
   type ConnectorDetail,
   type GatewayHealth,
 } from "@errand/shared";
@@ -36,16 +35,16 @@ import { getUser, listAgentKeys } from "./db/scoped-reads.ts";
 import { EgressRefusal } from "./egress/guard.ts";
 import { ConnectorLimitError } from "./connectors/quota.ts";
 import {
+  approveCatalogTool,
+  catalogToolView,
   listCatalog,
   setToolClass,
   setToolRequestable,
-  type CatalogTool,
 } from "./connectors/catalog.ts";
 import { McpConnectError, type DiscoverOptions } from "./connectors/mcp.ts";
 import { connectorAuthInputSchema, toConnectorAuth } from "./connectors/auth.ts";
 import { ConnectorError, type ConnectorErrorCode } from "./connectors/errors.ts";
 import {
-  approveCatalogTool,
   connectConnector,
   createConnectorServiceDeps,
   listConnectors,
@@ -129,31 +128,6 @@ const CONNECTOR_ERROR_STATUS = {
   confirmation_required: 409,
   blocked: 409,
 } as const satisfies Record<ConnectorErrorCode, number>;
-
-export function catalogToolView(row: CatalogTool): CatalogToolView {
-  return {
-    id: row.id,
-    connectorId: row.connectorId,
-    name: row.name,
-    agentName: row.agentName,
-    description: row.description,
-    inputSchema: row.inputSchema,
-    annotations: row.annotations,
-    class: row.class,
-    definitionHash: row.definitionHash,
-    observedDescription: row.observedDescription,
-    observedInputSchema: row.observedInputSchema,
-    observedAnnotations: row.observedAnnotations,
-    observedClass: row.observedClass,
-    observedHash: row.observedHash,
-    state: row.state,
-    requestable: row.requestable,
-    changedAt: row.changedAt,
-    removedAt: row.removedAt,
-    createdAt: row.createdAt,
-    updatedAt: row.updatedAt,
-  };
-}
 
 function oauthCallbackPage(connectorName: string): string {
   return `<!doctype html>

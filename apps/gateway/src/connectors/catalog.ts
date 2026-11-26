@@ -1,6 +1,13 @@
 import { randomUUID } from "node:crypto";
 import { and, eq } from "drizzle-orm";
-import { isBlockedToolState, isClassLoosening, type IngestSummary } from "@errand/shared";
+import {
+  catalogToolViewSchema,
+  isBlockedToolState,
+  isClassLoosening,
+  isToolExposed,
+  type CatalogToolView,
+  type IngestSummary,
+} from "@errand/shared";
 import type { Db } from "../db/client.ts";
 import { canonicalJson } from "../db/journal.ts";
 import { recordEvent } from "../db/events.ts";
@@ -34,8 +41,16 @@ export function listCatalog(db: Db, userId: string): CatalogTool[] {
   return scopedList(db, tools, tools.userId, userId, tools.agentName);
 }
 
+export function catalogToolView(row: CatalogTool): CatalogToolView {
+  return catalogToolViewSchema.parse(row);
+}
+
 export function getCatalogTool(db: Db, userId: string, id: string): CatalogTool | undefined {
   return scopedGet(db, tools, tools.userId, userId, tools.id, id);
+}
+
+function requestableByDefault(toolClass: ToolClass, state: ToolState): boolean {
+  return isToolExposed({ requestable: defaultRequestable(toolClass), state });
 }
 
 function uniqueAgentName(
@@ -58,11 +73,6 @@ function uniqueAgentName(
     const tail = `_${suffix}`;
     candidate = `${base.slice(0, Math.max(0, 64 - tail.length))}${tail}`;
   }
-}
-
-function requestableFor(state: ToolState, toolClass: ToolClass): boolean {
-  if (isBlockedToolState(state)) return false;
-  return defaultRequestable(toolClass);
 }
 
 function requireCatalogTool(db: Db, userId: string, id: string): CatalogTool {
@@ -114,7 +124,7 @@ export function ingestTools(db: Db, options: IngestOptions): IngestSummary {
             observedClass: toolClass,
             observedHash: hash,
             state,
-            requestable: requestableFor(state, toolClass),
+            requestable: requestableByDefault(toolClass, state),
             createdAt: now,
             updatedAt: now,
           })
@@ -208,11 +218,32 @@ export function pinToolDefinition(
   return requireCatalogTool(db, userId, row.id);
 }
 
-export function approveTool(db: Db, userId: string, toolId: string, now = new Date().toISOString()): CatalogTool {
+// Pinning and journalling are one act: the audit trail cannot be skipped by
+// choosing another entry point.
+export function approveCatalogTool(
+  db: Db,
+  userId: string,
+  toolId: string,
+  now = new Date().toISOString(),
+): CatalogTool {
   const row = getCatalogTool(db, userId, toolId);
-  if (row === undefined) throw new Error(`Tool ${toolId} not found`);
-  if (row.state === "removed") throw new Error(`Cannot approve a removed tool: ${row.name}`);
-  return pinToolDefinition(db, userId, row, now);
+  if (row === undefined) throw new ConnectorError("not_found", `Tool ${toolId} not found`);
+  if (row.state === "removed") throw new ConnectorError("not_found", `Tool ${row.name} was removed`);
+  const tool = pinToolDefinition(db, userId, row, now);
+  recordEvent(db, {
+    userId,
+    eventType: "catalog.tool_approved",
+    payload: {
+      tool_id: tool.id,
+      connector_id: tool.connectorId,
+      name: tool.name,
+      previous_class: row.class,
+      class: tool.class,
+      previous_hash: row.definitionHash,
+      hash: tool.definitionHash,
+    },
+  });
+  return tool;
 }
 
 export type ToolClassChange = {

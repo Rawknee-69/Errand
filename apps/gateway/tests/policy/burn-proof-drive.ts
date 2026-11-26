@@ -4,7 +4,7 @@ import { z } from "zod";
 import { createMigratedDatabase } from "../../src/db/client.ts";
 import { journal, trust } from "../../src/db/schema.ts";
 import { getSlip } from "../../src/db/scoped-reads.ts";
-import { DECOY_NAMES } from "../../src/policy/decoys.ts";
+import { DECOY_NAMES } from "@errand/shared";
 import { callTool, connectAgent } from "../agent/mcp-client.ts";
 import { humanRequests, parse, step } from "../support/proof-drive.ts";
 

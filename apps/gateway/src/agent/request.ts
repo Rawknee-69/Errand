@@ -2,9 +2,8 @@ import { randomUUID } from "node:crypto";
 import type { Db } from "../db/client.ts";
 import { recordEvent } from "../db/events.ts";
 import { slips, type Tier } from "../db/schema.ts";
+import { isDecoyToolName, isExposed } from "@errand/shared";
 import { listCatalog } from "../connectors/catalog.ts";
-import { isRequestableTool } from "./catalog.ts";
-import { isDecoyToolName } from "../policy/decoys.ts";
 import { errandTypeFor } from "../policy/errand-type.ts";
 import { ensureLearnerTrust, parseTrustCaps, settleRuns } from "../policy/trust.ts";
 import { approveSlip } from "../slips/approval.ts";
@@ -65,7 +64,7 @@ export function requestErrand(
       throw new ErrandRequestError("decoy", `${name} is bait and can never be requested`, name);
     }
     const tool = catalog.get(name);
-    if (tool === undefined || !isRequestableTool(tool)) {
+    if (tool === undefined || !isExposed(tool)) {
       throw new ErrandRequestError("unknown_tool", `${name} is not requestable`, name);
     }
     return { name: tool.agentName, connectorId: tool.connectorId, class: tool.class };

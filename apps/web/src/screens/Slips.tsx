@@ -10,6 +10,7 @@ import type {
 } from "@errand/shared";
 import { api, errorMessage } from "../api.ts";
 import { OutboxPanel } from "../components/OutboxPanel.tsx";
+import { ResourceState } from "../components/ResourceState.tsx";
 import { describeFeedEvent, type FeedItem } from "../feed.ts";
 import {
   formatCalls,
@@ -385,32 +386,15 @@ export function Slips() {
 
       <div className="slips-layout">
         <div className="stack">
-          {loading && (
-            <p className="panel hint" aria-busy="true">
-              Reading slips…
-            </p>
-          )}
-
-          {error !== null && (
-            <div className="panel stack">
-              <p className="alert" role="alert">
-                {error}
-              </p>
-              <button type="button" className="button secondary" onClick={() => void reload()}>
-                Try again
-              </button>
-            </div>
-          )}
-
-          {!loading && error === null && pending.length === 0 && (
-            <div className="panel stack empty">
-              <h2>Nothing is waiting for you</h2>
-              <p className="lede">
-                When an agent requests an errand, its slip appears here with plain-language caps for
-                your tap. Approved and denied slips move to the list below.
-              </p>
-            </div>
-          )}
+          <ResourceState
+            loading={loading}
+            error={error}
+            isEmpty={pending.length === 0}
+            loadingCopy="Reading slips…"
+            emptyTitle="Nothing is waiting for you"
+            emptyCopy="When an agent requests an errand, its slip appears here with plain-language caps for your tap. Approved and denied slips move to the list below."
+            onRetry={() => void reload()}
+          />
 
           {pending.map((detail) => (
             <SlipCard

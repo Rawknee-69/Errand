@@ -10,9 +10,8 @@ import type { VaultKeyring } from "../vault/keyring.ts";
 import { Vault } from "../vault/vault.ts";
 import { assertFetchableUrl } from "../egress/guard.ts";
 import { parseCredential, serialiseCredential, type ConnectorAuth } from "./auth.ts";
-import { getCatalogTool, pinToolDefinition, type DiscoveredTool, type IngestSummary } from "./catalog.ts";
+import type { DiscoveredTool, IngestSummary } from "./catalog.ts";
 import { applyDiscovery } from "./discovery.ts";
-import { ConnectorError } from "./errors.ts";
 import { assertConnectorQuota } from "./quota.ts";
 import {
   discoverMcpTools,
@@ -224,23 +223,3 @@ export async function refreshConnector(
   };
 }
 
-export function approveCatalogTool(db: Db, userId: string, toolId: string) {
-  const row = getCatalogTool(db, userId, toolId);
-  if (row === undefined) throw new ConnectorError("not_found", `Tool ${toolId} not found`);
-  if (row.state === "removed") throw new ConnectorError("not_found", `Tool ${row.name} was removed`);
-  const tool = pinToolDefinition(db, userId, row);
-  recordEvent(db, {
-    userId,
-    eventType: "catalog.tool_approved",
-    payload: {
-      tool_id: tool.id,
-      connector_id: tool.connectorId,
-      name: tool.name,
-      previous_class: row.class,
-      class: tool.class,
-      previous_hash: row.definitionHash,
-      hash: tool.definitionHash,
-    },
-  });
-  return tool;
-}

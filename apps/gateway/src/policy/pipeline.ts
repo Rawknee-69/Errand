@@ -1,9 +1,9 @@
 import type { ToolClass } from "@errand/shared";
 import type { Db } from "../db/client.ts";
 import { getConnector, getSlip } from "../db/scoped-reads.ts";
+import { isBlockedToolState, isDecoyToolName } from "@errand/shared";
 import { listCatalog } from "../connectors/catalog.ts";
 import { parseSlipTools, type SlipTool } from "../agent/slip-tools.ts";
-import { isDecoyToolName } from "./decoys.ts";
 import { checkArguments } from "./arguments.ts";
 import { checkConstraints } from "./constraints.ts";
 import { checkCapability, type CapabilityFailure } from "./capability.ts";
@@ -128,7 +128,7 @@ export function admitCall(
   const tool = listCatalog(db, userId).find(
     (entry) => entry.agentName === input.tool && entry.connectorId === slipTool.connectorId,
   );
-  if (tool === undefined || tool.state === "changed" || tool.state === "removed") {
+  if (tool === undefined || isBlockedToolState(tool.state)) {
     return deny("tool_unavailable", `${input.tool} is not available to call`);
   }
 
