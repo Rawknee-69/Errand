@@ -165,10 +165,15 @@ export const outboxStateSchema = z.enum([
   "releasing",
   "released",
   "confirmed",
+  "failed",
   "cancelled",
   "expired",
 ]);
 export type OutboxState = z.infer<typeof outboxStateSchema>;
+
+export function isPendingOutboxState(state: OutboxState): boolean {
+  return state === "held" || state === "needs_human";
+}
 
 export const outboxItemSchema = z.object({
   id: z.string(),

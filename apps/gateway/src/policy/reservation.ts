@@ -44,7 +44,8 @@ function failureReason(slip: SlipRow, amountCents: number): ReservationFailure {
 }
 
 // Returns a held call's reservation when the human cancels it or its window
-// expires. The SQL max keeps a double release from underflowing a counter.
+// expires. The SQL max keeps a double release from underflowing a counter; the
+// rate counter stays, because it limits attempts rather than completed calls.
 export function releaseCall(
   db: Pick<Db, "update">,
   input: { userId: string; slipId: string; amountCents: number; now: Date },
@@ -53,7 +54,6 @@ export function releaseCall(
     .set({
       callsUsed: sql`max(0, ${slips.callsUsed} - 1)`,
       spendUsedCents: sql`max(0, ${slips.spendUsedCents} - ${input.amountCents})`,
-      rateWindowCalls: sql`max(0, ${slips.rateWindowCalls} - 1)`,
       updatedAt: input.now.toISOString(),
     })
     .where(and(eq(slips.userId, input.userId), eq(slips.id, input.slipId)))

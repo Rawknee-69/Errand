@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { writeFileSync } from "node:fs";
 import { eq } from "drizzle-orm";
+import { outboxItemResponseSchema, outboxListResponseSchema } from "@errand/shared";
 import { z } from "zod";
 import { createMigratedDatabase } from "../../src/db/client.ts";
 import { calls, outbox, slips } from "../../src/db/schema.ts";
@@ -36,15 +37,6 @@ const pendingSchema = z.object({
   expiresAt: z.string(),
   amountCents: z.number().int().nonnegative().optional(),
 });
-const outboxItemSchema = z.object({
-  item: z.object({ id: z.string(), state: z.string(), reason: z.string().nullable() }),
-});
-const outboxListSchema = z.object({
-  items: z.array(
-    z.object({ id: z.string(), state: z.string(), toolClass: z.string(), amountCents: z.number() }),
-  ),
-});
-
 
 assert.ok(hmacKey.length >= 32, "HMAC_KEY must be set for the proof driver");
 
@@ -240,7 +232,7 @@ const cancelHeld = pendingSchema.parse(
 );
 const cancelled = await parse(
   await human(`/api/outbox/${cancelHeld.outboxId}/cancel`, { method: "POST" }),
-  outboxItemSchema,
+  outboxItemResponseSchema,
 );
 assert.equal(cancelled.item.state, "cancelled");
 await Bun.sleep(32_000);
@@ -262,7 +254,7 @@ assert.equal(callsFor(learnerSpend.slipId).length, 0);
 console.log(`learner spend ${learnerPending.outboxId}: needs_human, nothing moved`);
 const confirmed = await parse(
   await human(`/api/outbox/${learnerPending.outboxId}/confirm`, { method: "POST" }),
-  outboxItemSchema,
+  outboxItemResponseSchema,
 );
 assert.equal(confirmed.item.state, "confirmed");
 console.log(
@@ -277,7 +269,7 @@ assert.equal(licensePending.state, "needs_human");
 console.log(`license spend ${licensePending.outboxId}: needs_human even on the license tier`);
 const denied = await parse(
   await human(`/api/outbox/${licensePending.outboxId}/cancel`, { method: "POST" }),
-  outboxItemSchema,
+  outboxItemResponseSchema,
 );
 assert.equal(denied.item.state, "cancelled");
 assert.equal(callsFor(licenseSpend.slipId).length, 0);
@@ -310,7 +302,7 @@ console.log(
 );
 
 step("the outbox list and the live feed");
-const list = await parse(await human("/api/outbox"), outboxListSchema);
+const list = await parse(await human("/api/outbox"), outboxListResponseSchema);
 console.log(`outbox list: ${JSON.stringify(list.items)}`);
 await Bun.sleep(1_000);
 for (const eventType of [
@@ -319,11 +311,12 @@ for (const eventType of [
   "outbox.cancelled",
   "outbox.needs_human",
   "outbox.confirmed",
+  "outbox.completed",
   "outbox.expired",
 ]) {
   assert.ok(feedText.includes(eventType), `live feed never showed ${eventType}`);
 }
-console.log("live feed carried held, released, cancelled, needs_human, confirmed and expired frames");
+console.log("live feed carried held, released, cancelled, needs_human, confirmed, completed and expired frames");
 
 step("verify the journal chain");
 const verify = await parse(await human("/api/journal/verify"), z.object({ ok: z.boolean(), checked: z.number() }));

@@ -23,8 +23,9 @@
    after 32 more seconds it still had no calls row and the reservation was
    refunded.
 6. A learner spend returned `needs_human`; a separate POST confirm forwarded
-   it, wrote `outbox.confirmed` and one call row. A license spend returned
-   `needs_human` too and was denied; spend and call counters returned to zero.
+   it, wrote `outbox.confirmed` (the tap), `outbox.completed` (the result) and
+   one call row. A license spend returned `needs_human` too and was denied;
+   spend and call counters returned to zero.
 7. An outbox row past `expires_at` was swept to `expired`; after 32 seconds it
    still had no calls row.
 8. Subscribed to `/api/events?since=0` for the whole run and captured the SSE
@@ -36,7 +37,7 @@
 The transcript is `logs/outbox-transcript.txt`; the SSE capture is
 `logs/sse.txt`; the server windows are `logs/gateway-server.txt`,
 `logs/gateway-ui-server.txt`, `logs/mock-services.txt` and
-`logs/web-server.txt`. Journal verify ended `{ok:true, checked:27}`.
+`logs/web-server.txt`. Journal verify ended `{ok:true, checked:28}`.
 
 ## Findings
 
@@ -56,10 +57,10 @@ The fixed layout was re-driven at both widths: the phone run reports
 
 - Multi-process worker races: one gateway process releases the outbox. The
   conditional state claim is covered by unit behaviour, not by two processes.
-- A crash between `releasing` and the forwarded call leaves the row
-  `releasing`; recovery for that crash window is not implemented or proven.
+- A stale `releasing` claim is swept by the next release pass and covered by a
+  test, but no real process was killed mid-forward.
 - The 30-second window is proven in real time; timing under a suspended
-  process is covered only by the expired-row sweep.
+  process is covered only by the expired-row sweep and the five-second grace.
 - The Pay mock is the upstream; no real Stripe/email integration was driven.
 - OAuth connectors were not used for this ticket.
 

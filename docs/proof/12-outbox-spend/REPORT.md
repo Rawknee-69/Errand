@@ -9,12 +9,15 @@
 - `packages/shared/src/index.ts` — `OutboxItem`, its state and class schemas,
   and the list/response schemas shared by gateway and web.
 - `apps/gateway/src/outbox/constants.ts` — the 30-second send hold, the
-  one-minute post-release grace and the five-minute spend tap window.
+  five-second release grace, the five-minute spend tap window and the
+  one-minute stale-claim timeout.
 - `apps/gateway/src/outbox/service.ts` — the outbox behaviour: hold a send,
   wait for a spend tap, list, cancel, confirm, claim-and-release due sends,
-  expire an item that missed its window, refund the reservation, and journal
-  every transition. Release re-runs the policy pipeline without reserving
-  again, so a burned, expired or revoked slip cannot fire.
+  sweep a stale `releasing` claim, expire an item that missed its window,
+  refund the call/spend reservation, and journal every transition. Release
+  re-runs the policy pipeline without reserving again, so a burned, expired or
+  revoked slip cannot fire. A failed forward is `failed`, never `confirmed`,
+  and a spend journals `outbox.completed` with its call id and outcome.
 - `apps/gateway/src/outbox/view.ts` — the scoped view with the slip goal and
   connector name.
 - `apps/gateway/src/agent/forward.ts` — split the upstream forwarder from the
@@ -35,10 +38,11 @@
   spend-tap panel on Slips with a live countdown, Stop it, Deny, Confirm spend,
   plain-language outcomes, phone layout and feed entries for every outbox
   event.
-- Tests: `apps/gateway/tests/outbox/outbox.test.ts` (10 tests: hold, release,
-  cancel, expiry, burn during the hold, needs_human on both tiers, confirm,
-  deny, expired confirm, wrong action, live SSE) and web feed coverage in
-  `apps/web/tests/feed.test.ts`.
+- Tests: `apps/gateway/tests/outbox/outbox.test.ts` (12 tests: hold, release,
+  cancel with a rate-counter check, expiry, burn during the hold, needs_human
+  on both tiers, confirm, deny, expired confirm, wrong action, a failed
+  upstream after the tap, a stale `releasing` sweep and live SSE) and web feed
+  coverage in `apps/web/tests/feed.test.ts`.
 - Proof tooling: `apps/gateway/tests/outbox/proof-drive.ts`,
   `apps/gateway/tests/outbox/seed-pending.ts`.
 - Proof: `docs/proof/12-outbox-spend/` (`PROOF.md`, transcript, SSE frames,
@@ -71,10 +75,10 @@ $ bun run typecheck
 ✓ 4 checks passed: comments, installed, no-any, oauth-verifier
 
 $ bun test
- 376 pass
+ 378 pass
  0 fail
- 1315 expect() calls
-Ran 376 tests across 46 files.
+ 1329 expect() calls
+Ran 378 tests across 46 files.
 ```
 
 The full pasted output is `docs/proof/12-outbox-spend/logs/test-output.txt`
@@ -105,12 +109,42 @@ None. No dependency was added, upgraded, downgraded or removed.
 
 ## Review findings addressed
 
-(see the `/code-review` pass below — filled before close)
+Standards:
+- `isPending` had two homes; it is now `isPendingOutboxState` in
+  `packages/shared`, used by the service and the web hook.
+- `expire()` and `cancel()` pasted the claim/refund/journal shape; one `close`
+  transaction now serves both, with an explicit from-state list.
+- The proof driver shadowed the shared `outboxItemSchema`; it now imports
+  `outboxItemResponseSchema` and `outboxListResponseSchema`.
+- The constants file tripped the comment-density check; its comments were cut
+  to the one invariant the names cannot carry.
+- The release worker started by default in every app instance; it is now
+  production wiring only (`index.ts`), and tests drive `releaseDue` directly.
+- Proof logs were captured by PowerShell as UTF-16; they are UTF-8 now.
+- Deviation recorded: the diff is over the ~300-line guideline. The four
+  criteria share one table, service and API; splitting them would ship a
+  non-functional half. No generated files are included in that count.
+
+Spec:
+- A failed spend was stored as `confirmed` and fed as a green result. A failed
+  forward is now `failed`, with `outbox.completed` carrying `call_id` and
+  `outcome`; the feed reads "Spend settled" only on success.
+- `outbox.confirmed` is the human tap, not the result; the UI says "Spend
+  tapped" and the completion event follows. The journal now records both.
+- The 60-second post-release grace made a stalled worker fire a send at ~90s.
+  The grace is 5 seconds; a later item expires instead of firing.
+- Cancelling refunded the rate counter, allowing a hold/cancel loop around the
+  rate cap. The rate counter now stays; only the call and spend reservations
+  are refunded.
+- A row stuck in `releasing` after a crash was never swept. `releaseDue` now
+  closes claims older than one minute as `expired` (`release_timeout`) and
+  refunds them, so it can never double-fire.
 
 ## Unverified
 
 - Multi-process outbox workers; one process claims and releases.
-- Crash recovery for a row stuck in `releasing`.
+- The stale-claim sweep is covered in process, not by killing a real process
+  mid-forward.
 - The upstreams are the Pay mock; no real email or payment provider was used.
 - Timing under a suspended process is covered only by the expired-row sweep.
 

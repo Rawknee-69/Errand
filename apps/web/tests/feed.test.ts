@@ -106,7 +106,25 @@ describe("describeFeedEvent", () => {
     });
     expect(
       describeFeedEvent(event(15, "outbox.confirmed", { tool: "pay__charge_card", amount_cents: 500 })),
-    ).toMatchObject({ title: "Spend confirmed: pay__charge_card", tone: "ok" });
+    ).toMatchObject({ title: "Spend tapped: pay__charge_card", tone: "accent" });
+    expect(
+      describeFeedEvent(
+        event(19, "outbox.completed", {
+          tool: "pay__charge_card",
+          amount_cents: 500,
+          outcome: "succeeded",
+        }),
+      ),
+    ).toMatchObject({ title: "Spend settled: pay__charge_card", tone: "ok" });
+    expect(
+      describeFeedEvent(
+        event(20, "outbox.completed", {
+          tool: "pay__charge_card",
+          outcome: "failed",
+          reason: "The upstream call failed",
+        }),
+      ),
+    ).toMatchObject({ title: "Spend failed: pay__charge_card", tone: "danger" });
     expect(
       describeFeedEvent(event(16, "outbox.released", { tool: "pay__send_receipt", outcome: "succeeded" })),
     ).toMatchObject({ title: "Send released: pay__send_receipt", tone: "ok" });

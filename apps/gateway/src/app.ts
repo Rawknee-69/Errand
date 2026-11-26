@@ -72,7 +72,7 @@ export type GatewayAppOptions = {
   connectorConcurrency?: number;
   resultCapBytes?: number;
   feed?: FeedStreamOptions;
-  // 0 disables the release worker; tests drive `releaseDue` themselves.
+  // The worker is production wiring; tests drive `releaseDue` themselves.
   outboxReleaseIntervalMs?: number;
   auth: AuthOptions | "disabled";
 };
@@ -194,7 +194,7 @@ export function createGatewayApp(
   const outbox = agentForwarder?.outbox;
   const agentHandler = createAgentHandler(db, options.hmacKey, agentForwarder?.forward);
 
-  const releaseIntervalMs = options.outboxReleaseIntervalMs ?? 1_000;
+  const releaseIntervalMs = options.outboxReleaseIntervalMs ?? 0;
   if (outbox !== undefined && releaseIntervalMs > 0) {
     const timer = setInterval(() => {
       void outbox.releaseDue().catch((error: unknown) => {

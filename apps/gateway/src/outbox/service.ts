@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { and, eq, inArray, lte } from "drizzle-orm";
-import type { OutboxItem } from "@errand/shared";
+import { and, eq, inArray, lt, lte } from "drizzle-orm";
+import { isPendingOutboxState, type OutboxItem } from "@errand/shared";
 import type { AdmittedCall, Forwarder } from "../agent/forward.ts";
 import type { Db } from "../db/client.ts";
 import { appendJournalEventIn } from "../db/journal.ts";
@@ -8,7 +8,12 @@ import { outbox, type OutboxClass } from "../db/schema.ts";
 import { getOutboxItem, getSlip, listOutbox } from "../db/scoped-reads.ts";
 import { admitCall } from "../policy/pipeline.ts";
 import { releaseCall } from "../policy/reservation.ts";
-import { SEND_EXPIRY_GRACE_MS, SEND_HOLD_MS, SPEND_TAP_TTL_MS } from "./constants.ts";
+import {
+  RELEASING_TIMEOUT_MS,
+  SEND_HOLD_MS,
+  SEND_RELEASE_GRACE_MS,
+  SPEND_TAP_TTL_MS,
+} from "./constants.ts";
 import { outboxView, type OutboxRow } from "./view.ts";
 
 export type OutboxErrorCode = "not_found" | "not_pending" | "not_confirmable" | "expired";
@@ -40,10 +45,6 @@ export type OutboxServiceOptions = {
   hmacKey?: string | undefined;
 };
 
-function isPending(state: OutboxRow["state"]): boolean {
-  return state === "held" || state === "needs_human";
-}
-
 function earliest(...values: string[]): string {
   return values.reduce((left, right) => (Date.parse(left) <= Date.parse(right) ? left : right));
 }
@@ -68,7 +69,10 @@ function create(
       : null;
   const expiresAt =
     toolClass === "send"
-      ? earliest(slip.expiresAt, new Date(now.getTime() + SEND_HOLD_MS + SEND_EXPIRY_GRACE_MS).toISOString())
+      ? earliest(
+          slip.expiresAt,
+          new Date(now.getTime() + SEND_HOLD_MS + SEND_RELEASE_GRACE_MS).toISOString(),
+        )
       : earliest(slip.expiresAt, new Date(now.getTime() + SPEND_TAP_TTL_MS).toISOString());
 
   db.transaction((tx) => {
@@ -127,18 +131,18 @@ function claim(
     .all()[0];
 }
 
-function expire(db: Db, row: OutboxRow, reason: string, now: Date): void {
-  db.transaction((tx) => {
-    const updated = claim(
-      tx,
-      row.userId,
-      row.id,
-      [...PENDING_STATES, "releasing"],
-      "expired",
-      now,
-      reason,
-    );
-    if (updated === undefined) return;
+function close(
+  db: Db,
+  row: OutboxRow,
+  to: "cancelled" | "expired",
+  reason: string,
+  now: Date,
+  from: OutboxRow["state"][] = [...PENDING_STATES],
+): OutboxRow | undefined {
+  const eventType = to === "cancelled" ? "outbox.cancelled" : "outbox.expired";
+  return db.transaction((tx) => {
+    const updated = claim(tx, row.userId, row.id, from, to, now, reason);
+    if (updated === undefined) return undefined;
     releaseCall(tx, {
       userId: row.userId,
       slipId: row.slipId,
@@ -147,17 +151,22 @@ function expire(db: Db, row: OutboxRow, reason: string, now: Date): void {
     });
     appendJournalEventIn(tx, {
       userId: row.userId,
-      eventType: "outbox.expired",
+      eventType,
       payload: {
         outbox_id: row.id,
         slip_id: row.slipId,
         tool: row.tool,
         class: row.toolClass,
         reason,
-        expires_at: row.expiresAt,
+        ...(to === "expired" ? { expires_at: row.expiresAt } : {}),
       },
     });
+    return updated;
   });
+}
+
+function expire(db: Db, row: OutboxRow, reason: string, now: Date): void {
+  close(db, row, "expired", reason, now, [...PENDING_STATES, "releasing"]);
 }
 
 function revalidate(
@@ -198,35 +207,31 @@ async function run(
   }
 
   const outcome = await forward(row.userId, check, JSON.parse(row.arguments) as Record<string, unknown>);
-  const state = row.toolClass === "send" ? "released" : "confirmed";
+  const failed = outcome.state === "failed";
+  // A failed spend is not "confirmed": the badge and feed must not imply money moved.
+  const state = failed ? "failed" : row.toolClass === "send" ? "released" : "confirmed";
   const callId = outcome.state === "forwarded" ? outcome.callId : null;
-  const reason = outcome.state === "failed" ? outcome.message : null;
-  const finalize = (tx: Pick<Db, "update">) => {
+  const reason = failed ? outcome.message : null;
+  db.transaction((tx) => {
     tx.update(outbox)
       .set({ state, callId, reason, updatedAt: now.toISOString() })
       .where(and(eq(outbox.userId, row.userId), eq(outbox.id, row.id)))
       .run();
-  };
-  if (row.toolClass === "send") {
-    db.transaction((tx) => {
-      finalize(tx);
-      appendJournalEventIn(tx, {
-        userId: row.userId,
-        eventType: "outbox.released",
-        payload: {
-          outbox_id: row.id,
-          slip_id: row.slipId,
-          tool: row.tool,
-          class: row.toolClass,
-          call_id: callId,
-          outcome: outcome.state === "failed" ? "failed" : "succeeded",
-          reason,
-        },
-      });
+    appendJournalEventIn(tx, {
+      userId: row.userId,
+      eventType: row.toolClass === "send" ? "outbox.released" : "outbox.completed",
+      payload: {
+        outbox_id: row.id,
+        slip_id: row.slipId,
+        tool: row.tool,
+        class: row.toolClass,
+        amount_cents: row.amountCents,
+        call_id: callId,
+        outcome: failed ? "failed" : "succeeded",
+        reason,
+      },
     });
-  } else {
-    finalize(db);
-  }
+  });
   const final = getOutboxItem(db, row.userId, row.id);
   if (final === undefined) throw new Error(`Outbox item ${row.id} vanished after release`);
   return final;
@@ -247,8 +252,8 @@ export function createOutboxService(options: OutboxServiceOptions): OutboxServic
       const items = listOutbox(db, userId).map((row) => outboxView(db, userId, row));
       return items
         .sort((left, right) => {
-          const leftPending = isPending(left.state) ? 1 : 0;
-          const rightPending = isPending(right.state) ? 1 : 0;
+          const leftPending = isPendingOutboxState(left.state) ? 1 : 0;
+          const rightPending = isPendingOutboxState(right.state) ? 1 : 0;
           return rightPending - leftPending || right.createdAt.localeCompare(left.createdAt);
         })
         .slice(0, 50);
@@ -256,7 +261,7 @@ export function createOutboxService(options: OutboxServiceOptions): OutboxServic
     cancel(userId, id, now = new Date()) {
       const row = getOutboxItem(db, userId, id);
       if (row === undefined) throw new OutboxError("not_found", `No outbox item ${id}`);
-      if (!isPending(row.state)) {
+      if (!isPendingOutboxState(row.state)) {
         throw new OutboxError("not_pending", `Outbox item ${id} is already ${row.state}`);
       }
       if (Date.parse(row.expiresAt) <= now.getTime()) {
@@ -266,23 +271,7 @@ export function createOutboxService(options: OutboxServiceOptions): OutboxServic
         return outboxView(db, userId, expired);
       }
 
-      const cancelled = db.transaction((tx) => {
-        const updated = claim(tx, userId, id, [...PENDING_STATES], "cancelled", now, "human_cancelled");
-        if (updated === undefined) return undefined;
-        releaseCall(tx, { userId, slipId: row.slipId, amountCents: row.amountCents, now });
-        appendJournalEventIn(tx, {
-          userId,
-          eventType: "outbox.cancelled",
-          payload: {
-            outbox_id: id,
-            slip_id: row.slipId,
-            tool: row.tool,
-            class: row.toolClass,
-            reason: "human_cancelled",
-          },
-        });
-        return updated;
-      });
+      const cancelled = close(db, row, "cancelled", "human_cancelled", now);
       if (cancelled === undefined) throw new OutboxError("not_pending", `Outbox item ${id} was just decided`);
       return outboxView(db, userId, cancelled);
     },
@@ -292,7 +281,7 @@ export function createOutboxService(options: OutboxServiceOptions): OutboxServic
       if (row.toolClass !== "spend") {
         throw new OutboxError("not_confirmable", `Outbox item ${id} is a send, not a spend`);
       }
-      if (!isPending(row.state)) {
+      if (!isPendingOutboxState(row.state)) {
         throw new OutboxError("not_pending", `Outbox item ${id} is already ${row.state}`);
       }
       if (Date.parse(row.expiresAt) <= now.getTime()) {
@@ -327,6 +316,14 @@ export function createOutboxService(options: OutboxServiceOptions): OutboxServic
       if (releasing) return 0;
       releasing = true;
       try {
+        const staleCutoff = new Date(now.getTime() - RELEASING_TIMEOUT_MS).toISOString();
+        const stale = db
+          .select()
+          .from(outbox)
+          .where(and(eq(outbox.state, "releasing"), lt(outbox.updatedAt, staleCutoff)))
+          .all();
+        for (const row of stale) expire(db, row, "release_timeout", now);
+
         const due = db
           .select()
           .from(outbox)

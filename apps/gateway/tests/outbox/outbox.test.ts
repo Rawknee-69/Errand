@@ -12,7 +12,7 @@ import { createGatewayApp, type GatewayAppOptions } from "../../src/app.ts";
 import { createForwarder } from "../../src/agent/forward.ts";
 import type { Db } from "../../src/db/client.ts";
 import { listJournalEvents } from "../../src/db/journal.ts";
-import { calls, outbox, slips, type Tier } from "../../src/db/schema.ts";
+import { calls, connectors, outbox, slips, type Tier } from "../../src/db/schema.ts";
 import { getSlip } from "../../src/db/scoped-reads.ts";
 import { errandTypeFor } from "../../src/policy/errand-type.ts";
 import { issueCapability } from "../../src/policy/capability.ts";
@@ -274,6 +274,8 @@ describe("the outbox", () => {
     expect(cancelled.body).toMatchObject({ state: "cancelled", reason: "human_cancelled" });
     expect(events("outbox.cancelled").some((event) => event.payload.includes(pending.outboxId))).toBe(true);
     expect(getSlip(db, "user-a", slip.slipId)?.callsUsed).toBe(0);
+    // The rate counter limits attempts, so cancelling does not refund it.
+    expect(getSlip(db, "user-a", slip.slipId)?.rateWindowCalls).toBe(1);
 
     const fired = await testOutbox().releaseDue(
       new Date(Date.parse(pending.releaseAt ?? "") + 1_000),
@@ -437,6 +439,52 @@ describe("the outbox", () => {
     } finally {
       await sse.cancel();
     }
+  });
+
+  test("a confirmed spend whose upstream fails is failed, not confirmed", async () => {
+    const slip = spendSlip();
+    const response = await call(client, slip.slipId, slip.capability, "pay__charge_card", {
+      cents: 400,
+    });
+    const pending = pendingSchema.parse(response.body);
+    db.update(connectors)
+      .set({ url: "http://127.0.0.1:9/dead/mcp" })
+      .where(eq(connectors.id, payConnectorId))
+      .run();
+    try {
+      const failed = await confirm(pending.outboxId);
+      expect(failed.status).toBe(200);
+      expect(failed.body?.state).toBe("failed");
+      expect(callsFor(slip.slipId)).toHaveLength(1);
+      expect(callsFor(slip.slipId)[0]?.error).not.toBeNull();
+      const completed = events("outbox.completed").at(-1);
+      expect(completed?.payload).toContain('"outcome":"failed"');
+      expect(completed?.payload).toContain(pending.outboxId);
+    } finally {
+      db.update(connectors)
+        .set({ url: mockUrl(MOCK_PATHS.pay) })
+        .where(eq(connectors.id, payConnectorId))
+        .run();
+    }
+  });
+
+  test("a row stuck in releasing is swept to expired instead of staying pending", async () => {
+    const slip = sendSlip();
+    const response = await call(client, slip.slipId, slip.capability, "pay__send_receipt", {
+      id: "rcpt-1",
+    });
+    const pending = pendingSchema.parse(response.body);
+    db.update(outbox)
+      .set({ state: "releasing", updatedAt: "2026-01-01T00:00:00.000Z" })
+      .where(eq(outbox.id, pending.outboxId))
+      .run();
+
+    const fired = await testOutbox().releaseDue(new Date());
+    expect(fired).toBe(0);
+    expect(callsFor(slip.slipId)).toHaveLength(0);
+    expect(outboxRows(slip.slipId)[0]?.state).toBe("expired");
+    expect(outboxRows(slip.slipId)[0]?.reason).toBe("release_timeout");
+    expect(getSlip(db, "user-a", slip.slipId)?.callsUsed).toBe(0);
   });
 
   test("cancel is not a spend confirmation and confirm is not a send release", async () => {

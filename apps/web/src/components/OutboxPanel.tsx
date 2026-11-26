@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { OutboxItem } from "@errand/shared";
+import { isPendingOutboxState, type OutboxItem } from "@errand/shared";
 import { formatMoney, timeLeftFromIso } from "../format.ts";
 import type { OutboxView } from "../useOutbox.ts";
 
@@ -11,7 +11,8 @@ function outcomeNote(item: OutboxItem): string {
   if (item.state === "held") return "Sends when its window closes unless you stop it";
   if (item.state === "needs_human") return "No money moves without your tap";
   if (item.state === "releasing") return "Running now";
-  if (item.state === "confirmed") return item.reason ?? "The money moved after your tap";
+  if (item.state === "failed") return item.reason ?? "The upstream call failed, so nothing moved";
+  if (item.state === "confirmed") return "The money moved after your tap";
   if (item.state === "released") return item.reason ?? "The cancel window closed and it was sent";
   if (item.state === "cancelled") {
     return item.reason === "human_cancelled" || item.reason === null
@@ -27,6 +28,7 @@ function StateBadge({ item }: { item: OutboxItem }) {
   if (item.state === "needs_human") return <span className="badge accent">Needs your tap</span>;
   if (item.state === "releasing") return <span className="badge muted">Releasing…</span>;
   if (item.state === "confirmed") return <span className="badge ok">Confirmed</span>;
+  if (item.state === "failed") return <span className="badge danger">Failed</span>;
   if (item.state === "released") return <span className="badge ok">Released</span>;
   if (item.state === "cancelled") return <span className="badge muted">Stopped</span>;
   return <span className="badge danger">Expired</span>;
@@ -45,7 +47,7 @@ function ItemRow({
   onCancel: (id: string) => void;
   onConfirm: (id: string) => void;
 }) {
-  const pending = item.state === "held" || item.state === "needs_human";
+  const pending = isPendingOutboxState(item.state);
   const left = secondsLeft(item, now);
   return (
     <li className="outbox-row">

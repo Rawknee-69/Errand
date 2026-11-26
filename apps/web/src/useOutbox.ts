@@ -1,15 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { OutboxItem } from "@errand/shared";
+import { isPendingOutboxState, type OutboxItem } from "@errand/shared";
 import { api, errorMessage } from "./api.ts";
 
 export type OutboxView = {
   pending: OutboxItem[];
   recent: OutboxItem[];
 };
-
-function isPending(item: OutboxItem): boolean {
-  return item.state === "held" || item.state === "needs_human";
-}
 
 export function useOutbox() {
   const [data, setData] = useState<OutboxView | null>(null);
@@ -23,8 +19,8 @@ export function useOutbox() {
       const { items } = await api.outbox();
       if (request !== latest.current) return;
       setData({
-        pending: items.filter(isPending),
-        recent: items.filter((item) => !isPending(item)).slice(0, 8),
+        pending: items.filter((item) => isPendingOutboxState(item.state)),
+        recent: items.filter((item) => !isPendingOutboxState(item.state)).slice(0, 8),
       });
       setError(null);
     } catch (caught) {

@@ -157,9 +157,22 @@ export function describeFeedEvent(event: FeedEvent): FeedItem {
     case "outbox.confirmed": {
       const amount = count(payload, "amount_cents");
       return item(
-        `Spend confirmed: ${tool ?? "a tool"}`,
-        amount === null ? "Confirmed by you" : `${formatMoney(amount)} confirmed by you`,
-        "ok",
+        `Spend tapped: ${tool ?? "a tool"}`,
+        amount === null ? "Running after your tap" : `${formatMoney(amount)} · running after your tap`,
+        "accent",
+      );
+    }
+    case "outbox.completed": {
+      const amount = count(payload, "amount_cents");
+      const failed = text(payload, "outcome") === "failed";
+      return item(
+        failed ? `Spend failed: ${tool ?? "a tool"}` : `Spend settled: ${tool ?? "a tool"}`,
+        failed
+          ? (reason ?? "The upstream call failed; nothing moved")
+          : amount === null
+            ? "The money moved after your tap"
+            : `${formatMoney(amount)} moved after your tap`,
+        failed ? "danger" : "ok",
       );
     }
     case "outbox.released": {
